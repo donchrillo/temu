@@ -1,26 +1,24 @@
 import pandas as pd
-import xml.etree.ElementTree as ET
-from xml.dom import minidom
+import pyodbc
 from datetime import datetime
 import re
-import csv
-import io
+import os
+from dotenv import load_dotenv
+
+# .env laden
+load_dotenv()
 
 # --- EINSTELLUNGEN ---
-CSV_DATEINAME = 'order_export.csv' 
-XML_DATEINAME = 'jtl_temu_bestellungen.xml'
+CSV_DATEINAME = os.getenv('CSV_INPUT_PATH', 'order_export.csv')
 
-# Allgemeine JTL-Einstellungen
-WAEHRUNG = 'EUR'
-SPRACHE = 'ger'
-K_BENUTZER = '1'
-K_FIRMA = '1'
+# SQL Server Verbindung
+SQL_SERVER = os.getenv('SQL_SERVER')
+SQL_DATABASE = os.getenv('SQL_DATABASE')
+SQL_USERNAME = os.getenv('SQL_USERNAME')
+SQL_PASSWORD = os.getenv('SQL_PASSWORD')
 
-# Benötigte Spalten für die Validierung
-REQUIRED_COLS = ['Bestell-ID', 'Beitrags-SKU', 'Gekaufte Menge', 'Kaufdatum', 
-                 'Vorname des Empfängers', 'Nachname des Empfängers', 'Versandadresse 1', 
-                 'Versandpostleitzahl (Muss an die folgende Postleitzahl gesendet werden.)', 'Versandort', 'Versandland', 
-                 'Aktivitätsbasispreis der Waren', 'Gesamteinzelhandelspreis', 'Virtuelle E-Mail']
+TABLE_ORDERS = os.getenv('TABLE_ORDERS', 'temu_orders')
+TABLE_ORDER_ITEMS = os.getenv('TABLE_ORDER_ITEMS', 'temu_order_items')
 
 # --- HILFSFUNKTIONEN ---
 
@@ -35,20 +33,18 @@ def _clean_price(price_str):
     return float(price_str)
 
 def _format_date(date_str):
-    """Konvertiert das TEMU Datumsformat in das JTL-kompatible Format (DD.MM.YYYY)."""
+    """Konvertiert das TEMU Datumsformat in ein datetime-Objekt."""
     cleaned_date = re.sub(r'\sUhr\sCET\(UTC[+-]\d+\)', '', date_str).strip()
     try:
-        dt = datetime.strptime(cleaned_date, '%d. %b. %Y, %H:%M')
-        return dt.strftime('%d.%m.%Y')
+        return datetime.strptime(cleaned_date, '%d. %b. %Y, %H:%M')
     except Exception:
         try:
-            dt = datetime.strptime(cleaned_date.replace('.', ''), '%d %b %Y, %H:%M')
-            return dt.strftime('%d.%m.%Y')
+            return datetime.strptime(cleaned_date.replace('.', ''), '%d %b %Y, %H:%M')
         except:
-            return datetime.now().strftime('%d.%m.%Y')
+            return datetime.now()
 
 def _clean_street(address_line):
-    """Versucht, die Straße und die Hausnummer zu trennen."""
+    """Trennt Straße und Hausnummer."""
     if not isinstance(address_line, str):
         return '', ''
     address_line = address_line.strip()
@@ -57,230 +53,203 @@ def _clean_street(address_line):
     if match:
         street = address_line[:match.start()].strip()
         number = match.group(1).strip()
-        return street, number
-    return address_line, '' 
+        return f"{street} {number}".strip(), ''
+    return address_line, ''
 
 def _get_country_iso(country_name):
-    """Konvertiert den vollen Ländernamen (TEMU) in den ISO-Code (JTL)."""
+    """Konvertiert Ländernamen in ISO-Code."""
     mapping = {
         'Germany': 'DE',
         'Austria': 'AT',
         'France': 'FR',
         'Netherlands': 'NL'
     }
-    return mapping.get(country_name, country_name) 
+    return mapping.get(country_name, 'DE')
 
-def _prettify_xml(elem):
-    """Gibt einen schön formatierten XML-String zurück."""
-    rough_string = ET.tostring(elem, 'utf-8')
-    reparsed = minidom.parseString(rough_string).toprettyxml(indent="  ", encoding="ISO-8859-1")
-    return reparsed.decode("ISO-8859-1")
+def get_db_connection():
+    """Erstellt SQL Server Verbindung."""
+    conn_str = (
+        f'DRIVER={{ODBC Driver 17 for SQL Server}};'
+        f'SERVER={SQL_SERVER};'
+        f'DATABASE={SQL_DATABASE};'
+        f'UID={SQL_USERNAME};'
+        f'PWD={SQL_PASSWORD}'
+    )
+    return pyodbc.connect(conn_str)
 
 # --- HAUPTFUNKTION ---
 
-def convert_temu_csv_to_jtl_xml(csv_file, xml_file):
-    """Liest die TEMU CSV und konvertiert sie in das JTL XML Format."""
-
-    df = None
+def import_csv_to_database(csv_file):
+    """Liest TEMU CSV und importiert in SQL-Datenbank."""
     
-    # 1. CSV einlesen - TEMU nutzt KOMMAS als Trennzeichen
+    print("=" * 60)
+    print("TEMU CSV zu SQL Datenbank Import")
+    print("=" * 60)
+    
+    # 1. CSV einlesen
     try:
-        # Dateiinhalt direkt mit pandas einlesen (Komma-separiert)
         df = pd.read_csv(csv_file, delimiter=',', quotechar='"', encoding='utf-8-sig', dtype=str, keep_default_na=False)
         
         # Spaltennamen bereinigen
-        df.columns = df.columns.str.replace('\ufeff', '', regex=False) 
-        df.columns = df.columns.str.replace('\xa0', ' ', regex=False).str.strip() 
-        df.columns = df.columns.str.strip() 
+        df.columns = df.columns.str.replace('\ufeff', '', regex=False)
+        df.columns = df.columns.str.replace('\xa0', ' ', regex=False).str.strip()
+        df.columns = df.columns.str.strip()
         
         df.replace('', pd.NA, inplace=True)
-        df.fillna('', inplace=True) 
-        print(f"INFO: CSV erfolgreich eingelesen. {len(df)} Zeilen gefunden.")
-        print(f"INFO: Gefundene Spalten: {list(df.columns[:5])}")
-        if len(df) > 0:
-            print(f"INFO: Erste Bestell-ID: {df['Bestell-ID'].iloc[0]}")
-
-    except Exception as e:
-        print(f"FEHLER beim Einlesen der CSV-Datei. Ursache: {e}")
-        import traceback
-        traceback.print_exc()
-        return None
-
-    # 1.3 Datentypen und Preise konvertieren
-    price_cols = ['Gesamteinzelhandelspreis', 'Versandkosten']
-    
-    for col in price_cols:
-        if col not in df.columns:
-            print(f"FATALER FEHLER: Die benötigte Spalte '{col}' fehlt im DataFrame.")
-            print("\nGefundene Spalten (zum Debuggen):")
-            print(df.columns.tolist())
-            return None
+        df.fillna('', inplace=True)
         
-        df[col] = df[col].apply(_clean_price)
+        print(f"✓ CSV erfolgreich eingelesen: {len(df)} Zeilen")
+        
+    except Exception as e:
+        print(f"✗ FEHLER beim Einlesen der CSV: {e}")
+        return False
+
+    # 2. Datentypen konvertieren
+    price_cols = ['Gesamteinzelhandelspreis', 'Versandkosten']
+    for col in price_cols:
+        if col in df.columns:
+            df[col] = df[col].apply(_clean_price)
     
     df['Gekaufte Menge'] = pd.to_numeric(df['Gekaufte Menge'], errors='coerce').fillna(0)
     
-    # 1.4 Spalten-Validierung (aktualisierte Spalten)
-    required_cols = ['Bestell-ID', 'Beitrags-SKU', 'Gekaufte Menge', 'Kaufdatum', 
-                     'Vorname des Empfängers', 'Nachname des Empfängers', 'Versandadresse 1', 
-                     'Versandpostleitzahl (Muss an die folgende Postleitzahl gesendet werden.)', 
-                     'Versandort', 'Versandland', 'Gesamteinzelhandelspreis', 'Versandkosten',
-                     'Virtuelle E-Mail', 'Produktname']
-    
-    for col in required_cols:
-        if col not in df.columns:
-            print(f"FATALER FEHLER: Die benötigte Spalte '{col}' fehlt trotz Bereinigung.")
-            return None
-
-    # 2. Datenvorbereitung - Preise pro Artikel berechnen
+    # Netto-Einzelpreis berechnen
     df['Netto_Einzelpreis'] = df.apply(
         lambda row: row['Gesamteinzelhandelspreis'] / row['Gekaufte Menge'] 
         if row['Gekaufte Menge'] > 0 else 0.00,
         axis=1
     )
     
+    # 3. Datenbankverbindung
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        print("✓ SQL Server Verbindung hergestellt")
+    except Exception as e:
+        print(f"✗ FEHLER bei SQL-Verbindung: {e}")
+        return False
+    
+    # 4. Daten gruppieren und importieren
     grouped_orders = df.groupby('Bestell-ID')
-
-    # 3. XML-Struktur aufbauen
-    root = ET.Element('tBestellungen')
-
+    imported_count = 0
+    updated_count = 0
+    
     for order_id, group in grouped_orders:
-        
         order_data = group.iloc[0]
         
-        # --- Bestellung-Tag ---
-        bestellung = ET.SubElement(root, 'tBestellung', kFirma=K_FIRMA, kBenutzer=K_BENUTZER)
+        # Namenslogik
+        vorname = str(order_data.get('Vorname des Empfängers', '')).strip()
+        nachname = str(order_data.get('Nachname des Empfängers', '')).strip()
         
-        # Basis-Informationen
-        ET.SubElement(bestellung, 'cSprache').text = SPRACHE
-        ET.SubElement(bestellung, 'cWaehrung').text = WAEHRUNG
-        ET.SubElement(bestellung, 'cBestellNr')  # LEER - wird von JTL automatisch gesetzt
-        ET.SubElement(bestellung, 'cExterneBestellNr').text = str(order_id)  # TEMU Bestell-ID
-        ET.SubElement(bestellung, 'cVersandartName').text = 'TEMU'
-        ET.SubElement(bestellung, 'cVersandInfo')
-        ET.SubElement(bestellung, 'dVersandDatum')
-        ET.SubElement(bestellung, 'cTracking')
-        ET.SubElement(bestellung, 'dLieferDatum')
-        ET.SubElement(bestellung, 'cKommentar')
-        ET.SubElement(bestellung, 'cBemerkung')
-        ET.SubElement(bestellung, 'dErstellt').text = _format_date(order_data['Kaufdatum'])
-        ET.SubElement(bestellung, 'cZahlungsartName').text = 'TEMU'
-        ET.SubElement(bestellung, 'dBezahltDatum')
-
-        # --- Positionen (Artikel) ---
-        for index, row in group.iterrows():
-            pos = ET.SubElement(bestellung, 'twarenkorbpos')
+        if not vorname and not nachname:
+            vorname = ''
+            nachname = str(order_data.get('Name des Empfängers', '')).strip()
+        
+        # Adresse
+        strasse, _ = _clean_street(str(order_data.get('Versandadresse 1', '')))
+        land_iso = _get_country_iso(str(order_data.get('Versandland', 'Germany')))
+        kaufdatum = _format_date(str(order_data.get('Kaufdatum', '')))
+        
+        # Prüfen ob Bestellung bereits existiert
+        cursor.execute(f"SELECT id FROM {TABLE_ORDERS} WHERE bestell_id = ?", order_id)
+        existing_order = cursor.fetchone()
+        
+        if existing_order:
+            # Update existierende Bestellung
+            order_db_id = existing_order[0]
+            cursor.execute(f"""
+                UPDATE {TABLE_ORDERS} SET
+                    bestellstatus = ?,
+                    updated_at = GETDATE()
+                WHERE id = ?
+            """, str(order_data.get('Bestellstatus', '')), order_db_id)
+            updated_count += 1
+        else:
+            # Neue Bestellung einfügen
+            cursor.execute(f"""
+                INSERT INTO {TABLE_ORDERS} (
+                    bestell_id, bestellstatus, kaufdatum,
+                    name_empfaenger, vorname_empfaenger, nachname_empfaenger,
+                    telefon_empfaenger, email,
+                    strasse, plz, ort, bundesland, land, land_iso,
+                    versandkosten, status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, 
+                order_id,
+                str(order_data.get('Bestellstatus', '')),
+                kaufdatum,
+                str(order_data.get('Name des Empfängers', '')),
+                vorname,
+                nachname,
+                str(order_data.get('Telefonnummer des Empfängers', '')),
+                str(order_data.get('Virtuelle E-Mail', '')),
+                strasse,
+                str(order_data.get('Versandpostleitzahl (Muss an die folgende Postleitzahl gesendet werden.)', '')),
+                str(order_data.get('Versandort', '')),
+                str(order_data.get('Versandbundesland', '')),
+                str(order_data.get('Versandland', '')),
+                land_iso,
+                float(order_data.get('Versandkosten', 0)),
+                'importiert'
+            )
             
-            # Gesamteinzelhandelspreis ist der Netto-Preis pro Artikel
-            netto_einzelpreis = row['Netto_Einzelpreis']
+            cursor.execute("SELECT @@IDENTITY")
+            order_db_id = cursor.fetchone()[0]
+            imported_count += 1
+        
+        # Artikel-Positionen einfügen
+        for _, row in group.iterrows():
+            bestellartikel_id = str(row.get('Bestellartikel-ID', ''))
+            
+            # Prüfen ob Artikel bereits existiert
+            cursor.execute(f"SELECT id FROM {TABLE_ORDER_ITEMS} WHERE bestellartikel_id = ?", bestellartikel_id)
+            if cursor.fetchone():
+                continue  # Artikel existiert bereits
+            
+            menge = float(row.get('Gekaufte Menge', 0))
+            netto_einzelpreis = float(row.get('Netto_Einzelpreis', 0))
             mwst_satz = 19.00
             brutto_einzelpreis = netto_einzelpreis * (1 + mwst_satz / 100)
             
-            ET.SubElement(pos, 'cName').text = str(row['Produktname'])
-            ET.SubElement(pos, 'cArtNr').text = str(row['Beitrags-SKU'])
-            ET.SubElement(pos, 'cBarcode')
-            ET.SubElement(pos, 'cEinheit')
-            ET.SubElement(pos, 'fPreisEinzelNetto').text = f"{netto_einzelpreis:.5f}"
-            ET.SubElement(pos, 'fPreis').text = f"{brutto_einzelpreis:.2f}"
-            ET.SubElement(pos, 'fMwSt').text = f"{mwst_satz:.2f}"
-            ET.SubElement(pos, 'fAnzahl').text = f"{row['Gekaufte Menge']:.2f}"
-            ET.SubElement(pos, 'cPosTyp').text = 'standard'
-            ET.SubElement(pos, 'fRabatt').text = '0.00'
-        
-        # Versandkosten-Position - Netto-Preis aus CSV
-        versandkosten_netto = order_data['Versandkosten']
-        versandkosten_brutto = versandkosten_netto * 1.19
-        
-        versand_pos = ET.SubElement(bestellung, 'twarenkorbpos')
-        ET.SubElement(versand_pos, 'cName').text = 'TEMU Versand'
-        ET.SubElement(versand_pos, 'cArtNr')
-        ET.SubElement(versand_pos, 'cBarcode')
-        ET.SubElement(versand_pos, 'cEinheit')
-        ET.SubElement(versand_pos, 'fPreisEinzelNetto').text = f"{versandkosten_netto:.5f}"
-        ET.SubElement(versand_pos, 'fPreis').text = f"{versandkosten_brutto:.2f}"
-        ET.SubElement(versand_pos, 'fMwSt').text = '19.00'
-        ET.SubElement(versand_pos, 'fAnzahl').text = '1.00'
-        ET.SubElement(versand_pos, 'cPosTyp').text = 'versandkosten'
-        ET.SubElement(versand_pos, 'fRabatt').text = '0.00'
-        
-        # Adressdaten
-        strasse, hausnummer = _clean_street(str(order_data['Versandadresse 1']))
-        land_iso = _get_country_iso(str(order_data['Versandland']))
-        
-        # --- Rechnungsadresse (tkunde) ---
-        kunde = ET.SubElement(bestellung, 'tkunde')
-        ET.SubElement(kunde, 'cKundenNr')  # LEER - wird von JTL automatisch ausgefüllt
-        ET.SubElement(kunde, 'cAnrede')
-        ET.SubElement(kunde, 'cTitel')
-        ET.SubElement(kunde, 'cVorname').text = str(order_data['Vorname des Empfängers'])
-        ET.SubElement(kunde, 'cNachname').text = str(order_data['Nachname des Empfängers'])
-        ET.SubElement(kunde, 'cFirma')
-        ET.SubElement(kunde, 'cStrasse').text = f"{strasse} {hausnummer}".strip()
-        ET.SubElement(kunde, 'cAdressZusatz')
-        ET.SubElement(kunde, 'cPLZ').text = str(order_data['Versandpostleitzahl (Muss an die folgende Postleitzahl gesendet werden.)']).strip()
-        ET.SubElement(kunde, 'cOrt').text = str(order_data['Versandort'])
-        ET.SubElement(kunde, 'cBundesland')
-        ET.SubElement(kunde, 'cLand').text = land_iso
-        ET.SubElement(kunde, 'cTel')
-        ET.SubElement(kunde, 'cMobil')
-        ET.SubElement(kunde, 'cFax')
-        ET.SubElement(kunde, 'cMail').text = str(order_data['Virtuelle E-Mail'])
-        ET.SubElement(kunde, 'cUSTID')
-        ET.SubElement(kunde, 'cWWW')
-        ET.SubElement(kunde, 'cHerkunft').text = 'TEMU'
-        ET.SubElement(kunde, 'dErstellt').text = _format_date(order_data['Kaufdatum'])
-        
-        # --- Lieferadresse (tlieferadresse) - ALLE Felder müssen da sein ---
-        lieferadresse = ET.SubElement(bestellung, 'tlieferadresse')
-        ET.SubElement(lieferadresse, 'cAnrede')  # Pflichtfeld (muss da sein, auch wenn leer)
-        ET.SubElement(lieferadresse, 'cVorname').text = str(order_data['Vorname des Empfängers'])
-        ET.SubElement(lieferadresse, 'cNachname').text = str(order_data['Nachname des Empfängers'])
-        ET.SubElement(lieferadresse, 'cTitel')  # Pflichtfeld (muss da sein, auch wenn leer)
-        ET.SubElement(lieferadresse, 'cFirma')  # Pflichtfeld (muss da sein, auch wenn leer)
-        ET.SubElement(lieferadresse, 'cStrasse').text = f"{strasse} {hausnummer}".strip()
-        ET.SubElement(lieferadresse, 'cAdressZusatz')  # Pflichtfeld (muss da sein, auch wenn leer)
-        ET.SubElement(lieferadresse, 'cPLZ').text = str(order_data['Versandpostleitzahl (Muss an die folgende Postleitzahl gesendet werden.)']).strip()
-        ET.SubElement(lieferadresse, 'cOrt').text = str(order_data['Versandort'])
-        ET.SubElement(lieferadresse, 'cBundesland')  # Pflichtfeld (muss da sein, auch wenn leer)
-        ET.SubElement(lieferadresse, 'cLand').text = land_iso
-        ET.SubElement(lieferadresse, 'cTel')  # Pflichtfeld (muss da sein, auch wenn leer)
-        ET.SubElement(lieferadresse, 'cMobil')  # Pflichtfeld (muss da sein, auch wenn leer)
-        ET.SubElement(lieferadresse, 'cFax')  # Pflichtfeld (muss da sein, auch wenn leer)
-        ET.SubElement(lieferadresse, 'cMail').text = str(order_data['Virtuelle E-Mail'])
-        
-        # --- Zahlungsinfo - ALLE Felder müssen da sein (auch wenn leer) ---
-        zahlungsinfo = ET.SubElement(bestellung, 'tzahlungsinfo')
-        ET.SubElement(zahlungsinfo, 'cBankName')
-        ET.SubElement(zahlungsinfo, 'cBLZ')
-        ET.SubElement(zahlungsinfo, 'cKontoNr')
-        ET.SubElement(zahlungsinfo, 'cKartenNr')
-        ET.SubElement(zahlungsinfo, 'dGueltigkeit')
-        ET.SubElement(zahlungsinfo, 'cCVV')
-        ET.SubElement(zahlungsinfo, 'cKartenTyp')
-        ET.SubElement(zahlungsinfo, 'cInhaber')
-        ET.SubElement(zahlungsinfo, 'cIBAN')
-        ET.SubElement(zahlungsinfo, 'cBIC')
-            
-    # 4. XML-Datei speichern
-    xml_output = _prettify_xml(root)
+            cursor.execute(f"""
+                INSERT INTO {TABLE_ORDER_ITEMS} (
+                    order_id, bestell_id, bestellartikel_id,
+                    produktname, sku, sku_id, variation,
+                    menge, netto_einzelpreis, brutto_einzelpreis,
+                    gesamtpreis_netto, gesamtpreis_brutto, mwst_satz
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+                order_db_id,
+                order_id,
+                bestellartikel_id,
+                str(row.get('Produktname', '')),
+                str(row.get('Beitrags-SKU', '')),
+                str(row.get('SKU-ID', '')),
+                str(row.get('Variation', '')),
+                menge,
+                netto_einzelpreis,
+                brutto_einzelpreis,
+                netto_einzelpreis * menge,
+                brutto_einzelpreis * menge,
+                mwst_satz
+            )
     
-    with open(xml_file, 'w', encoding='ISO-8859-1') as f:
-        f.write(xml_output)
+    conn.commit()
+    cursor.close()
+    conn.close()
     
-    print(f"SUCCESS: XML-Datei wurde erfolgreich erstellt: {xml_file}")
-    return xml_file
+    print(f"\n{'='*60}")
+    print(f"✓ Import erfolgreich abgeschlossen!")
+    print(f"  Neue Bestellungen: {imported_count}")
+    print(f"  Aktualisierte Bestellungen: {updated_count}")
+    print(f"{'='*60}\n")
+    
+    return True
 
 
 # --- HAUPTPROGRAMM ---
 if __name__ == "__main__":
-    print("=" * 60)
-    print("TEMU CSV zu JTL XML Konverter")
-    print("=" * 60)
+    result = import_csv_to_database(CSV_DATEINAME)
     
-    result = convert_temu_csv_to_jtl_xml(CSV_DATEINAME, XML_DATEINAME)
-    
-    if result:
-        print(f"\n✓ Konvertierung erfolgreich abgeschlossen!")
-        print(f"  Output: {result}")
-    else:
-        print("\n✗ Konvertierung fehlgeschlagen. Bitte Fehlermeldungen prüfen.")
+    if not result:
+        print("\n✗ Import fehlgeschlagen!")
+        exit(1)
