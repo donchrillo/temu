@@ -6,26 +6,48 @@ load_dotenv()
 
 # --- EINSTELLUNGEN ---
 SQL_SERVER = os.getenv('SQL_SERVER')
-SQL_DATABASE = os.getenv('SQL_DATABASE')
 SQL_USERNAME = os.getenv('SQL_USERNAME')
 SQL_PASSWORD = os.getenv('SQL_PASSWORD')
 
 TABLE_ORDERS = os.getenv('TABLE_ORDERS', 'temu_orders')
 
-# JTL Datenbank (anpassen!)
-JTL_SQL_SERVER = os.getenv('JTL_SQL_SERVER', SQL_SERVER)
-JTL_SQL_DATABASE = os.getenv('JTL_SQL_DATABASE', 'eazybusiness')
-JTL_SQL_USERNAME = os.getenv('JTL_SQL_USERNAME', SQL_USERNAME)
-JTL_SQL_PASSWORD = os.getenv('JTL_SQL_PASSWORD', SQL_PASSWORD)
+# Datenbanknamen (fest im Code)
+DB_TOCI = 'toci'
+DB_JTL = 'eazybusiness'
 
-def get_db_connection(server, database, username, password):
-    """Erstellt SQL Server Verbindung."""
+def get_db_connection(database):
+    """Erstellt SQL Server Verbindung zu einer bestimmten Datenbank."""
+    # Verfügbare Treiber in Priorität
+    drivers = [
+        'ODBC Driver 18 for SQL Server',
+        'ODBC Driver 17 for SQL Server',
+        'ODBC Driver 13 for SQL Server',
+        'SQL Server Native Client 11.0',
+        'SQL Server'
+    ]
+    
+    # Installierten Treiber finden
+    available_drivers = [d for d in pyodbc.drivers() if 'SQL Server' in d]
+    
+    driver = None
+    for d in drivers:
+        if d in available_drivers:
+            driver = d
+            break
+    
+    if not driver and available_drivers:
+        driver = available_drivers[0]
+    
+    if not driver:
+        raise Exception("Kein SQL Server ODBC-Treiber gefunden!")
+    
     conn_str = (
-        f'DRIVER={{ODBC Driver 17 for SQL Server}};'
-        f'SERVER={server};'
+        f'DRIVER={{{driver}}};'
+        f'SERVER={SQL_SERVER};'
         f'DATABASE={database};'
-        f'UID={username};'
-        f'PWD={password}'
+        f'UID={SQL_USERNAME};'
+        f'PWD={SQL_PASSWORD};'
+        f'TrustServerCertificate=yes;'
     )
     return pyodbc.connect(conn_str)
 
@@ -36,30 +58,38 @@ def update_tracking_from_jtl():
     print("Trackingnummern aus JTL aktualisieren")
     print("=" * 60)
     
-    # Verbindung zu unserer Datenbank
-    conn_temu = get_db_connection(SQL_SERVER, SQL_DATABASE, SQL_USERNAME, SQL_PASSWORD)
-    cursor_temu = conn_temu.cursor()
+    # Verbindung zu TOCI Datenbank (TEMU Orders)
+    conn_toci = get_db_connection(DB_TOCI)
+    cursor_toci = conn_toci.cursor()
+    print(f"✓ {DB_TOCI} Datenbankverbindung hergestellt")
     
     # Verbindung zu JTL Datenbank
     try:
-        conn_jtl = get_db_connection(JTL_SQL_SERVER, JTL_SQL_DATABASE, JTL_SQL_USERNAME, JTL_SQL_PASSWORD)
+        conn_jtl = get_db_connection(DB_JTL)
         cursor_jtl = conn_jtl.cursor()
-        print("✓ JTL Datenbankverbindung hergestellt")
+        print(f"✓ {DB_JTL} Datenbankverbindung hergestellt")
     except Exception as e:
         print(f"✗ FEHLER bei JTL-Verbindung: {e}")
+        cursor_toci.close()
+        conn_toci.close()
         return False
     
-    # Bestellungen holen die noch keine Trackingnummer haben
-    cursor_temu.execute(f"""
+    # Bestellungen aus TOCI holen die noch keine Trackingnummer haben
+    cursor_toci.execute(f"""
         SELECT id, bestell_id 
         FROM {TABLE_ORDERS}
-        WHERE trackingnummer IS NULL OR trackingnummer = ''
+        WHERE (trackingnummer IS NULL OR trackingnummer = '')
+          AND status = 'xml_erstellt'
     """)
     
-    orders = cursor_temu.fetchall()
+    orders = cursor_toci.fetchall()
     
     if not orders:
         print("✓ Keine Bestellungen ohne Trackingnummer gefunden")
+        cursor_toci.close()
+        cursor_jtl.close()
+        conn_toci.close()
+        conn_jtl.close()
         return True
     
     print(f"✓ {len(orders)} Bestellungen ohne Tracking gefunden")
@@ -69,38 +99,44 @@ def update_tracking_from_jtl():
     for order in orders:
         order_db_id, bestell_id = order
         
-        # Tracking aus JTL holen (ANPASSEN an JTL-Struktur!)
+        # Tracking aus JTL holen mit dem neuen SQL Query
         cursor_jtl.execute("""
-            SELECT TOP 1 v.cIdentCode, l.cName, v.dErstellt
-            FROM tVersand v
-            INNER JOIN tAuftrag a ON v.kLieferschein = a.kLieferschein
-            LEFT JOIN tVersandart l ON v.kVersandart = l.kVersandart
-            WHERE a.cBestellNr = ?
-            ORDER BY v.dErstellt DESC
+            SELECT 
+                [cBestellungInetBestellNr],
+                [cVersandartName],
+                CAST([cTrackingId] AS VARCHAR(50))
+            FROM [eazybusiness].[Versand].[lvLieferschein]
+            JOIN [eazybusiness].[Versand].[lvLieferscheinpaket]
+                ON [eazybusiness].[Versand].[lvLieferscheinpaket].kLieferschein = 
+                   [eazybusiness].[Versand].[lvLieferschein].kLieferschein
+            WHERE cBestellungInetBestellNr = ?
         """, bestell_id)
         
         result = cursor_jtl.fetchone()
         
         if result:
-            trackingnummer, versanddienstleister, versanddatum = result
+            bestellnr, versanddienstleister, trackingnummer = result
             
-            cursor_temu.execute(f"""
+            # In TOCI Datenbank aktualisieren
+            cursor_toci.execute(f"""
                 UPDATE {TABLE_ORDERS}
                 SET trackingnummer = ?,
                     versanddienstleister = ?,
-                    versanddatum = ?,
+                    versanddatum = GETDATE(),
                     status = 'versendet',
                     updated_at = GETDATE()
                 WHERE id = ?
-            """, trackingnummer, versanddienstleister, versanddatum, order_db_id)
+            """, trackingnummer, versanddienstleister, order_db_id)
             
             updated_count += 1
-            print(f"  ✓ {bestell_id}: {trackingnummer}")
+            print(f"  ✓ {bestell_id}: {trackingnummer} ({versanddienstleister})")
+        else:
+            print(f"  ⚠ {bestell_id}: Noch kein Tracking in JTL")
     
-    conn_temu.commit()
-    cursor_temu.close()
+    conn_toci.commit()
+    cursor_toci.close()
     cursor_jtl.close()
-    conn_temu.close()
+    conn_toci.close()
     conn_jtl.close()
     
     print(f"\n{'='*60}")

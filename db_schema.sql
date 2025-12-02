@@ -1,11 +1,11 @@
 -- Datenbank erstellen (falls nicht vorhanden)
-IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = 'TemuOrders')
+IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = 'toci')
 BEGIN
-    CREATE DATABASE TemuOrders;
+    CREATE DATABASE toci;
 END
 GO
 
-USE TemuOrders;
+USE toci;
 GO
 
 -- Tabelle für Bestellungen (Header-Daten)
@@ -43,6 +43,12 @@ BEGIN
         status NVARCHAR(50) DEFAULT 'importiert',
         xml_erstellt BIT DEFAULT 0,
         temu_gemeldet BIT DEFAULT 0,
+        
+        -- Status-Flow:
+        -- 'importiert' -> Neue Bestellung aus TEMU CSV
+        -- 'xml_erstellt' -> XML wurde erstellt und an JTL übergeben
+        -- 'versendet' -> Trackingnummer aus JTL erhalten
+        -- 'storniert' -> Von TEMU storniert (wird NICHT nach JTL exportiert)
         
         -- Timestamps
         created_at DATETIME DEFAULT GETDATE(),

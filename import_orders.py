@@ -13,9 +13,11 @@ CSV_DATEINAME = os.getenv('CSV_INPUT_PATH', 'order_export.csv')
 
 # SQL Server Verbindung
 SQL_SERVER = os.getenv('SQL_SERVER')
-SQL_DATABASE = os.getenv('SQL_DATABASE')
 SQL_USERNAME = os.getenv('SQL_USERNAME')
 SQL_PASSWORD = os.getenv('SQL_PASSWORD')
+
+# Datenbanknamen (fest im Code)
+DB_TOCI = 'toci'
 
 TABLE_ORDERS = os.getenv('TABLE_ORDERS', 'temu_orders')
 TABLE_ORDER_ITEMS = os.getenv('TABLE_ORDER_ITEMS', 'temu_order_items')
@@ -67,13 +69,41 @@ def _get_country_iso(country_name):
     return mapping.get(country_name, 'DE')
 
 def get_db_connection():
-    """Erstellt SQL Server Verbindung."""
+    """Erstellt SQL Server Verbindung zur TOCI Datenbank."""
+    # Verfügbare Treiber in Priorität
+    drivers = [
+        'ODBC Driver 18 for SQL Server',
+        'ODBC Driver 17 for SQL Server',
+        'ODBC Driver 13 for SQL Server',
+        'SQL Server Native Client 11.0',
+        'SQL Server'
+    ]
+    
+    # Installierten Treiber finden
+
+    available_drivers = [d for d in pyodbc.drivers() if 'SQL Server' in d]
+    
+    driver = None
+    for d in drivers:
+        if d in available_drivers:
+            driver = d
+            break
+    
+    if not driver and available_drivers:
+        driver = available_drivers[0]
+    
+    if not driver:
+        raise Exception("Kein SQL Server ODBC-Treiber gefunden! Bitte installieren Sie 'ODBC Driver 18 for SQL Server'")
+    
+    print(f"  Verwende Treiber: {driver}")
+    
     conn_str = (
-        f'DRIVER={{ODBC Driver 17 for SQL Server}};'
+        f'DRIVER={{{driver}}};'
         f'SERVER={SQL_SERVER};'
-        f'DATABASE={SQL_DATABASE};'
+        f'DATABASE={DB_TOCI};'
         f'UID={SQL_USERNAME};'
-        f'PWD={SQL_PASSWORD}'
+        f'PWD={SQL_PASSWORD};'
+        f'TrustServerCertificate=yes;'
     )
     return pyodbc.connect(conn_str)
 
@@ -156,26 +186,68 @@ def import_csv_to_database(csv_file):
         if existing_order:
             # Update existierende Bestellung
             order_db_id = existing_order[0]
-            cursor.execute(f"""
-                UPDATE {TABLE_ORDERS} SET
-                    bestellstatus = ?,
-                    updated_at = GETDATE()
-                WHERE id = ?
-            """, str(order_data.get('Bestellstatus', '')), order_db_id)
+            
+            # Status von TEMU prüfen
+            temu_status = str(order_data.get('Bestellstatus', ''))
+            
+            # Stornierte Bestellungen
+            if temu_status == 'Storniert':
+                cursor.execute(f"""
+                    UPDATE {TABLE_ORDERS} SET
+                        bestellstatus = ?,
+                        status = 'storniert',
+                        updated_at = GETDATE()
+                    WHERE id = ?
+                """, temu_status, order_db_id)
+                print(f"  ⚠ {order_id}: STORNIERT - Bitte in JTL manuell stornieren!")
+            # Wenn in TEMU als "Versandt" oder "Zugestellt" markiert → temu_gemeldet = 1
+            elif temu_status in ['Versandt', 'Zugestellt']:
+                cursor.execute(f"""
+                    UPDATE {TABLE_ORDERS} SET
+                        bestellstatus = ?,
+                        temu_gemeldet = 1,
+                        updated_at = GETDATE()
+                    WHERE id = ?
+                """, temu_status, order_db_id)
+                print(f"  ✓ {order_id}: Von TEMU bestätigt ({temu_status})")
+            else:
+                cursor.execute(f"""
+                    UPDATE {TABLE_ORDERS} SET
+                        bestellstatus = ?,
+                        updated_at = GETDATE()
+                    WHERE id = ?
+                """, temu_status, order_db_id)
+            
             updated_count += 1
         else:
             # Neue Bestellung einfügen
+            temu_status = str(order_data.get('Bestellstatus', ''))
+            
+            # Stornierte Bestellungen direkt mit Status 'storniert' importieren
+            if temu_status == 'Storniert':
+                db_status = 'storniert'
+                is_confirmed = 0
+                print(f"  ⚠ {order_id}: STORNIERT - Wird nicht nach JTL exportiert")
+            # Bereits versendete/zugestellte Bestellungen
+            elif temu_status in ['Versandt', 'Zugestellt']:
+                db_status = 'importiert'
+                is_confirmed = 1
+            # Normale neue Bestellungen
+            else:
+                db_status = 'importiert'
+                is_confirmed = 0
+            
             cursor.execute(f"""
                 INSERT INTO {TABLE_ORDERS} (
                     bestell_id, bestellstatus, kaufdatum,
                     name_empfaenger, vorname_empfaenger, nachname_empfaenger,
                     telefon_empfaenger, email,
                     strasse, plz, ort, bundesland, land, land_iso,
-                    versandkosten, status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    versandkosten, status, temu_gemeldet
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, 
                 order_id,
-                str(order_data.get('Bestellstatus', '')),
+                temu_status,
                 kaufdatum,
                 str(order_data.get('Name des Empfängers', '')),
                 vorname,
@@ -189,7 +261,8 @@ def import_csv_to_database(csv_file):
                 str(order_data.get('Versandland', '')),
                 land_iso,
                 float(order_data.get('Versandkosten', 0)),
-                'importiert'
+                db_status,
+                is_confirmed
             )
             
             cursor.execute("SELECT @@IDENTITY")

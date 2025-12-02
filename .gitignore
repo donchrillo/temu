@@ -1,2 +1,4 @@
 .env
 .venv
+jtl_temu_bestellungen.xml
+order_export.csv
