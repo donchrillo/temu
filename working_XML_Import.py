@@ -1,3 +1,5 @@
+#funktionierer Code für die Konvertierung von TEMU CSV-Bestelldaten in JTL XML-Format***
+
 import pandas as pd
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
