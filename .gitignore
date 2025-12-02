@@ -1,4 +1,16 @@
+.gitignore
+
 .env
 .venv
 jtl_temu_bestellungen.xml
 order_export.csv
+
+
+__pycache__/
+*.pyc   
+db_schema.sql
+
+temu_tracking_export.xlsx
+temu_tracking_export.csv
+
+
