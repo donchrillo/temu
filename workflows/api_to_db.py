@@ -1,10 +1,10 @@
-"""Workflow: CSV/API → Datenbank"""
+"""Workflow: API → Datenbank"""
 
-from src.services.csv_import_service import import_csv_to_database
+from src.services.api_sync_service import import_api_responses_to_db
 
 def run_api_to_db():
-    """Importiert Bestellungen in Datenbank"""
-    return import_csv_to_database()
+    """Importiert API-Responses in Datenbank"""
+    return import_api_responses_to_db()
 
 if __name__ == "__main__":
     run_api_to_db()

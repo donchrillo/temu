@@ -7,7 +7,9 @@ from workflows.full_workflow import run_full_workflow
 
 if __name__ == "__main__":
     try:
-        success = run_full_workflow()
+        # Use_api Flag: True = API, False = CSV
+        use_api = '--api' in sys.argv
+        success = run_full_workflow(use_api=use_api)
         sys.exit(0 if success else 1)
     except KeyboardInterrupt:
         print("\n⚠ Abgebrochen")
