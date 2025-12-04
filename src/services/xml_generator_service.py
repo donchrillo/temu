@@ -1,98 +1,44 @@
-import pyodbc
+"""XML Generator Service - erstellt JTL-XML aus Datenbank"""
+
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
-
-# --- EINSTELLUNGEN ---
-SQL_SERVER = os.getenv('SQL_SERVER')
-SQL_USERNAME = os.getenv('SQL_USERNAME')
-SQL_PASSWORD = os.getenv('SQL_PASSWORD')
-
-# Datenbanknamen (fest im Code)
-DB_TOCI = 'toci'
-DB_JTL = 'eazybusiness'
-
-TABLE_ORDERS = os.getenv('TABLE_ORDERS', 'temu_orders')
-TABLE_ORDER_ITEMS = os.getenv('TABLE_ORDER_ITEMS', 'temu_order_items')
-TABLE_XML_EXPORT = os.getenv('TABLE_XML_EXPORT', 'temu_xml_export')
-
-WAEHRUNG = os.getenv('JTL_WAEHRUNG', 'EUR')
-SPRACHE = os.getenv('JTL_SPRACHE', 'ger')
-K_BENUTZER = os.getenv('JTL_K_BENUTZER', '1')
-K_FIRMA = os.getenv('JTL_K_FIRMA', '1')
-
-XML_OUTPUT_PATH = os.getenv('XML_OUTPUT_PATH', 'jtl_temu_bestellungen.xml')
-
-def get_db_connection(database=DB_TOCI):
-    """Erstellt SQL Server Verbindung zu einer bestimmten Datenbank."""
-    # Verfügbare Treiber in Priorität
-    drivers = [
-        'ODBC Driver 18 for SQL Server',
-        'ODBC Driver 17 for SQL Server',
-        'ODBC Driver 13 for SQL Server',
-        'SQL Server Native Client 11.0',
-        'SQL Server'
-    ]
-    
-    # Installierten Treiber finden
-    available_drivers = [d for d in pyodbc.drivers() if 'SQL Server' in d]
-    
-    driver = None
-    for d in drivers:
-        if d in available_drivers:
-            driver = d
-            break
-    
-    if not driver and available_drivers:
-        driver = available_drivers[0]
-    
-    if not driver:
-        raise Exception("Kein SQL Server ODBC-Treiber gefunden!")
-    
-    conn_str = (
-        f'DRIVER={{{driver}}};'
-        f'SERVER={SQL_SERVER};'
-        f'DATABASE={database};'
-        f'UID={SQL_USERNAME};'
-        f'PWD={SQL_PASSWORD};'
-        f'TrustServerCertificate=yes;'
-    )
-    return pyodbc.connect(conn_str)
+from src.database.connection import get_db_connection
+from src.database.models import TemuOrder, TemuOrderItem
+from config.settings import (
+    TABLE_ORDERS, TABLE_ORDER_ITEMS, TABLE_XML_EXPORT,
+    DB_TOCI, DB_JTL, JTL_WAEHRUNG, JTL_SPRACHE, 
+    JTL_K_BENUTZER, JTL_K_FIRMA, XML_OUTPUT_PATH
+)
 
 def _prettify_xml(elem):
-    """Formatiert XML schön."""
+    """Formatiert XML schön"""
     rough_string = ET.tostring(elem, 'utf-8')
     reparsed = minidom.parseString(rough_string).toprettyxml(indent="  ", encoding="ISO-8859-1")
     return reparsed.decode("ISO-8859-1")
 
-def create_xml_for_orders():
-    """Erstellt XML für alle Bestellungen mit status='importiert'."""
+def generate_xml_for_orders():
+    """Generiert XML für alle Bestellungen mit status='importiert'"""
     
     print("=" * 60)
-    print("XML-Export für JTL erstellen")
+    print("XML-Generierung für JTL")
     print("=" * 60)
     
-    # Verbindung zur TOCI Datenbank (wo TEMU Orders liegen)
+    # Verbindung zu TOCI
     conn = get_db_connection(DB_TOCI)
     cursor = conn.cursor()
-    print(f"✓ {DB_TOCI} Datenbankverbindung hergestellt")
+    print(f"✓ {DB_TOCI} Verbindung hergestellt")
     
-    # JTL Datenbankverbindung für direkten XML-Import
+    # JTL Verbindung für direkten Import
     try:
         conn_jtl = get_db_connection(DB_JTL)
         cursor_jtl = conn_jtl.cursor()
-        print(f"✓ {DB_JTL} Datenbankverbindung hergestellt")
+        print(f"✓ {DB_JTL} Verbindung hergestellt")
     except Exception as e:
-        print(f"⚠ WARNUNG: JTL-Verbindung fehlgeschlagen: {e}")
-        print("  XML wird nur in Datei gespeichert")
+        print(f"⚠ JTL-Verbindung fehlgeschlagen: {e}")
         conn_jtl = None
         cursor_jtl = None
     
-    # Bestellungen aus TOCI holen die noch nicht verarbeitet wurden
-    # WICHTIG: Stornierte Bestellungen NICHT exportieren!
+    # Bestellungen holen (status='importiert', nicht storniert)
     cursor.execute(f"""
         SELECT * FROM {TABLE_ORDERS} 
         WHERE status = 'importiert' 
@@ -104,15 +50,7 @@ def create_xml_for_orders():
     columns = [column[0] for column in cursor.description]
     
     if not orders:
-        print("✓ Keine neuen Bestellungen zum Verarbeiten")
-        # Prüfen ob stornierte Bestellungen vorhanden sind
-        cursor.execute(f"""
-            SELECT COUNT(*) FROM {TABLE_ORDERS} 
-            WHERE status = 'storniert' AND xml_erstellt = 0
-        """)
-        storniert_count = cursor.fetchone()[0]
-        if storniert_count > 0:
-            print(f"  ⚠ {storniert_count} stornierte Bestellungen werden übersprungen")
+        print("✓ Keine neuen Bestellungen")
         cursor.close()
         conn.close()
         if conn_jtl:
@@ -122,7 +60,7 @@ def create_xml_for_orders():
     
     print(f"✓ {len(orders)} Bestellungen gefunden")
     
-    # XML Root erstellen für Datei-Export
+    # XML Root
     root = ET.Element('tBestellungen')
     processed_count = 0
     jtl_import_count = 0
@@ -132,20 +70,16 @@ def create_xml_for_orders():
         order_id = order['bestell_id']
         order_db_id = order['id']
         
-        # Artikel aus TOCI holen
-        cursor.execute(f"""
-            SELECT * FROM {TABLE_ORDER_ITEMS}
-            WHERE order_id = ?
-        """, order_db_id)
-        
+        # Artikel holen
+        cursor.execute(f"SELECT * FROM {TABLE_ORDER_ITEMS} WHERE order_id = ?", order_db_id)
         items = cursor.fetchall()
         item_columns = [column[0] for column in cursor.description]
         
-        # Bestellung-XML erstellen
-        bestellung = ET.SubElement(root, 'tBestellung', kFirma=K_FIRMA, kBenutzer=K_BENUTZER)
+        # XML Bestellung erstellen
+        bestellung = ET.SubElement(root, 'tBestellung', kFirma=JTL_K_FIRMA, kBenutzer=JTL_K_BENUTZER)
         
-        ET.SubElement(bestellung, 'cSprache').text = SPRACHE
-        ET.SubElement(bestellung, 'cWaehrung').text = WAEHRUNG
+        ET.SubElement(bestellung, 'cSprache').text = JTL_SPRACHE
+        ET.SubElement(bestellung, 'cWaehrung').text = JTL_WAEHRUNG
         ET.SubElement(bestellung, 'cBestellNr')
         ET.SubElement(bestellung, 'cExterneBestellNr').text = order_id
         ET.SubElement(bestellung, 'cVersandartName').text = 'TEMU'
@@ -245,47 +179,42 @@ def create_xml_for_orders():
         ET.SubElement(zahlungsinfo, 'cIBAN')
         ET.SubElement(zahlungsinfo, 'cBIC')
         
-        # XML für diese einzelne Bestellung erstellen (für JTL Import)
+        # Einzelne Bestellung als XML
         single_root = ET.Element('tBestellungen')
         single_root.append(bestellung)
         xml_string = _prettify_xml(single_root)
         
-        # In eigene Export-Tabelle in TOCI speichern
+        # In TOCI Export-Tabelle speichern
         cursor.execute(f"""
             INSERT INTO {TABLE_XML_EXPORT} (bestell_id, xml_content, status)
             VALUES (?, ?, 'pending')
         """, order_id, xml_string)
         
-        # ID des eingefügten Export-Eintrags holen
         cursor.execute("SELECT @@IDENTITY")
         xml_export_id = cursor.fetchone()[0]
         
-        # Direkt in JTL eazybusiness Import-Tabelle schreiben
+        # In JTL Import-Tabelle schreiben
         jtl_import_success = False
         if conn_jtl and cursor_jtl:
             try:
                 cursor_jtl.execute("""
-                    INSERT INTO [dbo].[tXMLBestellImport] 
-                    (cText, nPlattform, nRechnung)
+                    INSERT INTO [dbo].[tXMLBestellImport] (cText, nPlattform, nRechnung)
                     VALUES (?, 5, 0)
                 """, xml_string)
                 jtl_import_count += 1
                 jtl_import_success = True
-                print(f"  ✓ {order_id} in JTL importiert")
+                print(f"  ✓ {order_id} → JTL")
             except Exception as e:
-                print(f"  ⚠ {order_id}: JTL-Import fehlgeschlagen: {e}")
+                print(f"  ⚠ {order_id}: {e}")
         
-        # XML Export Status aktualisieren wenn JTL Import erfolgreich
+        # Status aktualisieren
         if jtl_import_success:
             cursor.execute(f"""
                 UPDATE {TABLE_XML_EXPORT}
-                SET status = 'imported',
-                    verarbeitet = 1,
-                    processed_at = GETDATE()
+                SET status = 'imported', verarbeitet = 1, processed_at = GETDATE()
                 WHERE id = ?
             """, xml_export_id)
         
-        # Status in TOCI aktualisieren
         cursor.execute(f"""
             UPDATE {TABLE_ORDERS}
             SET xml_erstellt = 1, status = 'xml_erstellt', updated_at = GETDATE()
@@ -296,28 +225,22 @@ def create_xml_for_orders():
     
     # Gesamte XML-Datei speichern
     xml_output = _prettify_xml(root)
-    with open(XML_OUTPUT_PATH, 'w', encoding='ISO-8859-1') as f:
+    with open(str(XML_OUTPUT_PATH), 'w', encoding='ISO-8859-1') as f:
         f.write(xml_output)
     
-    # TOCI Transaktion abschließen
     conn.commit()
     cursor.close()
     conn.close()
     
-    # JTL Transaktion abschließen
     if conn_jtl:
         conn_jtl.commit()
         cursor_jtl.close()
         conn_jtl.close()
     
     print(f"\n{'='*60}")
-    print(f"✓ XML-Export erfolgreich!")
-    print(f"  Verarbeitete Bestellungen: {processed_count}")
-    print(f"  In JTL importiert: {jtl_import_count}")
-    print(f"  XML-Datei: {XML_OUTPUT_PATH}")
+    print(f"✓ XML-Generierung erfolgreich!")
+    print(f"  Bestellungen: {processed_count}")
+    print(f"  JTL-Import: {jtl_import_count}")
     print(f"{'='*60}\n")
     
     return True
-
-if __name__ == "__main__":
-    create_xml_for_orders()
