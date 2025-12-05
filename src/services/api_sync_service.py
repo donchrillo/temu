@@ -169,16 +169,17 @@ def import_api_responses_to_db(api_response_dir=None):
         for item_idx, order in enumerate(order_list):
             bestellartikel_id = order.get('orderSn')
             
-            # Prüfe ob Artikel bereits existiert
-            cursor.execute(f"SELECT id FROM {TABLE_ORDER_ITEMS} WHERE bestellartikel_id = ?", bestellartikel_id)
-            if cursor.fetchone():
-                continue
-            
             # Artikel-Daten (original = sprachunabhängig!)
             produktname = order.get('originalGoodsName', '')
             variation = order.get('originalSpecName', '')
             menge = float(order.get('originalOrderQuantity', 0))
-            sku = order.get('skuId', '')
+            sku_id = order.get('skuId', '')
+            
+            # Extrahiere SKU aus productList
+            sku = ''
+            product_list = order.get('productList', [])
+            if product_list and len(product_list) > 0:
+                sku = product_list[0].get('extCode', '')
             
             # ===== Preise aus amount_info =====
             netto_einzelpreis = 0.0
@@ -191,27 +192,63 @@ def import_api_responses_to_db(api_response_dir=None):
                 brutto_einzelpreis = amount_item.get('unitRetailPriceVatIncl', {}).get('amount', 0) / 100
                 mwst_satz = amount_item.get('productTaxRate', 19000000) / 1000000
             
-            cursor.execute(f"""
-                INSERT INTO {TABLE_ORDER_ITEMS} (
-                    order_id, bestell_id, bestellartikel_id,
-                    produktname, sku, variation,
-                    menge, netto_einzelpreis, brutto_einzelpreis,
-                    gesamtpreis_netto, gesamtpreis_brutto, mwst_satz
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-                order_db_id,
-                parent_order_sn,
-                bestellartikel_id,
-                produktname,
-                sku,
-                variation,
-                menge,
-                netto_einzelpreis,
-                brutto_einzelpreis,
-                netto_einzelpreis * menge,
-                brutto_einzelpreis * menge,
-                mwst_satz
-            )
+            # Prüfe ob Artikel bereits existiert
+            cursor.execute(f"SELECT id FROM {TABLE_ORDER_ITEMS} WHERE bestellartikel_id = ?", bestellartikel_id)
+            existing_item = cursor.fetchone()
+            
+            if existing_item:
+                # UPDATE: Artikel schon vorhanden, aber mit neuen Daten aktualisieren
+                item_id = existing_item[0]
+                cursor.execute(f"""
+                    UPDATE {TABLE_ORDER_ITEMS} SET
+                        produktname = ?,
+                        sku = ?,
+                        sku_id = ?,
+                        variation = ?,
+                        menge = ?,
+                        netto_einzelpreis = ?,
+                        brutto_einzelpreis = ?,
+                        gesamtpreis_netto = ?,
+                        gesamtpreis_brutto = ?,
+                        mwst_satz = ?
+                    WHERE id = ?
+                """,
+                    produktname,
+                    sku,
+                    sku_id,
+                    variation,
+                    menge,
+                    netto_einzelpreis,
+                    brutto_einzelpreis,
+                    netto_einzelpreis * menge,
+                    brutto_einzelpreis * menge,
+                    mwst_satz,
+                    item_id
+                )
+            else:
+                # INSERT: Neuer Artikel
+                cursor.execute(f"""
+                    INSERT INTO {TABLE_ORDER_ITEMS} (
+                        order_id, bestell_id, bestellartikel_id,
+                        produktname, sku, sku_id, variation,
+                        menge, netto_einzelpreis, brutto_einzelpreis,
+                        gesamtpreis_netto, gesamtpreis_brutto, mwst_satz
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                    order_db_id,
+                    parent_order_sn,
+                    bestellartikel_id,
+                    produktname,
+                    sku,
+                    sku_id,
+                    variation,
+                    menge,
+                    netto_einzelpreis,
+                    brutto_einzelpreis,
+                    netto_einzelpreis * menge,
+                    brutto_einzelpreis * menge,
+                    mwst_satz
+                )
     
     conn.commit()
     cursor.close()

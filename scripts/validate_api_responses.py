@@ -136,6 +136,13 @@ def validate_and_preview():
                 produktname = order.get('originalGoodsName', '')
                 variation = order.get('originalSpecName', '')
                 menge = float(order.get('originalOrderQuantity', 0))
+                sku_id = order.get('skuId', '')
+                
+                # Extrahiere SKU aus productList
+                sku = ''
+                product_list = order.get('productList', [])
+                if product_list and len(product_list) > 0:
+                    sku = product_list[0].get('extCode', '')
                 
                 # Preis aus amount_list
                 if idx-1 < len(order_amount_list):
@@ -149,6 +156,8 @@ def validate_and_preview():
                 print(f"    │  {idx}. {produktname}")
                 print(f"    │     Variation: {variation}")
                 print(f"    │     Menge: {menge}x")
+                print(f"    │     SKU: {sku}")
+                print(f"    │     SKU-ID: {sku_id}")
                 print(f"    │     Preis: {netto:.2f}€ (netto) / {brutto:.2f}€ (brutto)")
             
             print(f"    └─ STATUS: OK - Bereit für DB-Import")
