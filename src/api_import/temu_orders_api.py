@@ -14,14 +14,17 @@ class TemuOrdersApi:
         """
         self.client = client
     
-    def get_orders(self, page_number=1, page_size=100, parent_order_status=2):
+    def get_orders(self, page_number=1, page_size=100, parent_order_status=2, 
+                   createAfter=None, createBefore=None):
         """
         Holt Bestellungsliste von TEMU API.
         
         Args:
             page_number: Seite (Standard: 1)
             page_size: Bestellungen pro Seite (Standard: 100, Max: 100)
-            parent_order_status: 2 = alle Bestellungen
+            parent_order_status: Order Status Filter (0=All, 1=PENDING, 2=UN_SHIPPING, etc.)
+            createAfter: Unix timestamp - Start time für Order-Abfrage (optional)
+            createBefore: Unix timestamp - End time für Order-Abfrage (optional)
         
         Returns:
             API-Response oder None bei Fehler
@@ -32,6 +35,13 @@ class TemuOrdersApi:
             "pageNumber": page_number,
             "parentOrderStatus": parent_order_status
         }
+        
+        # Optionale Parameter hinzufügen
+        if createAfter is not None:
+            request_params["createAfter"] = createAfter
+        
+        if createBefore is not None:
+            request_params["createBefore"] = createBefore
         
         return self.client.call("bg.order.list.v2.get", request_params)
     
