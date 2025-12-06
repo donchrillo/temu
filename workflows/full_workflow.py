@@ -1,13 +1,14 @@
 """Kompletter Workflow: CSV → DB → XML → Tracking → Excel"""
 
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from workflows.api_to_json import run_api_to_json
 from workflows.csv_to_db import run_csv_to_db
 from workflows.api_to_db import run_api_to_db
 from workflows.db_to_xml import run_db_to_xml
 from workflows.update_tracking import run_update_tracking
+from workflows.db_to_api import run_db_to_api
 from workflows.db_to_excel import run_db_to_excel
 
 def print_header(title):
@@ -42,7 +43,7 @@ def run_full_workflow(use_api=False, parent_order_status=0, days_back=7):
         print(f"  Status Filter: {parent_order_status}\n")
     
     # Bestimme Gesamtanzahl Schritte
-    total_steps = 6 if use_api else 5
+    total_steps = 5 if use_api else 6
     
     results = {
         'fetch': True,
@@ -86,29 +87,36 @@ def run_full_workflow(use_api=False, parent_order_status=0, days_back=7):
     
     # Schritt 3: Tracking Update
     tracking_step = 4 if use_api else 3
-    print_step(tracking_step, total_steps, "JTL → Tracking")
+    tracking_desc = "JTL → Tracking"
+    print_step(tracking_step, total_steps, tracking_desc)
     try:
         results['tracking'] = run_update_tracking()
     except Exception as e:
         print(f"✗ FEHLER: {e}")
     
-    # Schritt 4: Excel Export
-    excel_step = 5 if use_api else 4
-    print_step(excel_step, total_steps, "Datenbank → Excel")
+    # Schritt 4: Excel oder API Export 
+
+    excel_step = 4 if use_api else 5
+    print_step(excel_step, total_steps, "Tracking Export → TEMU")
     try:
-        results['excel'] = run_db_to_excel()
+        if use_api:
+            results['api'] = run_db_to_api()   
+        else:
+            results['excel'] = run_db_to_excel()           
+        
     except Exception as e:
         print(f"✗ FEHLER: {e}")
     
-    # Schritt 5: Stornierte Check
-    storno_step = 6 if use_api else 5
-    print_step(storno_step, total_steps, "Stornierte Bestellungen prüfen")
-    try:
-        from scripts.stornierte_bestellungen import show_stornierte_bestellungen
-        show_stornierte_bestellungen()
-    except Exception as e:
-        print(f"✗ FEHLER: {e}")
-        results['stornierte'] = False
+    # Schritt 5: Stornierte Check (nur bei CSV Import)
+    if not use_api:
+        storno_step = 5
+        print_step(storno_step, total_steps, "Stornierte Bestellungen prüfen")
+        try:
+            from scripts.stornierte_bestellungen import show_stornierte_bestellungen
+            show_stornierte_bestellungen()
+        except Exception as e:
+            print(f"✗ FEHLER: {e}")
+            results['stornierte'] = False
     
     # Zusammenfassung
     end_time = datetime.now()
@@ -130,9 +138,11 @@ def run_full_workflow(use_api=False, parent_order_status=0, days_back=7):
     step_num += 1
     print(f"  {step_num}. Tracking Update: {'✓' if results['tracking'] else '✗'}")
     step_num += 1
-    print(f"  {step_num}. Excel-Export:  {'✓' if results['excel'] else '✗'}")
-    step_num += 1
-    print(f"  {step_num}. Storno-Check:  {'✓' if results['stornierte'] else '✗'}")
+    
+    if not use_api:
+        print(f"  {step_num}. Excel-Export:  {'✓' if results['excel'] else '✗'}")
+        step_num += 1
+        print(f"  {step_num}. Storno-Check:  {'✓' if results['stornierte'] else '✗'}")
     
     success_count = sum(results.values())
     print(f"\n{success_count}/{total_steps} erfolgreich")
