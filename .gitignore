@@ -1,16 +1,22 @@
-.gitignore
-
+# Environment
 .env
 .venv
-
-
-
+venv/
 __pycache__/
-*.pyc   
+*.pyc
+*.pyo
 
-jtl_temu_bestellungen.xml
-order_export.csv
-temu_tracking_export.xlsx
-temu_tracking_export.csv
+# IDE
+.vscode/
+.idea/
+
+# Daten
+data/
+api_responses/
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
 
 
