@@ -1,6 +1,5 @@
 """Workflow: Datenbank → TEMU API"""
 
-import sys
 from config.settings import TEMU_APP_KEY, TEMU_APP_SECRET, TEMU_ACCESS_TOKEN, TEMU_API_ENDPOINT, DATA_DIR
 
 from src.services.api_export_service import export_to_temu_api

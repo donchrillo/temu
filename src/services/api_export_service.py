@@ -76,13 +76,11 @@ def export_to_temu_api(app_key, app_secret, access_token, api_endpoint):
         orders_api = TemuOrdersApi(client)
         success = orders_api.upload_tracking_data(export_data)
         
-        #success = False  # Mock success for this example
         if success:
             for order_id in order_ids:
                 cursor_toci.execute(f"""
                     UPDATE {TABLE_ORDERS}
                     SET temu_gemeldet = 1,
-                        bestellstatus = 'shipped',
                         updated_at = GETDATE()
                     WHERE id = ?
                 """, order_id)
