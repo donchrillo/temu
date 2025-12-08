@@ -26,22 +26,23 @@ def calculate_signature(app_secret, params):
     # Sortiere Parameter alphabetisch
     sorted_params = sorted(params.items())
     
-    # Baue Signatur-String
-    for k, v in sorted_params:
-        # JSON-encode den Wert (mit ensure_ascii=False)
-        v_json = json.dumps(v, ensure_ascii=False, separators=(',', ':'))
-        # Entferne äußere Anführungszeichen
-        v_stripped = v_json.strip('"')
-        # Concatenate key + value
-        temp.append(str(k) + v_stripped)
+    # Erstelle String für die Berechnung
+    param_string = '&'.join([f"{k}={v}" for k, v in sorted_params])
     
-    # Zusammenfassung
-    un_sign = ''.join(temp)
-    
-    # Wrap mit app_secret
-    un_sign = str(app_secret) + un_sign + str(app_secret)
-    
-    # MD5 Hash (UPPERCASE)
-    sign = hashlib.md5(un_sign.encode('utf-8')).hexdigest().upper()
+    # Berechne den MD5 Hash
+    hash_object = hashlib.md5(f"{app_secret}{param_string}{app_secret}".encode())
+    sign = hash_object.hexdigest().upper()
     
     return sign
+
+if __name__ == "__main__":
+    # Testaufruf
+    secret = "mein_app_secret"
+    parameters = {
+        "param1": "wert1",
+        "param2": "wert2",
+        "param3": "wert3"
+    }
+    
+    signatur = calculate_signature(secret, parameters)
+    print(f"Berechnete Signatur: {signatur}")

@@ -24,17 +24,11 @@ def test_imports():
         from services.api_fetch_service import fetch_and_save_orders
         print("  ✓ api_fetch_service importiert")
         
-        from services.api_sync_service import import_api_responses_to_db
-        print("  ✓ api_sync_service importiert")
-        
-        from services.api_export_service import export_to_temu_api
-        print("  ✓ api_export_service importiert")
-        
-        from services.xml_generator_service import generate_xml_for_orders
-        print("  ✓ xml_generator_service importiert")
-        
-        from services.tracking_service import update_tracking_from_jtl
-        print("  ✓ tracking_service importiert")
+        # Alte Services sind gelöscht - nicht mehr testen!
+        # from services.api_sync_service import import_api_responses_to_db
+        # from services.api_export_service import export_to_temu_api
+        # from services.xml_generator_service import generate_xml_for_orders
+        # from services.tracking_service import update_tracking_from_jtl
         
         print("\n✓ Alle Service-Imports erfolgreich!\n")
         return True
@@ -63,6 +57,32 @@ def test_workflow_imports():
         print("  ✓ db_tracking_to_api importiert")
         
         print("\n✓ Alle Workflow-Imports erfolgreich!\n")
+        return True
+    except ImportError as e:
+        print(f"\n✗ Import Fehler: {e}\n")
+        return False
+
+def test_new_repositories_and_services():
+    """Test: Neue Repositories & Services funktionieren"""
+    print("✓ Testing New Architecture (Repositories + Services)...")
+    
+    try:
+        from src.db.repositories.order_repository import OrderRepository
+        print("  ✓ OrderRepository importiert")
+        
+        from src.db.repositories.order_item_repository import OrderItemRepository
+        print("  ✓ OrderItemRepository importiert")
+        
+        from src.modules.orders.service import OrderService
+        print("  ✓ OrderService importiert")
+        
+        from src.modules.tracking.service import TrackingService
+        print("  ✓ TrackingService importiert")
+        
+        from src.modules.xml_export.service import XmlExportService
+        print("  ✓ XmlExportService importiert")
+        
+        print("\n✓ Alle neuen Imports erfolgreich!\n")
         return True
     except ImportError as e:
         print(f"\n✗ Import Fehler: {e}\n")
@@ -107,6 +127,7 @@ if __name__ == "__main__":
     results = {
         "Services": test_imports(),
         "Workflows": test_workflow_imports(),
+        "New Architecture": test_new_repositories_and_services(),
         "Dashboard": test_dashboard_imports(),
         "Database": test_db_imports(),
     }
