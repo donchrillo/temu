@@ -79,7 +79,7 @@ class TemuOrdersApi:
         
         return self.client.call("bg.order.amount.query", request_params)
     
-    def upload_tracking_data(self,tracking_data_list):
+    def upload_tracking_data(self, tracking_data_list):
         """
         Lädt Tracking-Daten zu TEMU API hoch
         
@@ -92,63 +92,52 @@ class TemuOrdersApi:
                 - carrier_id (Standard: 960246690 für externe Carrier)
         
         Returns:
-            bool: True wenn erfolgreich
+            tuple: (success: bool, error_code: int or None, error_msg: str or None)
         """
         
         if not tracking_data_list:
             print("Keine Tracking-Daten zum Upload")
-            return True
+            return (True, None, None)
         
-        # Gruppiere nach Carrier ID
-        by_carrier = {}
-        for item in tracking_data_list:
-            carrier_id = item.get('carrier_id', 960246690)
-            if carrier_id not in by_carrier:
-                by_carrier[carrier_id] = []
-            by_carrier[carrier_id].append(item)
+        # Für einzelne Orders ist tracking_data_list normalerweise nur 1 Element
+        item = tracking_data_list[0]
+        carrier_id = item.get('carrier_id', 960246690)
         
-        success_count = 0
-        error_count = 0
+        send_request = {
+            "carrierId": carrier_id,
+            "orderSendInfoList": [
+                {
+                    "orderSn": item['order_sn'],
+                    "parentOrderSn": item['bestell_id'],
+                    "quantity": item['quantity'],
+                }
+            ],
+            "trackingNumber": item['tracking_number']
+        }
         
-        for carrier_id, items in by_carrier.items():
-            send_request_list = []
+        # API Request
+        payload = {
+            "type": "bg.logistics.shipment.v2.confirm",
+            "sendRequestList": [send_request],
+            "sendType": 0
+        }
+        
+        try:
+            response = self.client.call("bg.logistics.shipment.v2.confirm", payload)
             
-            for item in items:
-                send_request_list.append({
-                    "carrierId": carrier_id,
-                    "orderSendInfoList": [
-                        {
-                            "orderSn": item['order_sn'],
-                            "parentOrderSn": item['bestell_id'],
-                            "quantity": item['quantity'],
-                        }
-                    ],
-                    "trackingNumber": item['tracking_number']
-                })
+            if response is None:
+                return (False, -1, "API gab keine Response (Fehler bereits geloggt)")
             
-            # API Request
-            payload = {
-                "type": "bg.logistics.shipment.v2.confirm",
-                "sendRequestList": send_request_list,
-                "sendType": 0
-            }
+            if response.get('success'):
+                print(f"  ✓ {item['order_sn']}: {item['tracking_number']} hochgeladen")
+                return (True, None, None)
             
-            try:
-                response = self.client.call("bg.logistics.shipment.v2.confirm", payload)
-                #response = False # Temporär deaktiviert
-                print(payload)
-                if response and response.get('success'):
-                    success_count += len(items)
-                    for item in items:
-                        print(f"  ✓ {item['order_sn']}: {item['tracking_number']} hochgeladen")
-                else:
-                    error_count += len(items)
-                    error_msg = response.get('message', 'Unbekannter Fehler')
-                    print(f"  ✗ API Fehler: {error_msg}")
+            # Fehlerfall - Error wurde bereits von temu_client.py geloggt
+            error_code = response.get('errorCode')
+            error_msg = response.get('errorMsg', 'Unbekannter Fehler')
+            
+            return (False, error_code, error_msg)
                     
-            except Exception as e:
-                error_count += len(items)
-                print(f"  ✗ Fehler beim Upload: {e}")
-        
-        print(f"\nTracking-Upload: {success_count} erfolgreich, {error_count} Fehler")
-        return error_count == 0
+        except Exception as e:
+            print(f"  ✗ Exception beim Upload: {e}")
+            return (False, -1, str(e))

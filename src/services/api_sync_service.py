@@ -104,7 +104,7 @@ def import_api_responses_to_db(api_response_dir=None):
         order_amount_list = amount_result.get('orderList', [])
         
         # Versandkosten (in Cents, daher /100)
-        versandkosten_brutto = parent_amount_map.get('shipAmountTotalTaxIncl', {}).get('amount', 0) / 100
+        #versandkosten_brutto = parent_amount_map.get('shipAmountTotalTaxIncl', {}).get('amount', 0) / 100
         versandkosten_netto = parent_amount_map.get('shippingAmountTotal', {}).get('amount', 0) / 100
         
         # Bestellstatus

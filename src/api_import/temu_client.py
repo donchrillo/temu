@@ -33,7 +33,7 @@ class TemuApiClient:
             request_params: Dict mit zusätzlichen Parametern
         
         Returns:
-            API-Response als Dict oder None bei Fehler
+            API-Response als Dict (auch bei Fehlern!) oder None bei HTTP-Fehler
         """
         
         if request_params is None:
@@ -78,12 +78,14 @@ class TemuApiClient:
             response.raise_for_status()
             response_json = response.json()
             
-            # Prüfe auf API-Fehler
+            # Gib IMMER die Response zurück (auch bei API-Fehlern)
+            # Der Caller kann dann response.get('success') prüfen
             if not response_json.get("success", False):
                 error_code = response_json.get("errorCode", "?")
                 error_msg = response_json.get("errorMsg", "Unbekannter Fehler")
                 print(f"  ✗ API Fehler (Code {error_code}): {error_msg}")
-                return None
+                # Gib die Error-Response zurück statt None!
+                return response_json
             
             print(f"  ✓ Response erhalten")
             return response_json

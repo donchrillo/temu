@@ -1,12 +1,16 @@
 """API Export Service - sendet Daten an TEMU API"""
 
+import time
+import logging
 from src.database.connection import get_db_connection
 from src.api_import.temu_client import TemuApiClient
 from src.api_import.temu_orders_api import TemuOrdersApi
 from config.settings import TABLE_ORDERS, TABLE_ORDER_ITEMS, DB_TOCI
 
+logger = logging.getLogger(__name__)
+
 def export_to_temu_api(app_key, app_secret, access_token, api_endpoint):
-    """Exportiert Bestellungen mit Tracking zur TEMU API"""
+    """Exportiert Bestellungen mit Tracking zur TEMU API (1 Order pro Request)"""
     
     print("=" * 60)
     print("Datenbank → TEMU API")
@@ -19,6 +23,7 @@ def export_to_temu_api(app_key, app_secret, access_token, api_endpoint):
     # Bestellungen mit Tracking zum Export holen
     cursor_toci.execute(f"""
         SELECT 
+            o.id,
             o.bestell_id,
             i.bestellartikel_id,
             CAST(i.menge AS INTEGER),
@@ -41,65 +46,112 @@ def export_to_temu_api(app_key, app_secret, access_token, api_endpoint):
         conn_toci.close()
         return True
     
-    print(f"✓ {len(orders)} Bestellungen zum Exportieren gefunden")
+    print(f"✓ {len(orders)} Bestellungen zum Exportieren gefunden\n")
 
-        # Mapping von Versanddienstleister zu Carrier ID
+    # Mapping von Versanddienstleister zu Carrier ID
     CARRIER_MAPPING = {
         'DHL': 141252268,
         'DPD': 998264853,
-        'default': 141252268  # Externe Carrier ID als Fallback
+        'default': 141252268
     }
     
-    # Prepare data for API
-    export_data = []
-    order_ids = []
-
-    for order in orders:
-        bestell_id, bestellartikel_id, menge, versanddienstleister, trackingnummer = order
-
-        # Bestimme Carrier ID basierend auf Versanddienstleister
-        carrier_id = CARRIER_MAPPING.get(versanddienstleister, CARRIER_MAPPING['default'])
-        
-        export_data.append({
-            'bestell_id': bestell_id,
-            'order_sn': bestellartikel_id,
-            'quantity': menge,
-            'carrier_id': carrier_id,  # Externe Carrier ID
-            'tracking_number': trackingnummer
-        })
-        order_ids.append(bestell_id)
+    # Statistik
+    exported_count = 0
+    skipped_count = 0
+    error_count = 0
     
-    # Send to TEMU API
+    # Erstelle API Client einmalig
     try:
-        # Erstelle API Client
         client = TemuApiClient(app_key, app_secret, access_token, api_endpoint)
         orders_api = TemuOrdersApi(client)
-        success = orders_api.upload_tracking_data(export_data)
+    except Exception as e:
+        print(f"✗ API Client Fehler: {e}")
+        cursor_toci.close()
+        conn_toci.close()
+        return False
+    
+    # Loop: Jede Order einzeln exportieren
+    for idx, order in enumerate(orders, 1):
+        order_id, bestell_id, bestellartikel_id, menge, versanddienstleister, trackingnummer = order
         
-        if success:
-            for order_id in order_ids:
+        print(f"[{idx}/{len(orders)}] Order {bestell_id} (Tracking: {trackingnummer})")
+        
+        try:
+            # Bestimme Carrier ID
+            carrier_id = CARRIER_MAPPING.get(versanddienstleister, CARRIER_MAPPING['default'])
+            
+            # Baue Payload für EINEN Order
+            export_data = [{
+                'bestell_id': bestell_id,
+                'order_sn': bestellartikel_id,
+                'quantity': menge,
+                'carrier_id': carrier_id,
+                'tracking_number': trackingnummer
+            }]
+            
+            # API Aufruf (1 Order) - gibt jetzt Tuple zurück
+            success, error_code, error_msg = orders_api.upload_tracking_data(export_data)
+            
+            if success:
+                # Order als gemeldet markieren
                 cursor_toci.execute(f"""
                     UPDATE {TABLE_ORDERS}
                     SET temu_gemeldet = 1,
                         updated_at = GETDATE()
                     WHERE id = ?
                 """, order_id)
-            conn_toci.commit()
-            exported_count = len(order_ids)
-        else:
-            exported_count = 0
+                conn_toci.commit()
+                
+                print(f"  ✓ Erfolgreich exportiert")
+                exported_count += 1
             
-    except Exception as e:
-        print(f"✗ API-Fehler: {e}")
-        exported_count = 0
-        success = False
-    finally:
-        cursor_toci.close()
-        conn_toci.close()
+            else:
+                # Fehlerbehandlung basierend auf Error-Code
+                # Fehler-Codes die wir ignorieren (Order trotzdem als gemeldet markieren)
+                IGNORABLE_ERRORS = {
+                    20004: "Order already shipped",
+                    20005: "Tracking already exists",
+                }
+                
+                if error_code in IGNORABLE_ERRORS:
+                    print(f"  ⚠ {IGNORABLE_ERRORS[error_code]} (Code {error_code})")
+                    
+                    # Trotzdem als gemeldet markieren (verhindert Endlosschleife)
+                    cursor_toci.execute(f"""
+                        UPDATE {TABLE_ORDERS}
+                        SET temu_gemeldet = 1,
+                            updated_at = GETDATE()
+                        WHERE id = ?
+                    """, order_id)
+                    conn_toci.commit()
+                    skipped_count += 1
+                else:
+                    # Echter Fehler - nicht als gemeldet markieren
+                    print(f"  ✗ Fehler Code {error_code}: {error_msg}")
+                    error_count += 1
+        
+        except Exception as e:
+            print(f"  ✗ Exception: {e}")
+            logger.error(f"Order {bestell_id} Export Fehler: {e}")
+            error_count += 1
+        
+        # Rate Limiting: 0,5 Sekunden Pause zwischen Requests
+        if idx < len(orders):
+            time.sleep(0.5)
     
+    cursor_toci.close()
+    conn_toci.close()
+    
+    # Zusammenfassung
     print(f"\n{'='*60}")
-    print(f"{'✓ API-Export erfolgreich!' if success else '✗ API-Export fehlgeschlagen'}")
-    print(f"  Exportiert: {exported_count}")
+    print("EXPORT ABGESCHLOSSEN")
+    print(f"{'='*60}")
+    print(f"  ✓ Erfolgreich:   {exported_count}")
+    print(f"  ⚠ Übersprungen:  {skipped_count}")
+    print(f"  ✗ Fehler:        {error_count}")
+    print(f"  Total bearbeitet: {exported_count + skipped_count + error_count}/{len(orders)}")
     print(f"{'='*60}\n")
     
+    # Erfolg = mindestens ein Order verarbeitet
+    success = (exported_count + skipped_count) > 0
     return success
