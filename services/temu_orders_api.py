@@ -1,6 +1,6 @@
 """TEMU Orders API - Get Orders"""
 
-from src.api_import.temu_client import TemuApiClient
+from services.temu_client import TemuApiClient
 
 class TemuOrdersApi:
     """Orders API Endpoint"""

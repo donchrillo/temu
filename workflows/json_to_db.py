@@ -1,6 +1,6 @@
 """Workflow: API → Datenbank"""
 
-from src.services.api_sync_service import import_api_responses_to_db
+from services.api_sync_service import import_api_responses_to_db
 
 def run_json_to_db():
     """Importiert API-Responses in Datenbank"""

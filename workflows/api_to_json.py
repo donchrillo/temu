@@ -1,8 +1,7 @@
 """Workflow: API → JSON (speichert API Responses lokal)"""
 
-
 from config.settings import TEMU_APP_KEY, TEMU_APP_SECRET, TEMU_ACCESS_TOKEN, TEMU_API_ENDPOINT, DATA_DIR
-from src.services.api_fetch_service import fetch_and_save_orders
+from services.api_fetch_service import fetch_and_save_orders
 
 API_RESPONSE_DIR = DATA_DIR / 'api_responses'
 
@@ -25,4 +24,3 @@ def run_api_to_json(parent_order_status=2, days_back=7):
 
 if __name__ == "__main__":
     run_api_to_json()
-   

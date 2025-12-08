@@ -1,13 +1,10 @@
 """API Export Service - sendet Daten an TEMU API"""
 
 import time
-import logging
-from src.database.connection import get_db_connection
-from src.api_import.temu_client import TemuApiClient
-from src.api_import.temu_orders_api import TemuOrdersApi
+from db.connection import get_db_connection
+from services.temu_client import TemuApiClient
+from services.temu_orders_api import TemuOrdersApi
 from config.settings import TABLE_ORDERS, TABLE_ORDER_ITEMS, DB_TOCI
-
-logger = logging.getLogger(__name__)
 
 def export_to_temu_api(app_key, app_secret, access_token, api_endpoint):
     """Exportiert Bestellungen mit Tracking zur TEMU API (1 Order pro Request)"""
@@ -89,7 +86,7 @@ def export_to_temu_api(app_key, app_secret, access_token, api_endpoint):
                 'tracking_number': trackingnummer
             }]
             
-            # API Aufruf (1 Order) - gibt jetzt Tuple zurück
+            # API Aufruf (1 Order) - gibt Tuple zurück
             success, error_code, error_msg = orders_api.upload_tracking_data(export_data)
             
             if success:
@@ -107,7 +104,6 @@ def export_to_temu_api(app_key, app_secret, access_token, api_endpoint):
             
             else:
                 # Fehlerbehandlung basierend auf Error-Code
-                # Fehler-Codes die wir ignorieren (Order trotzdem als gemeldet markieren)
                 IGNORABLE_ERRORS = {
                     20004: "Order already shipped",
                     20005: "Tracking already exists",
@@ -132,7 +128,6 @@ def export_to_temu_api(app_key, app_secret, access_token, api_endpoint):
         
         except Exception as e:
             print(f"  ✗ Exception: {e}")
-            logger.error(f"Order {bestell_id} Export Fehler: {e}")
             error_count += 1
         
         # Rate Limiting: 0,5 Sekunden Pause zwischen Requests

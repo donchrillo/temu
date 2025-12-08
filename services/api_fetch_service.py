@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 from datetime import datetime, timedelta
 from config.settings import DATA_DIR
-from src.api_import.temu_client import TemuApiClient
-from src.api_import.temu_orders_api import TemuOrdersApi
+from services.temu_client import TemuApiClient
+from services.temu_orders_api import TemuOrdersApi
 
 API_RESPONSE_DIR = DATA_DIR / 'api_responses'
 API_RESPONSE_DIR.mkdir(exist_ok=True)

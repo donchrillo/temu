@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 from datetime import datetime
-from src.database.connection import get_db_connection
+from db.connection import get_db_connection
 from config.settings import TABLE_ORDERS, TABLE_ORDER_ITEMS, DB_TOCI, DATA_DIR
 
 def import_api_responses_to_db(api_response_dir=None):

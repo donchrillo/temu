@@ -1,6 +1,6 @@
 """Workflow: Update Tracking"""
 
-from src.services.tracking_service import update_tracking_from_jtl
+from services.tracking_service import update_tracking_from_jtl
 
 def run_update_tracking():
     """Holt Tracking aus JTL"""

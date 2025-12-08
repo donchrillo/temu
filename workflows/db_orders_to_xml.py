@@ -1,6 +1,6 @@
 """Workflow: Datenbank → XML"""
 
-from src.services.xml_generator_service import generate_xml_for_orders
+from services.xml_generator_service import generate_xml_for_orders
 
 def run_db_to_xml():
     """Generiert XML aus Datenbank"""

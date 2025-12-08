@@ -1,6 +1,6 @@
 """Tracking Service - holt Tracking aus JTL"""
 
-from src.database.connection import get_db_connection
+from db.connection import get_db_connection
 from config.settings import TABLE_ORDERS, DB_TOCI, DB_JTL
 
 def update_tracking_from_jtl():

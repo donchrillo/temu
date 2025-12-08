@@ -1,1 +1,0 @@
-"""Quellcode-Module"""

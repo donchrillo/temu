@@ -2,8 +2,7 @@
 
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
-from src.database.connection import get_db_connection
-from src.database.models import TemuOrder, TemuOrderItem
+from db.connection import get_db_connection
 from config.settings import (
     TABLE_ORDERS, TABLE_ORDER_ITEMS, TABLE_XML_EXPORT,
     DB_TOCI, DB_JTL, JTL_WAEHRUNG, JTL_SPRACHE, 
@@ -237,10 +236,10 @@ def generate_xml_for_orders():
         cursor_jtl.close()
         conn_jtl.close()
     
-    print(f"\n{'='*60}")
+    print(f"\n{'='*70}")
     print(f"✓ XML-Generierung erfolgreich!")
     print(f"  Bestellungen: {processed_count}")
     print(f"  JTL-Import: {jtl_import_count}")
-    print(f"{'='*60}\n")
+    print(f"{'='*70}\n")
     
     return True

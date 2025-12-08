@@ -3,7 +3,7 @@
 import requests
 import json
 import time
-from src.api_import.temu_signature import calculate_signature
+from services.temu_signature import calculate_signature
 
 class TemuApiClient:
     """Base Client für TEMU Open API"""
