@@ -1,7 +1,7 @@
 """OrderItem Repository - Data Access Layer für Order Items"""
 
 from typing import List, Optional
-from src.database.connection import get_db_connection
+from src.db.connection import get_db_connection
 from config.settings import TABLE_ORDER_ITEMS, DB_TOCI
 
 class OrderItem:

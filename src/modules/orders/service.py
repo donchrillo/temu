@@ -64,7 +64,7 @@ class OrderService:
         
         # ===== IMPORT mit vollständiger Merge-Logik =====
         # ===== WICHTIG: Hole gepoolte Connection EINMAL! =====
-        from src.database.connection import get_db_connection
+        from src.db.connection import get_db_connection
         pooled_conn = get_db_connection(database='toci', use_pool=True)
         
         # Injiziere pooled Connection in Repositories

@@ -106,3 +106,5 @@ def close_all_connections():
             pass
     
     _connection_pools = {}
+
+# ✅ Diese Datei BEHALTEN!

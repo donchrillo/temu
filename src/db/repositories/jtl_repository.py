@@ -1,7 +1,7 @@
 """JTL Repository - Data Access Layer für JTL Datenbank"""
 
 from typing import Optional, Dict, List
-from src.database.connection import get_db_connection
+from src.db.connection import get_db_connection
 from config.settings import DB_JTL
 
 class JtlRepository:

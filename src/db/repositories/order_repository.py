@@ -2,7 +2,7 @@
 
 from typing import Optional, List, Dict
 from datetime import datetime
-from src.database.connection import get_db_connection
+from src.db.connection import get_db_connection
 from config.settings import TABLE_ORDERS, TABLE_ORDER_ITEMS, DB_TOCI
 
 class Order:

@@ -3,7 +3,7 @@
 from src.db.repositories.order_repository import OrderRepository
 from src.marketplace_connectors.temu.service import TemuMarketplaceService
 from src.modules.tracking.service import TrackingService
-from src.database.connection import get_db_connection
+from src.db.connection import get_db_connection
 from config.settings import (
     TEMU_APP_KEY, TEMU_APP_SECRET, TEMU_ACCESS_TOKEN, TEMU_API_ENDPOINT
 )

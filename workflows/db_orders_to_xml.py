@@ -4,7 +4,7 @@ from src.modules.xml_export.service import XmlExportService
 from src.db.repositories.order_repository import OrderRepository
 from src.db.repositories.order_item_repository import OrderItemRepository
 from src.db.repositories.jtl_repository import JtlRepository
-from src.database.connection import get_db_connection
+from src.db.connection import get_db_connection
 
 def run_db_to_xml(save_to_disk: bool = True, import_to_jtl: bool = True) -> bool:
     """

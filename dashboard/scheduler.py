@@ -102,7 +102,7 @@ class SchedulerService:
                 # Führe entsprechenden Job aus
                 if job_type == JobType.SYNC_ORDERS:
                     # ✅ KORRIGIERT: Nutze _async_wrapper mit kwargs!
-                    from main_refactored import run_full_workflow_refactored
+                    from main import run_full_workflow_refactored
                     result = await self._async_wrapper(
                         run_full_workflow_refactored,
                         parent_order_status=2,

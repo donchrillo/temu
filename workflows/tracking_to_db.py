@@ -3,7 +3,7 @@
 from src.db.repositories.order_repository import OrderRepository
 from src.db.repositories.jtl_repository import JtlRepository
 from src.modules.tracking.service import TrackingService
-from src.database.connection import get_db_connection
+from src.db.connection import get_db_connection
 
 def run_update_tracking() -> bool:
     """

@@ -6,7 +6,7 @@ from config.settings import DATA_DIR
 from src.db.repositories.order_repository import OrderRepository
 from src.db.repositories.order_item_repository import OrderItemRepository
 from src.modules.orders.service import OrderService
-from src.database.connection import get_db_connection
+from src.db.connection import get_db_connection
 
 def run_json_to_db():
     """
