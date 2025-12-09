@@ -8,7 +8,7 @@ from src.marketplace_connectors.temu.signature import calculate_signature
 class TemuApiClient:
     """Base Client für TEMU Open API"""
     
-    def __init__(self, app_key, app_secret, access_token, endpoint):
+    def __init__(self, app_key, app_secret, access_token, endpoint, verbose: bool = False):
         """
         Initialisiert den API Client.
         
@@ -16,13 +16,15 @@ class TemuApiClient:
             app_key: TEMU_APP_KEY
             app_secret: TEMU_APP_SECRET
             access_token: TEMU_ACCESS_TOKEN
-            endpoint: TEMU_API_ENDPOINT (z.B. https://open.temuglobal.com)
+            endpoint: TEMU_API_ENDPOINT
+            verbose: Debug Output (Payload + Response)
         """
         self.app_key = app_key
         self.app_secret = app_secret
         self.access_token = access_token
         self.endpoint = endpoint
         self.data_type = "JSON"
+        self.verbose = verbose  # ✅ IMPORTANT!
     
     def call(self, api_type, request_params=None):
         """
@@ -69,12 +71,12 @@ class TemuApiClient:
         try:
             print(f"  → API Call: {api_type}")
             
-            # ===== DEBUG: Payload ausgeben =====
-            print(f"\n  DEBUG - Request Payload:")
-            print(f"  {'-'*60}")
-            import json
-            print(json.dumps(payload, indent=2, default=str))
-            print(f"  {'-'*60}\n")
+            # ===== DEBUG: Nur wenn --verbose! =====
+            if self.verbose:
+                print(f"\n  DEBUG - Request Payload:")
+                print(f"  {'-'*60}")
+                print(json.dumps(payload, indent=2, default=str))
+                print(f"  {'-'*60}\n")
             
             response = requests.post(
                 self.endpoint,
@@ -86,11 +88,12 @@ class TemuApiClient:
             response.raise_for_status()
             response_json = response.json()
             
-            # ===== DEBUG: Response ausgeben =====
-            print(f"  DEBUG - Response:")
-            print(f"  {'-'*60}")
-            print(json.dumps(response_json, indent=2, default=str))
-            print(f"  {'-'*60}\n")
+            # ===== DEBUG: Nur wenn --verbose! =====
+            if self.verbose:
+                print(f"  DEBUG - Response:")
+                print(f"  {'-'*60}")
+                print(json.dumps(response_json, indent=2, default=str))
+                print(f"  {'-'*60}\n")
             
             # Prüfe auf API-Fehler
             if not response_json.get("success", False):
@@ -104,13 +107,18 @@ class TemuApiClient:
         
         except requests.exceptions.RequestException as e:
             print(f"  ✗ Request Fehler: {e}")
-            print(f"\n  DEBUG - Exception Details:")
-            print(f"  {'-'*60}")
-            import traceback
-            traceback.print_exc()
-            print(f"  {'-'*60}\n")
+            
+            # ===== DEBUG: Nur wenn --verbose! =====
+            if self.verbose:
+                print(f"\n  DEBUG - Exception Details:")
+                print(f"  {'-'*60}")
+                import traceback
+                traceback.print_exc()
+                print(f"  {'-'*60}\n")
+            
             return None
         except json.JSONDecodeError as e:
             print(f"  ✗ JSON Decode Fehler: {e}")
-            print(f"  Response Text: {response.text}")
+            if self.verbose:
+                print(f"  Response Text: {response.text}")
             return None

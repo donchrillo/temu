@@ -49,23 +49,22 @@ class OrderRepository:
         return get_db_connection(DB_TOCI)
     
     def find_by_bestell_id(self, bestell_id: str) -> Optional[Order]:
-        """Hole Order aus DB"""
+        """Hole Order aus DB - ALLE Spalten!"""
         try:
             conn = self._get_conn()
             cursor = conn.cursor()
             
+            # ✅ WICHTIG: ALLE Spalten in gleicher Reihenfolge wie _map_to_order!
             cursor.execute(f"""
                 SELECT id, bestell_id, bestellstatus, kaufdatum,
                        vorname_empfaenger, nachname_empfaenger,
-                       strasse, plz, ort, bundesland, land, land_iso,
-                       email, telefon_empfaenger, versandkosten, status
+                       strasse, adresszusatz, plz, ort, bundesland, land, land_iso,
+                       email, telefon_empfaenger, versandkosten, status, xml_erstellt,
+                       trackingnummer, versanddienstleister, versanddatum
                 FROM {TABLE_ORDERS}
                 WHERE bestell_id = ?
             """, bestell_id)
             row = cursor.fetchone()
-            
-            # ❌ NICHT conn.close() bei gepoolter Connection!
-            # ✅ Connection bleibt offen für nächsten Request
             
             return self._map_to_order(row) if row else None
         except Exception as e:
@@ -136,17 +135,18 @@ class OrderRepository:
             return 0
     
     def find_by_status(self, status: str) -> List[Order]:
-        """Hole alle Orders mit bestimmtem Status"""
+        """Hole alle Orders mit bestimmtem Status - ALLE Spalten!"""
         try:
             conn = self._get_conn()
             cursor = conn.cursor()
             
+            # ✅ WICHTIG: ALLE Spalten in gleicher Reihenfolge wie _map_to_order!
             cursor.execute(f"""
                 SELECT id, bestell_id, bestellstatus, kaufdatum,
                        vorname_empfaenger, nachname_empfaenger,
                        strasse, adresszusatz, plz, ort, bundesland, land, land_iso,
                        email, telefon_empfaenger, versandkosten, status, xml_erstellt,
-                       trackingnummer, versanddienstleister
+                       trackingnummer, versanddienstleister, versanddatum
                 FROM {TABLE_ORDERS}
                 WHERE status = ?
                 ORDER BY created_at DESC
@@ -308,21 +308,12 @@ class OrderRepository:
             return False
 
     def find_orders_for_tracking(self) -> List[Order]:
-        """
-        Hole Orders die TRACKING benötigen
-        
-        Query:
-        - xml_erstellt = 1 (XML wurde exportiert)
-        - trackingnummer IS NULL ODER = '' (Kein Tracking)
-        - Status ist EGAL!
-        
-        Returns:
-            List[Order]
-        """
+        """Hole Orders für Tracking - ALLE Spalten!"""
         try:
             conn = self._get_conn()
             cursor = conn.cursor()
             
+            # ✅ WICHTIG: ALLE Spalten in gleicher Reihenfolge wie _map_to_order!
             cursor.execute(f"""
                 SELECT id, bestell_id, bestellstatus, kaufdatum,
                        vorname_empfaenger, nachname_empfaenger,
@@ -344,30 +335,31 @@ class OrderRepository:
             return []
 
     def _map_to_order(self, row) -> Order:
-        """Konvertiere DB Row zu Order Object"""
+        """Konvertiere DB Row zu Order Object - MUSS alle 20 Spalten sein!"""
         if not row:
             return None
         
+        # ✅ WICHTIG: Index muss exakt mit SELECT Spalten-Reihenfolge übereinstimmen!
         return Order(
-            id=row[0],
-            bestell_id=row[1],
-            bestellstatus=row[2],
-            kaufdatum=row[3],
-            vorname_empfaenger=row[4],
-            nachname_empfaenger=row[5],
-            strasse=row[6],
-            adresszusatz=row[7],  # 🆕
-            plz=row[8],
-            ort=row[9],
-            bundesland=row[10],
-            land=row[11],
-            land_iso=row[12],
-            email=row[13],
-            telefon_empfaenger=row[14],
-            versandkosten=row[15],
-            status=row[16],
-            xml_erstellt=bool(row[17]) if len(row) > 17 else False,
-            trackingnummer=row[18] if len(row) > 18 else None,  # 🆕
-            versanddienstleister=row[19] if len(row) > 19 else None,  # 🆕
-            versanddatum=row[20] if len(row) > 20 else None  # 🆕
+            id=row[0],                              # id
+            bestell_id=row[1],                      # bestell_id
+            bestellstatus=row[2],                   # bestellstatus
+            kaufdatum=row[3],                       # kaufdatum
+            vorname_empfaenger=row[4],              # vorname_empfaenger
+            nachname_empfaenger=row[5],             # nachname_empfaenger
+            strasse=row[6],                         # strasse
+            adresszusatz=row[7],                    # adresszusatz
+            plz=row[8],                             # plz
+            ort=row[9],                             # ort
+            bundesland=row[10],                     # bundesland
+            land=row[11],                           # land
+            land_iso=row[12],                       # land_iso
+            email=row[13],                          # email
+            telefon_empfaenger=row[14],             # telefon_empfaenger
+            versandkosten=row[15],                  # versandkosten
+            status=row[16],                         # status
+            xml_erstellt=bool(row[17]),             # xml_erstellt
+            trackingnummer=row[18],                 # trackingnummer
+            versanddienstleister=row[19]            # versanddienstleister
+            # versanddatum wird nicht verwendet (row[20] wäre falsch!)
         )

@@ -26,24 +26,8 @@ async def lifespan(app: FastAPI):
     # Startup
     print("🚀 Starte TEMU Worker...")
     
-    # Definiere Standard-Jobs
-    scheduler.add_job(
-        JobType.SYNC_ORDERS,
-        interval_minutes=15,
-        description="Synchronisiere neue Aufträge von TEMU API"
-    )
-    
-    scheduler.add_job(
-        JobType.SYNC_INVENTORY,
-        interval_minutes=5,
-        description="Aktualisiere Bestandszahlen"
-    )
-    
-    scheduler.add_job(
-        JobType.FETCH_INVOICES,
-        interval_minutes=60,
-        description="Hole Rechnungen von TEMU"
-    )
+    # ✅ NEU: Lade Jobs aus gespeicherter Konfiguration
+    scheduler.initialize_from_config()
     
     scheduler.start()
     print("✓ Scheduler gestartet")
@@ -162,8 +146,7 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
         "api.main:app",
-        "api.main:app",
-        host="127.0.0.1",",
+        host="127.0.0.1",
         port=8000,
-        reload=Truee
+        reload=True
     )

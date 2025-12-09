@@ -20,13 +20,14 @@ class TemuMarketplaceService(BaseMarketplaceConnector):
     Verantwortlich für: API Kommunikation, JSON Speicherung, Authentifizierung
     """
     
-    def __init__(self, app_key: str, app_secret: str, access_token: str, endpoint: str):
+    def __init__(self, app_key: str, app_secret: str, access_token: str, endpoint: str, verbose: bool = False):
+        # ✅ Propagiere verbose zu ApiClient
         self.app_key = app_key
         self.app_secret = app_secret
         self.access_token = access_token
         self.endpoint = endpoint
         
-        self.client = TemuApiClient(app_key, app_secret, access_token, endpoint)
+        self.client = TemuApiClient(app_key, app_secret, access_token, endpoint, verbose=verbose)
         self.orders_api = TemuOrdersApi(self.client)
     
     def validate_credentials(self) -> bool:

@@ -267,7 +267,7 @@
         </div>
         
         <div class="logs-section">
-            <div class="logs-title">Live-Logs</div>
+            <div class="logs-title">Live-Logs des aktiven Jobs</div>
             <div class="logs-container" id="logs-container">
                 <div class="log-line">Warte auf Logs...</div>
             </div>
@@ -280,6 +280,7 @@
         
         let ws = null;
         let jobs = [];
+        let selectedJobId = null;  // ← Track selected job for logs
         
         // Verbinde WebSocket
         function connectWebSocket() {
@@ -295,6 +296,11 @@
                 if (data.type === "jobs_update") {
                     jobs = data.data;
                     renderJobs();
+                    
+                    // ✅ Update Logs wenn ein Job selected ist
+                    if (selectedJobId) {
+                        updateLogsForJob(selectedJobId);
+                    }
                 }
             };
             
@@ -304,8 +310,51 @@
             
             ws.onclose = () => {
                 document.getElementById("status").textContent = "Offline";
-                setTimeout(connectWebSocket, 3000); // Reconnect nach 3s
+                setTimeout(connectWebSocket, 3000);
             };
+        }
+        
+        // ✅ NEU: Update Logs für Job
+        function updateLogsForJob(jobId) {
+            const job = jobs.find(j => j.job_id === jobId);
+            if (!job) return;
+            
+            const logsContainer = document.getElementById("logs-container");
+            const logs = job.recent_logs || [];
+            
+            if (logs.length === 0) {
+                logsContainer.innerHTML = '<div class="log-line">Keine Logs vorhanden</div>';
+                return;
+            }
+            
+            logsContainer.innerHTML = logs
+                .map(line => {
+                    let className = "log-line";
+                    if (line.includes("✓") || line.includes("erfolgreich")) {
+                        className = "log-line log-success";
+                    } else if (line.includes("✗") || line.includes("Fehler")) {
+                        className = "log-line log-error";
+                    } else if (line.includes("⚠")) {
+                        className = "log-line log-warning";
+                    }
+                    return `<div class="${className}">${escapeHtml(line)}</div>`;
+                })
+                .join("");
+            
+            // Auto-scroll to bottom
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+        }
+        
+        // ✅ NEU: HTML Escaping (Sicherheit)
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
         }
         
         // Rendere Job-Cards
@@ -326,6 +375,20 @@
                     : "—";
                 
                 const statusClass = `status-${job.status.status.toLowerCase()}`;
+                
+                const lastDuration = job.status.last_duration 
+                    ? `<div class="info-row">
+                        <span class="info-label">Dauer:</span>
+                        <span class="info-value">${job.status.last_duration.toFixed(2)}s</span>
+                    </div>`
+                    : "";
+                
+                const lastError = job.status.last_error 
+                    ? `<div class="info-row" style="background: #7f1d1d;">
+                        <span class="info-label">Fehler:</span>
+                        <span class="info-value">${escapeHtml(job.status.last_error.substring(0, 50))}</span>
+                    </div>`
+                    : "";
                 
                 card.innerHTML = `
                     <div class="job-header">
@@ -349,17 +412,15 @@
                             <span class="info-label">Nächste Ausführung:</span>
                             <span class="info-value">${nextRun}</span>
                         </div>
-                        ${job.status.last_duration_seconds ? `
-                        <div class="info-row">
-                            <span class="info-label">Dauer:</span>
-                            <span class="info-value">${job.status.last_duration_seconds.toFixed(2)}s</span>
-                        </div>
-                        ` : ""}
+                        ${lastDuration}
+                        ${lastError}
                     </div>
                     
                     <div class="job-controls">
                         <button class="btn-primary" onclick="triggerJob('${job.job_id}')">Jetzt ausführen</button>
-                        <button class="btn-secondary" onclick="configureJob('${job.job_id}')">Einstellungen</button>
+                        <button class="btn-secondary" onclick="selectJobLogs('${job.job_id}')">📋 Logs</button>
+                        <button class="btn-secondary" onclick="openIntervalDialog('${job.job_id}', ${job.config.schedule.interval_minutes})">⏱️ Interval</button>
+                        <button class="btn-${job.config.schedule.enabled ? 'success' : 'danger'}" onclick="toggleJob('${job.job_id}', ${!job.config.schedule.enabled})">${job.config.schedule.enabled ? '✓ Aktiv' : '✗ Aus'}</button>
                     </div>
                 `;
                 
@@ -369,28 +430,87 @@
             document.getElementById("active-jobs").textContent = jobs.length;
         }
         
+        // ✅ NEU: Open Interval Dialog
+        function openIntervalDialog(jobId, currentInterval) {
+            const newInterval = prompt(`Neues Intervall in Minuten (aktuell: ${currentInterval}):`);
+            
+            if (newInterval && !isNaN(newInterval) && newInterval > 0) {
+                updateJobInterval(jobId, parseInt(newInterval));
+            } else if (newInterval !== null) {
+                alert("Bitte geben Sie eine gültige Zahl > 0 ein!");
+                openIntervalDialog(jobId, currentInterval);
+            }
+        }
+        
+        // ✅ NEU: Update Job Interval
+        async function updateJobInterval(jobId, intervalMinutes) {
+            try {
+                const response = await fetch(
+                    `${API_URL}/jobs/${jobId}/schedule?interval_minutes=${intervalMinutes}`,
+                    { method: "POST" }
+                );
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log("✓ Interval aktualisiert:", data);
+                    alert(`✓ Interval auf ${intervalMinutes} Minuten gesetzt!`);
+                } else {
+                    alert("✗ Fehler beim Update des Intervalls");
+                }
+            } catch (e) {
+                console.error("✗ Fehler:", e);
+                alert("✗ Fehler beim Update des Intervalls");
+            }
+        }
+        
+        // ✅ NEU: Toggle Job Enable/Disable
+        async function toggleJob(jobId, enabled) {
+            try {
+                const response = await fetch(
+                    `${API_URL}/jobs/${jobId}/toggle?enabled=${enabled}`,
+                    { method: "POST" }
+                );
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log("✓ Job toggled:", data);
+                    alert(`✓ Job ist jetzt ${enabled ? 'AKTIV' : 'AUS'}!`);
+                } else {
+                    alert("✗ Fehler beim Toggle des Jobs");
+                }
+            } catch (e) {
+                console.error("✗ Fehler:", e);
+                alert("✗ Fehler beim Toggle des Jobs");
+            }
+        }
+        
+        // ✅ NEU: Select Job für Log Display
+        function selectJobLogs(jobId) {
+            selectedJobId = jobId;
+            document.querySelector('.logs-title').textContent = `Live-Logs: ${jobs.find(j => j.job_id === jobId)?.config.description || jobId}`;
+            updateLogsForJob(jobId);
+        }
+        
         // Triggere Job
         async function triggerJob(jobId) {
             try {
                 await fetch(`${API_URL}/jobs/${jobId}/run-now`, { method: "POST" });
                 console.log("✓ Job gestartet");
+                selectedJobId = jobId;  // Auto-select für Logs
             } catch (e) {
                 console.error("✗ Fehler:", e);
             }
         }
         
-        // Konfiguriere Job
-        function configureJob(jobId) {
-            const newInterval = prompt("Neues Intervall in Minuten:");
-            if (newInterval) {
-                fetch(`${API_URL}/jobs/${jobId}/schedule?interval_minutes=${newInterval}`, {
-                    method: "POST"
-                });
-            }
-        }
-        
         // Starte App
         connectWebSocket();
+        
+        // ✅ Auto-select ersten Job nach kurzer Verzögerung
+        setTimeout(() => {
+            if (jobs.length > 0 && !selectedJobId) {
+                selectJobLogs(jobs[0].job_id);
+            }
+        }, 1000);
     </script>
 </body>
 </html>

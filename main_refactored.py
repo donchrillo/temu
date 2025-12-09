@@ -1,6 +1,7 @@
 """
 BEISPIEL: Kompletter Workflow mit neuer Architektur
 Zeigt wie Repositories → Services → Workflows zusammenarbeiten
+Mit interaktiven Pausen nach jedem Schritt!
 """
 
 import sys
@@ -29,6 +30,25 @@ def print_section(step_num, total, description):
     print(f"\n[Schritt {step_num}/{total}] {description}")
     print("-"*70)
 
+def wait_for_input(step_num: int, total_steps: int):
+    """Warte auf User-Eingabe vor nächstem Schritt"""
+    print("\n" + "="*70)
+    if step_num < total_steps:
+        print(f"✓ Schritt {step_num} abgeschlossen!")
+        print(f"\nDrücke ENTER für Schritt {step_num + 1}, oder 'q' zum Abbrechen...")
+        user_input = input(">>> ").strip().lower()
+        
+        if user_input == 'q':
+            print("\n✗ Workflow abgebrochen vom Benutzer!")
+            return False
+    else:
+        print(f"✓ Schritt {step_num} abgeschlossen!")
+        print(f"\nDrücke ENTER zum Beenden...")
+        input(">>> ")
+    
+    print("="*70)
+    return True
+
 def parse_arguments():
     """Parse Command Line Arguments"""
     parser = argparse.ArgumentParser(
@@ -38,15 +58,18 @@ def parse_arguments():
 Beispiele:
   python main_refactored.py
   python main_refactored.py --status 2 --days 7
-  python main_refactored.py --status 1 --days 30
-  python main_refactored.py -s 0 -d 90
+  python main_refactored.py --status 4 --days 30
+  python main_refactored.py -s 3 -d 90
 
-TEMU Status Codes:
-  0 = All Orders
-  1 = PENDING (offen)
+TEMU Status Codes (GÜLTIG):
   2 = UN_SHIPPING (nicht versendet)
   3 = CANCELLED (storniert)
   4 = SHIPPED (versendet)
+  5 = RECEIPTED (Order received)
+
+NICHT NUTZEN:
+  0 = All Orders (zu viel Daten!)
+  1 = PENDING (offen - nicht versendet!)
         """
     )
     
@@ -54,7 +77,7 @@ TEMU Status Codes:
         '--status', '-s',
         type=int,
         default=2,
-        help='TEMU Order Status Filter (0=All, 1=PENDING, 2=UN_SHIPPING, 3=CANCELLED, 4=SHIPPED) [default: 2]'
+        help='TEMU Order Status (2=UN_SHIPPING, 3=CANCELLED, 4=SHIPPED, 5=RECEIPTED) [default: 2]'
     )
     
     parser.add_argument(
@@ -70,9 +93,15 @@ TEMU Status Codes:
         help='Verbose Output (Debug-Modus)'
     )
     
+    parser.add_argument(
+        '--interactive', '-i',
+        action='store_true',
+        help='Interaktiv: Pause nach jedem Schritt für Kontrolle'
+    )
+    
     return parser.parse_args()
 
-def run_full_workflow_refactored(parent_order_status=2, days_back=7, verbose=False):
+def run_full_workflow_refactored(parent_order_status=2, days_back=7, verbose=False, interactive=False):
     """
     REFAKTORIERT: Vollständiger Workflow mit neuer Architektur
     
@@ -81,19 +110,26 @@ def run_full_workflow_refactored(parent_order_status=2, days_back=7, verbose=Fal
     API → Repositories → Services → Workflows
     
     Args:
-        parent_order_status: TEMU Status Filter (0-4)
+        parent_order_status: TEMU Status Filter (2, 3, 4, 5)
         days_back: Anzahl Tage zurück
         verbose: Debug Output
+        interactive: Pause nach jedem Schritt
     """
     
     start_time = datetime.now()
     total_steps = 5
     
-    # Validiere Status Code
-    valid_status_codes = [0, 1, 2, 3, 4]
+    # ===== Validiere Status Code =====
+    # NUR diese Status Codes sind gültig!
+    valid_status_codes = [2, 3, 4, 5]
     if parent_order_status not in valid_status_codes:
         print(f"✗ Ungültiger Status Code: {parent_order_status}")
         print(f"  Gültige Werte: {valid_status_codes}")
+        print(f"  Erklärung:")
+        print(f"    2 = UN_SHIPPING (nicht versendet)")
+        print(f"    3 = CANCELLED (storniert)")
+        print(f"    4 = SHIPPED (versendet)")
+        print(f"    5 = RECEIPTED (Order received)")
         return False
     
     # Validiere Days
@@ -102,11 +138,10 @@ def run_full_workflow_refactored(parent_order_status=2, days_back=7, verbose=Fal
         return False
     
     status_map = {
-        0: 'All Orders',
-        1: 'PENDING (offen)',
         2: 'UN_SHIPPING (nicht versendet)',
         3: 'CANCELLED (storniert)',
-        4: 'SHIPPED (versendet)'
+        4: 'SHIPPED (versendet)',
+        5: 'RECEIPTED (Order received)'
     }
     
     print_header("TEMU WORKFLOW - MIT NEUER ARCHITEKTUR")
@@ -117,6 +152,12 @@ def run_full_workflow_refactored(parent_order_status=2, days_back=7, verbose=Fal
     if verbose:
         print(f"Verbose Mode: ON")
     
+    if interactive:
+        print(f"Interactive Mode: ON (Pause nach jedem Schritt)")
+        print("\nCommands:")
+        print("  ENTER → Nächster Schritt")
+        print("  q     → Workflow abbrechen")
+    
     print()
     
     results = {}
@@ -126,9 +167,11 @@ def run_full_workflow_refactored(parent_order_status=2, days_back=7, verbose=Fal
     # ========================================
     print_section(1, total_steps, "TEMU API → JSON speichern")
     try:
+        # ✅ Propagiere verbose zu Workflow!
         results['api_fetch'] = run_api_to_json(
             parent_order_status=parent_order_status,
-            days_back=days_back
+            days_back=days_back,
+            verbose=verbose  # ← WICHTIG!
         )
         print(f"  ✓ API Responses gespeichert")
     except Exception as e:
@@ -138,18 +181,15 @@ def run_full_workflow_refactored(parent_order_status=2, days_back=7, verbose=Fal
             traceback.print_exc()
         results['api_fetch'] = False
     
+    if interactive:
+        if not wait_for_input(1, total_steps):
+            return False
+    
     # ========================================
     # SCHRITT 2: JSON → Datenbank (mit SERVICE!)
     # ========================================
     print_section(2, total_steps, "JSON → Datenbank (mit Service)")
     try:
-        # Das ist jetzt so VIEL sauberer!
-        # Alte Version: api_sync_service.py (DB + Business Logic gemischt)
-        # Neue Version: 
-        #   - OrderRepository: Nur DB Operationen
-        #   - OrderItemRepository: Nur DB Operationen
-        #   - OrderService: Nur Business Logic (nutzt Repositories)
-        
         results['json_import'] = run_json_to_db()
         print(f"  ✓ Orders in DB importiert")
     except Exception as e:
@@ -159,17 +199,15 @@ def run_full_workflow_refactored(parent_order_status=2, days_back=7, verbose=Fal
             traceback.print_exc()
         results['json_import'] = False
     
+    if interactive:
+        if not wait_for_input(2, total_steps):
+            return False
+    
     # ========================================
     # SCHRITT 3: XML Export (mit SERVICE!)
     # ========================================
     print_section(3, total_steps, "Datenbank → XML Export (mit Service)")
     try:
-        # Alte Version: xml_generator_service.py (DB + XML + JTL Import gemischt)
-        # Neue Version:
-        #   - OrderRepository: DB Reads
-        #   - OrderItemRepository: DB Reads
-        #   - XmlExportService: Nur Business Logic
-        
         results['xml_export'] = run_db_to_xml()
         print(f"  ✓ XML exportiert")
     except Exception as e:
@@ -179,16 +217,15 @@ def run_full_workflow_refactored(parent_order_status=2, days_back=7, verbose=Fal
             traceback.print_exc()
         results['xml_export'] = False
     
+    if interactive:
+        if not wait_for_input(3, total_steps):
+            return False
+    
     # ========================================
     # SCHRITT 4: Tracking Update (mit SERVICE!)
     # ========================================
     print_section(4, total_steps, "JTL → Tracking Update (mit Service)")
     try:
-        # Alte Version: tracking_service.py (JTL + TOCI DB gemischt)
-        # Neue Version:
-        #   - OrderRepository: TOCI DB Operations
-        #   - TrackingService: Nur Business Logic (holt JTL Daten, delegiert Saves)
-        
         results['tracking'] = run_update_tracking()
         print(f"  ✓ Tracking aktualisiert")
     except Exception as e:
@@ -197,6 +234,10 @@ def run_full_workflow_refactored(parent_order_status=2, days_back=7, verbose=Fal
             import traceback
             traceback.print_exc()
         results['tracking'] = False
+    
+    if interactive:
+        if not wait_for_input(4, total_steps):
+            return False
     
     # ========================================
     # SCHRITT 5: Tracking zu TEMU API
@@ -233,6 +274,9 @@ def run_full_workflow_refactored(parent_order_status=2, days_back=7, verbose=Fal
     print(f"\n✓ {success_count}/{total_steps} erfolgreich")
     print("="*70 + "\n")
     
+    if interactive:
+        wait_for_input(total_steps, total_steps)
+    
     return success_count == total_steps
 
 if __name__ == "__main__":
@@ -244,7 +288,8 @@ if __name__ == "__main__":
         success = run_full_workflow_refactored(
             parent_order_status=args.status,
             days_back=args.days,
-            verbose=args.verbose
+            verbose=args.verbose,
+            interactive=args.interactive
         )
         
         sys.exit(0 if success else 1)

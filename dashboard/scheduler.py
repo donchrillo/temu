@@ -10,6 +10,7 @@ import sys
 from contextlib import redirect_stdout, redirect_stderr
 from pathlib import Path
 
+from dashboard.config import SchedulerConfig
 from dashboard.jobs import JobType, JobStatusEnum, JobConfig, JobSchedule
 
 class SchedulerService:
@@ -21,7 +22,19 @@ class SchedulerService:
         self.job_logs: Dict[str, List[str]] = {}
         self.job_status: Dict[str, dict] = {}
     
-    def add_job(self, job_type: JobType, interval_minutes: int, description: str):
+    def initialize_from_config(self):
+        """✅ NEU: Lade Jobs aus gespeicherter Konfiguration"""
+        job_configs = SchedulerConfig.load_jobs()
+        
+        for job_config in job_configs:
+            self.add_job(
+                job_type=JobType(job_config['job_type']),
+                interval_minutes=job_config['interval_minutes'],
+                description=job_config['description'],
+                enabled=job_config.get('enabled', True)
+            )
+    
+    def add_job(self, job_type: JobType, interval_minutes: int, description: str, enabled: bool = True):
         """Fügt einen neuen Job hinzu"""
         
         job_id = f"{job_type}_{int(datetime.now().timestamp())}"
@@ -30,7 +43,7 @@ class SchedulerService:
             job_type=job_type,
             schedule=JobSchedule(
                 interval_minutes=interval_minutes,
-                enabled=True
+                enabled=enabled
             ),
             description=description
         )
@@ -51,10 +64,20 @@ class SchedulerService:
             trigger=IntervalTrigger(minutes=interval_minutes),
             id=job_id,
             args=[job_id],
-            next_run_time=datetime.now()
+            next_run_time=datetime.now() if enabled else None
         )
         
+        if not enabled:
+            job = self.scheduler.get_job(job_id)
+            if job:
+                job.pause()
+        
         return job_id
+    
+    async def _async_wrapper(self, sync_func, *args, **kwargs):
+        """Wrapper für synchrone Funktionen mit Arguments"""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, lambda: sync_func(*args, **kwargs))
     
     async def _run_job(self, job_id: str):
         """Führt einen Job aus und captured Logs"""
@@ -78,8 +101,13 @@ class SchedulerService:
                 
                 # Führe entsprechenden Job aus
                 if job_type == JobType.SYNC_ORDERS:
-                    from main import run_full_workflow
-                    result = await self._async_wrapper(run_full_workflow)
+                    # ✅ KORRIGIERT: Nutze _async_wrapper mit kwargs!
+                    from main_refactored import run_full_workflow_refactored
+                    result = await self._async_wrapper(
+                        run_full_workflow_refactored,
+                        parent_order_status=2,
+                        days_back=7
+                    )
                     print(f"Job Ergebnis: {result}")
                 elif job_type == JobType.SYNC_INVENTORY:
                     print("ℹ Inventur-Sync noch nicht implementiert")
@@ -111,11 +139,6 @@ class SchedulerService:
             if job:
                 self.job_status[job_id]["next_run"] = job.next_run_time
     
-    async def _async_wrapper(self, sync_func):
-        """Wrapper für synchrone Funktionen"""
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, sync_func)
-    
     def start(self):
         """Starte Scheduler"""
         self.scheduler.start()
@@ -141,20 +164,41 @@ class SchedulerService:
         return [self.get_job_status(job_id) for job_id in self.jobs.keys()]
     
     def trigger_job_now(self, job_id: str):
-        """Triggere Job sofort"""
+        """Triggere Job SOFORT (nicht nur reschedule)"""
         job = self.scheduler.get_job(job_id)
         if job:
-            job.reschedule(next_run_time=datetime.now())
+            # ✅ WICHTIG: remove_job + add_job mit SOFORT Lauf!
+            # Das zwingt den Scheduler sofort auszuführen!
+            
+            # Speichere alte Konfiguration
+            trigger = job.trigger
+            func = job.func
+            args = job.args
+            
+            # Entferne alten Job
+            self.scheduler.remove_job(job_id)
+            
+            # Füge neu hinzu mit sofortigem Start
+            self.scheduler.add_job(
+                func,
+                trigger=trigger,
+                id=job_id,
+                args=args,
+                next_run_time=datetime.now()  # ← JETZT ausführen!
+            )
     
     def update_job_schedule(self, job_id: str, interval_minutes: int):
-        """Ändere Job-Schedule"""
+        """Ändere Job-Schedule und speichere"""
         job = self.scheduler.get_job(job_id)
         if job:
             job.reschedule(trigger=IntervalTrigger(minutes=interval_minutes))
             self.jobs[job_id].schedule.interval_minutes = interval_minutes
+            
+            # ✅ NEU: Speichere in Config-Datei!
+            self._save_config()
     
     def toggle_job(self, job_id: str, enabled: bool):
-        """Enable/Disable Job"""
+        """Enable/Disable Job und speichere"""
         job = self.scheduler.get_job(job_id)
         if job:
             if enabled:
@@ -162,3 +206,21 @@ class SchedulerService:
             else:
                 job.pause()
             self.jobs[job_id].schedule.enabled = enabled
+            
+            # ✅ NEU: Speichere in Config-Datei!
+            self._save_config()
+    
+    def _save_config(self):
+        """✅ NEU: Speichere aktuelle Job-Konfigurationen"""
+        jobs_list = []
+        
+        for job_id, job_config in self.jobs.items():
+            jobs_list.append({
+                'job_type': job_config.job_type.value,
+                'interval_minutes': job_config.schedule.interval_minutes,
+                'enabled': job_config.schedule.enabled,
+                'description': job_config.description
+            })
+        
+        SchedulerConfig.save_jobs(jobs_list)
+        print("✓ Job-Konfiguration gespeichert")
