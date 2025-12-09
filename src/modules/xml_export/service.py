@@ -296,9 +296,12 @@ class XmlExportService:
         """
         Importiere XML in JTL DB
         
+        ❌ PROBLEM: Schreibt einzelne <tBestellung> ohne Root!
+        ✅ LÖSUNG: Wrap in <tBestellungen> Root!
+        
         Args:
             order: Order Domain Model
-            bestellung_elem: XML Element
+            bestellung_elem: XML Element (einzelne Bestellung)
         
         Returns:
             bool: True wenn erfolgreich
@@ -308,10 +311,14 @@ class XmlExportService:
             return False
         
         try:
-            # Generiere XML String
-            xml_string = self._prettify_xml(bestellung_elem)
+            # ✅ WICHTIG: Wrap in Root Element!
+            root = ET.Element('tBestellungen')
+            root.append(bestellung_elem)
             
-            # Delegiere zu Repository!
+            # Konvertiere zu XML String
+            xml_string = self._prettify_xml(root)
+            
+            # Schreibe in JTL DB (als komplette XML mit Root!)
             return self.jtl_repo.insert_xml_import(xml_string)
         
         except Exception as e:

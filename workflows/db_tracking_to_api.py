@@ -39,7 +39,8 @@ def run_db_to_api() -> bool:
     order_repo = OrderRepository(connection=toci_conn)
     
     # ===== Services =====
-    tracking_service = TrackingService(order_repo)  # Carrier Mapping ist hier!
+    # ✅ TrackingService braucht jetzt nur order_repo (jtl_repo ist optional)
+    tracking_service = TrackingService(order_repo)
     
     temu_service = TemuMarketplaceService(
         app_key=TEMU_APP_KEY,

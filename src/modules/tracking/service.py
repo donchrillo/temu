@@ -1,6 +1,6 @@
 """Tracking Service - Hole Tracking aus JTL, Update DB, Upload zu TEMU"""
 
-from typing import Dict, List, Tuple
+from typing import Dict, List
 from src.db.repositories.order_repository import OrderRepository
 from src.db.repositories.jtl_repository import JtlRepository
 
@@ -12,7 +12,8 @@ class TrackingService:
     3. Prepare für API Upload
     """
     
-    def __init__(self, order_repo: OrderRepository, jtl_repo: JtlRepository):
+    def __init__(self, order_repo: OrderRepository, jtl_repo: JtlRepository = None):
+        # ✅ jtl_repo optional mit Default None
         self.order_repo = order_repo
         self.jtl_repo = jtl_repo
     
@@ -31,7 +32,6 @@ class TrackingService:
         print("→ Hole Orders ohne Tracking...")
         
         # Step 1: Hole Orders die XML haben, aber kein Tracking
-        # WICHTIG: Status ist irrelevant!
         orders_without_tracking = self.order_repo.find_orders_for_tracking()
         
         if not orders_without_tracking:
@@ -96,84 +96,6 @@ class TrackingService:
             'errors': error_count,
             'success': error_count == 0,
             'tracking_data': tracking_data_for_api
-        }
-    
-    def sync_tracking_from_jtl(self) -> Dict:
-        """
-        Holt Tracking aus JTL und aktualisiert TOCI Orders
-        
-        Prozess:
-        1. Hole Orders mit status='xml_erstellt' (ohne Tracking)
-        2. Für jede Order: Suche Tracking in JTL
-        3. Update Order mit Tracking + Status='versendet'
-        4. Return Data für API Upload
-        
-        Returns:
-            dict mit updated/tracking_data für API Upload
-        """
-        
-        print("→ Hole Tracking aus JTL...")
-        
-        # Step 1: Hole Orders die noch kein Tracking haben
-        orders_without_tracking = self.order_repo.find_by_status('xml_erstellt')
-        
-        if not orders_without_tracking:
-            print("✓ Keine Bestellungen ohne Tracking\n")
-            return {
-                'updated': 0,
-                'tracking_data': [],
-                'success': True
-            }
-        
-        print(f"✓ {len(orders_without_tracking)} Bestellungen ohne Tracking\n")
-        
-        updated_count = 0
-        tracking_data_for_api = []
-        
-        # Step 2: Für jede Order - suche Tracking in JTL
-        for order in orders_without_tracking:
-            try:
-                # **WICHTIG:** Hole Tracking aus JTL!
-                tracking_info = self.jtl_repo.get_tracking_from_lieferschein(
-                    order.bestell_id
-                )
-                
-                if not tracking_info:
-                    print(f"  ⚠ {order.bestell_id}: Kein Tracking in JTL gefunden")
-                    continue
-                
-                # Step 3: Update Order in TOCI mit Tracking
-                success = self.order_repo.update_order_tracking(
-                    order_id=order.id,
-                    tracking_number=tracking_info['tracking_number'],
-                    versanddienstleister=tracking_info['carrier'],
-                    status='versendet'
-                )
-                
-                if success:
-                    print(f"  ✓ {order.bestell_id}: {tracking_info['tracking_number']}")
-                    updated_count += 1
-                    
-                    # Step 4: Sammle Daten für API Upload
-                    # (wird später zu TEMU gesendet)
-                    tracking_data_for_api.append({
-                        'bestell_id': order.bestell_id,
-                        'tracking_number': tracking_info['tracking_number'],
-                        'carrier': tracking_info['carrier']
-                    })
-                else:
-                    print(f"  ✗ {order.bestell_id}: DB Update fehlgeschlagen")
-            
-            except Exception as e:
-                print(f"  ✗ {order.bestell_id}: {e}")
-        
-        print(f"\n✓ Tracking-Sync: {updated_count} aktualisiert")
-        print(f"✓ {len(tracking_data_for_api)} bereit für API Upload\n")
-        
-        return {
-            'updated': updated_count,
-            'tracking_data': tracking_data_for_api,
-            'success': updated_count > 0
         }
     
     def prepare_tracking_for_api(self, orders_data: List[Dict]) -> List[Dict]:
