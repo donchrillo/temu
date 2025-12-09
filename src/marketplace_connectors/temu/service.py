@@ -66,11 +66,11 @@ class TemuMarketplaceService(BaseMarketplaceConnector):
         # Abrufe Orders
         print("→ Rufe Orders ab...")
         orders_response = self.orders_api.get_orders(
+            parent_order_status=parent_order_status,            
             page_number=1, 
             page_size=100, 
-            parent_order_status=parent_order_status,
-            createAfter=create_after,
-            createBefore=create_before
+            create_after=create_after,
+            create_before=create_before
         )
         
         if orders_response is None:
@@ -131,7 +131,11 @@ class TemuMarketplaceService(BaseMarketplaceConnector):
         """Hole Versandinformationen"""
         return self.orders_api.get_shipping_info(order_id)
     
-    def upload_tracking(self, tracking_data) -> bool:
-        """Upload Tracking-Daten"""
-        success, error_code, error_msg = self.orders_api.upload_tracking_data(tracking_data)
-        return success
+    def upload_tracking(self, tracking_data):
+        """Upload Tracking-Daten zu TEMU API
+        
+        Returns:
+            Tuple: (success: bool, error_code: str, error_msg: str)
+        """
+        # Delegiere zu Orders API - der returniert das Tuple!
+        return self.orders_api.upload_tracking_data(tracking_data)

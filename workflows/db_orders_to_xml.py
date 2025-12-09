@@ -1,37 +1,56 @@
-"""Workflow: Datenbank → XML Export (mit neuer Architektur)"""
+"""Workflow: Datenbank → XML Export (für JTL)"""
 
+from src.modules.xml_export.service import XmlExportService
 from src.db.repositories.order_repository import OrderRepository
 from src.db.repositories.order_item_repository import OrderItemRepository
-from src.modules.xml_export.service import XmlExportService
+from src.db.repositories.jtl_repository import JtlRepository
+from src.database.connection import get_db_connection
 
-def run_db_to_xml():
+def run_db_to_xml(save_to_disk: bool = True, import_to_jtl: bool = True) -> bool:
     """
-    Exportiere Orders zu JTL XML
-    Nutzt neue Repository + Service Architektur
+    Workflow: Datenbank → XML Export
+    
+    🎯 Orchestriert: Services aufrufen in richtiger Reihenfolge
+    🎯 NICHT: Business Logic, DB Operations, Connection Management
+    
+    Args:
+        save_to_disk: Speichere XML lokal
+        import_to_jtl: Importiere in JTL DB
+    
+    Returns:
+        bool: True wenn erfolgreich
     """
     
-    print("=" * 70)
-    print("Datenbank → XML Export")
-    print("=" * 70)
+    # ✅ Hole Connections (ZENTRAL, nicht in Service!)
+    toci_conn = get_db_connection(database='toci', use_pool=True)
     
-    # ===== REPOSITORIES (Data Access Layer) =====
-    order_repo = OrderRepository()
-    item_repo = OrderItemRepository()
+    # ✅ Erstelle Repositories (ZENTRAL, nicht in Service!)
+    order_repo = OrderRepository(connection=toci_conn)
+    item_repo = OrderItemRepository(connection=toci_conn)
     
-    # ===== SERVICE (Business Logic Layer) =====
-    xml_service = XmlExportService(order_repo, item_repo)
+    # ✅ Optional: JTL Repository
+    jtl_repo = None
+    if import_to_jtl:
+        try:
+            jtl_conn = get_db_connection(database='eazybusiness', use_pool=True)
+            jtl_repo = JtlRepository(connection=jtl_conn)
+        except Exception as e:
+            print(f"⚠ JTL Verbindung fehlgeschlagen: {e}")
     
-    # ===== EXECUTE SERVICE =====
-    result = xml_service.export_to_xml()
+    # ✅ Erstelle Service (mit Dependencies!)
+    service = XmlExportService(
+        order_repo=order_repo,
+        item_repo=item_repo,
+        jtl_repo=jtl_repo
+    )
     
-    print(f"\n{'='*70}")
-    print(f"✓ XML-Export abgeschlossen!")
-    print(f"{'='*70}")
-    print(f"  Exportiert: {result['exported']}")
-    print(f"  JTL-Import: {result['jtl_imported']}")
-    print(f"{'='*70}\n")
+    # ✅ Rufe Service auf (ORCHESTRIERUNG!)
+    result = service.export_to_xml(
+        save_to_disk=save_to_disk,
+        import_to_jtl=import_to_jtl and jtl_repo is not None
+    )
     
-    return result['exported'] > 0
+    return result.get('success', False)
 
 if __name__ == "__main__":
     run_db_to_xml()

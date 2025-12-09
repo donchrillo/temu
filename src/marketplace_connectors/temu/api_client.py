@@ -33,53 +33,84 @@ class TemuApiClient:
             request_params: Dict mit zusätzlichen Parametern
         
         Returns:
-            API-Response als Dict (auch bei Fehlern!) oder None bei HTTP-Fehler
+            API-Response als Dict oder None bei Fehler
         """
-        path = f"/{api_type}"
-        return self._send_request("GET", path, data=request_params)
-    
-    def _get_headers(self):
-        """Berechne und gebe die erforderlichen Header zurück"""
-        timestamp = int(time.time() * 1000)
-        signature = calculate_signature(self.app_key, self.app_secret, timestamp)
         
-        return {
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "App-Key": self.app_key,
-            "App-Signature": signature,
-            "App-Timestamp": str(timestamp),
-            "Authorization": f"Bearer {self.access_token}"
+        if request_params is None:
+            request_params = {}
+        
+        # Common Parameters
+        common_params = {
+            "app_key": self.app_key,
+            "data_type": self.data_type,
+            "access_token": self.access_token,
+            "timestamp": int(time.time()),
+            "type": api_type,
+            "version": "V1"
         }
-    
-    def _send_request(self, method, path, data=None):
-        """Sende eine HTTP-Anfrage an die TEMU API"""
-        url = f"{self.endpoint}{path}"
-        headers = self._get_headers()
         
-        response = requests.request(method, url, headers=headers, json=data)
+        # Merge Parameters
+        all_params = {**common_params, **request_params}
         
-        if response.status_code != 200:
-            raise Exception(f"API Fehler: {response.status_code} - {response.text}")
+        # Berechne Signatur
+        sign = calculate_signature(self.app_secret, all_params)
         
-        return response.json()
-    
-    def get_order(self, order_id):
-        """Hole eine Bestellung"""
-        path = f"/orders/{order_id}"
-        return self._send_request("GET", path)
-    
-    def create_order(self, order_data):
-        """Erstelle eine neue Bestellung"""
-        path = "/orders"
-        return self._send_request("POST", path, data=order_data)
-    
-    def update_order(self, order_id, order_data):
-        """Aktualisiere eine bestehende Bestellung"""
-        path = f"/orders/{order_id}"
-        return self._send_request("PUT", path, data=order_data)
-    
-    def delete_order(self, order_id):
-        """Lösche eine Bestellung"""
-        path = f"/orders/{order_id}"
-        return self._send_request("DELETE", path)
+        # Erstelle Payload
+        payload = {
+            **all_params,
+            "sign": sign
+        }
+        
+        # Sende Request
+        headers = {
+            "Content-Type": "application/json"
+        }
+        
+        try:
+            print(f"  → API Call: {api_type}")
+            
+            # ===== DEBUG: Payload ausgeben =====
+            print(f"\n  DEBUG - Request Payload:")
+            print(f"  {'-'*60}")
+            import json
+            print(json.dumps(payload, indent=2, default=str))
+            print(f"  {'-'*60}\n")
+            
+            response = requests.post(
+                self.endpoint,
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
+            
+            response.raise_for_status()
+            response_json = response.json()
+            
+            # ===== DEBUG: Response ausgeben =====
+            print(f"  DEBUG - Response:")
+            print(f"  {'-'*60}")
+            print(json.dumps(response_json, indent=2, default=str))
+            print(f"  {'-'*60}\n")
+            
+            # Prüfe auf API-Fehler
+            if not response_json.get("success", False):
+                error_code = response_json.get("errorCode", "?")
+                error_msg = response_json.get("errorMsg", "Unbekannter Fehler")
+                print(f"  ✗ API Fehler (Code {error_code}): {error_msg}")
+                return None
+            
+            print(f"  ✓ Response erhalten")
+            return response_json
+        
+        except requests.exceptions.RequestException as e:
+            print(f"  ✗ Request Fehler: {e}")
+            print(f"\n  DEBUG - Exception Details:")
+            print(f"  {'-'*60}")
+            import traceback
+            traceback.print_exc()
+            print(f"  {'-'*60}\n")
+            return None
+        except json.JSONDecodeError as e:
+            print(f"  ✗ JSON Decode Fehler: {e}")
+            print(f"  Response Text: {response.text}")
+            return None

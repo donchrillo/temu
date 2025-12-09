@@ -1,7 +1,6 @@
 """FastAPI Server - TEMU Worker Dashboard"""
 
 import sys
-import os
 from pathlib import Path
 from fastapi import FastAPI, WebSocket
 from fastapi.staticfiles import StaticFiles
@@ -11,11 +10,10 @@ from contextlib import asynccontextmanager
 import asyncio
 from datetime import datetime
 
-# Importpfad korrigieren
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dashboard.scheduler import SchedulerService
-from dashboard.jobs import JobType, JobSchedule, JobConfig
+from dashboard.jobs import JobType
 
 # Globaler Scheduler
 scheduler = SchedulerService()
@@ -164,7 +162,8 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
         "api.main:app",
-        host="127.0.0.1",
+        "api.main:app",
+        host="127.0.0.1",",
         port=8000,
-        reload=True
+        reload=Truee
     )

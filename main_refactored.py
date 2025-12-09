@@ -4,20 +4,12 @@ Zeigt wie Repositories → Services → Workflows zusammenarbeiten
 """
 
 import sys
+import argparse
 from pathlib import Path
 from datetime import datetime
 
 # Importpfade
 sys.path.insert(0, str(Path(__file__).parent))
-
-# ===== REPOSITORIES (Data Access Layer) =====
-from src.db.repositories.order_repository import OrderRepository
-from src.db.repositories.order_item_repository import OrderItemRepository
-
-# ===== SERVICES (Business Logic Layer) =====
-from src.modules.orders.service import OrderService
-from src.modules.tracking.service import TrackingService
-from src.modules.xml_export.service import XmlExportService
 
 # ===== WORKFLOWS (Orchestration) =====
 from workflows.api_to_json import run_api_to_json
@@ -37,7 +29,50 @@ def print_section(step_num, total, description):
     print(f"\n[Schritt {step_num}/{total}] {description}")
     print("-"*70)
 
-def run_full_workflow_refactored(parent_order_status=2, days_back=7):
+def parse_arguments():
+    """Parse Command Line Arguments"""
+    parser = argparse.ArgumentParser(
+        description='TEMU ERP Workflow - 5-Schritt Prozess',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Beispiele:
+  python main_refactored.py
+  python main_refactored.py --status 2 --days 7
+  python main_refactored.py --status 1 --days 30
+  python main_refactored.py -s 0 -d 90
+
+TEMU Status Codes:
+  0 = All Orders
+  1 = PENDING (offen)
+  2 = UN_SHIPPING (nicht versendet)
+  3 = CANCELLED (storniert)
+  4 = SHIPPED (versendet)
+        """
+    )
+    
+    parser.add_argument(
+        '--status', '-s',
+        type=int,
+        default=2,
+        help='TEMU Order Status Filter (0=All, 1=PENDING, 2=UN_SHIPPING, 3=CANCELLED, 4=SHIPPED) [default: 2]'
+    )
+    
+    parser.add_argument(
+        '--days', '-d',
+        type=int,
+        default=7,
+        help='Anzahl Tage zurück für Order-Abfrage [default: 7]'
+    )
+    
+    parser.add_argument(
+        '--verbose', '-v',
+        action='store_true',
+        help='Verbose Output (Debug-Modus)'
+    )
+    
+    return parser.parse_args()
+
+def run_full_workflow_refactored(parent_order_status=2, days_back=7, verbose=False):
     """
     REFAKTORIERT: Vollständiger Workflow mit neuer Architektur
     
@@ -45,15 +80,44 @@ def run_full_workflow_refactored(parent_order_status=2, days_back=7):
     
     API → Repositories → Services → Workflows
     
+    Args:
+        parent_order_status: TEMU Status Filter (0-4)
+        days_back: Anzahl Tage zurück
+        verbose: Debug Output
     """
     
     start_time = datetime.now()
     total_steps = 5
     
+    # Validiere Status Code
+    valid_status_codes = [0, 1, 2, 3, 4]
+    if parent_order_status not in valid_status_codes:
+        print(f"✗ Ungültiger Status Code: {parent_order_status}")
+        print(f"  Gültige Werte: {valid_status_codes}")
+        return False
+    
+    # Validiere Days
+    if days_back < 1:
+        print(f"✗ Days muss >= 1 sein")
+        return False
+    
+    status_map = {
+        0: 'All Orders',
+        1: 'PENDING (offen)',
+        2: 'UN_SHIPPING (nicht versendet)',
+        3: 'CANCELLED (storniert)',
+        4: 'SHIPPED (versendet)'
+    }
+    
     print_header("TEMU WORKFLOW - MIT NEUER ARCHITEKTUR")
     print(f"Start: {start_time.strftime('%d.%m.%Y %H:%M:%S')}")
     print(f"Abfrage-Zeitraum: {days_back} Tage")
-    print(f"Status Filter: {parent_order_status}\n")
+    print(f"Status Filter: [{parent_order_status}] {status_map.get(parent_order_status, 'unknown')}")
+    
+    if verbose:
+        print(f"Verbose Mode: ON")
+    
+    print()
     
     results = {}
     
@@ -69,6 +133,9 @@ def run_full_workflow_refactored(parent_order_status=2, days_back=7):
         print(f"  ✓ API Responses gespeichert")
     except Exception as e:
         print(f"  ✗ Fehler: {e}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
         results['api_fetch'] = False
     
     # ========================================
@@ -87,6 +154,9 @@ def run_full_workflow_refactored(parent_order_status=2, days_back=7):
         print(f"  ✓ Orders in DB importiert")
     except Exception as e:
         print(f"  ✗ Fehler: {e}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
         results['json_import'] = False
     
     # ========================================
@@ -104,6 +174,9 @@ def run_full_workflow_refactored(parent_order_status=2, days_back=7):
         print(f"  ✓ XML exportiert")
     except Exception as e:
         print(f"  ✗ Fehler: {e}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
         results['xml_export'] = False
     
     # ========================================
@@ -120,6 +193,9 @@ def run_full_workflow_refactored(parent_order_status=2, days_back=7):
         print(f"  ✓ Tracking aktualisiert")
     except Exception as e:
         print(f"  ✗ Fehler: {e}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
         results['tracking'] = False
     
     # ========================================
@@ -131,6 +207,9 @@ def run_full_workflow_refactored(parent_order_status=2, days_back=7):
         print(f"  ✓ Tracking zu TEMU exportiert")
     except Exception as e:
         print(f"  ✗ Fehler: {e}")
+        if verbose:
+            import traceback
+            traceback.print_exc()
         results['api_export'] = False
     
     # ========================================
@@ -158,7 +237,16 @@ def run_full_workflow_refactored(parent_order_status=2, days_back=7):
 
 if __name__ == "__main__":
     try:
-        success = run_full_workflow_refactored(parent_order_status=2, days_back=7)
+        # Parse Command Line Arguments
+        args = parse_arguments()
+        
+        # Run Workflow mit Arguments
+        success = run_full_workflow_refactored(
+            parent_order_status=args.status,
+            days_back=args.days,
+            verbose=args.verbose
+        )
+        
         sys.exit(0 if success else 1)
     except Exception as e:
         print(f"\n✗ FEHLER: {e}")
