@@ -24,11 +24,11 @@ JTL_SPRACHE = os.getenv('JTL_SPRACHE', 'ger')
 JTL_K_BENUTZER = os.getenv('JTL_K_BENUTZER', '1')
 JTL_K_FIRMA = os.getenv('JTL_K_FIRMA', '1')
 
-# TEMU API (für Phase 3)
-TEMU_APP_KEY = os.getenv('TEMU_APP_KEY')
-TEMU_APP_SECRET = os.getenv('TEMU_APP_SECRET')
-TEMU_ACCESS_TOKEN = os.getenv('TEMU_ACCESS_TOKEN')
-TEMU_API_ENDPOINT = os.getenv('TEMU_API_ENDPOINT', 'https://open.temuglobal.com')
+# === TEMU API Credentials ===
+TEMU_APP_KEY = os.getenv('TEMU_APP_KEY', '')
+TEMU_APP_SECRET = os.getenv('TEMU_APP_SECRET', '')
+TEMU_ACCESS_TOKEN = os.getenv('TEMU_ACCESS_TOKEN', '')
+TEMU_API_ENDPOINT = os.getenv('TEMU_API_ENDPOINT', 'https://openapi-b-eu.temu.com/openapi/router')
 
 # --- Dateipfade (data/ Verzeichnis) ---
 DATA_DIR = Path(__file__).parent.parent / 'data'

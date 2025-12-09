@@ -1,1 +1,1 @@
-"""Quellcode-Module"""
+"""Source Package"""
