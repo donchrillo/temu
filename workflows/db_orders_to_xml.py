@@ -1,7 +1,7 @@
 """Workflow: Datenbank → XML Export (für JTL)"""
 
 from typing import Optional
-from src.modules.xml_export.service import XmlExportService
+from src.modules.xml_export.xml_export_service import XmlExportService
 from src.db.repositories.order_repository import OrderRepository
 from src.db.repositories.order_item_repository import OrderItemRepository
 from src.db.repositories.jtl_repository import JtlRepository

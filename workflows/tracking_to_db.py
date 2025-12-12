@@ -3,7 +3,7 @@
 from typing import Optional
 from src.db.repositories.order_repository import OrderRepository
 from src.db.repositories.jtl_repository import JtlRepository
-from src.modules.tracking.service import TrackingService
+from src.modules.tracking.tracking_service import TrackingService
 from src.db.connection import get_db_connection
 from src.services.log_service import log_service
 

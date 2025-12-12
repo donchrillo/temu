@@ -13,7 +13,7 @@ from datetime import datetime
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dashboard.scheduler import SchedulerService
-from dashboard.job_models import JobType  # ← KORRIGIERT: job_models statt job_model!
+from dashboard.job_models import JobType  # ← KORRIGIERT: job_models statt jobs!
 from src.services.log_service import log_service
 
 # Globaler Scheduler

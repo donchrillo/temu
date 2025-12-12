@@ -10,8 +10,8 @@ import sys
 from contextlib import redirect_stdout, redirect_stderr
 from pathlib import Path
 
-from dashboard.config import SchedulerConfig
-from dashboard.jobs import JobType, JobStatusEnum, JobConfig, JobSchedule
+from dashboard.scheduler_config import SchedulerConfig
+from dashboard.job_models import JobType, JobStatusEnum, JobConfig, JobSchedule  # ← KORRIGIERT: job_models statt jobs!
 from src.services.log_service import log_service
 
 class SchedulerService:
@@ -38,7 +38,11 @@ class SchedulerService:
     def add_job(self, job_type: JobType, interval_minutes: int, description: str, enabled: bool = True):
         """Fügt einen neuen Job hinzu"""
         
-        job_id = f"{job_type}_{int(datetime.now().timestamp())}"
+        # VORHER:
+        # job_id = f"{job_type}_{int(datetime.now().timestamp())}"
+        
+        # NACHHER: ← .value nutzen!
+        job_id = f"{job_type.value}_{int(datetime.now().timestamp())}"
         
         config = JobConfig(
             job_type=job_type,
@@ -65,7 +69,10 @@ class SchedulerService:
             trigger=IntervalTrigger(minutes=interval_minutes),
             id=job_id,
             args=[job_id],
-            next_run_time=datetime.now() if enabled else None
+            next_run_time=datetime.now() if enabled else None,
+            misfire_grace_time=None,  # ✅ Ignoriere verpasste Zyklen komplett
+            coalesce=True,  # ✅ Springe verpasste Ausführungen
+            max_instances=1  # ✅ Nur 1 Instanz gleichzeitig
         )
         
         if not enabled:
@@ -155,7 +162,14 @@ class SchedulerService:
             self.job_status[job_id]["last_run"] = start_time
             job = self.scheduler.get_job(job_id)
             if job:
-                self.job_status[job_id]["next_run"] = job.next_run_time
+                # ✅ KORRIGIERT: Berechne next_run neu basierend auf JETZT + Intervall!
+                interval_minutes = self.jobs[job_id].schedule.interval_minutes
+                from datetime import timedelta
+                next_run = datetime.now() + timedelta(minutes=interval_minutes)
+                
+                # Neuplanen mit aktueller Zeit
+                job.reschedule(trigger=IntervalTrigger(minutes=interval_minutes), next_run_time=next_run)
+                self.job_status[job_id]["next_run"] = next_run
     
     def start(self):
         """Starte Scheduler"""

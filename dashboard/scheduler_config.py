@@ -5,9 +5,8 @@ from pathlib import Path
 from typing import Dict, List
 from datetime import datetime
 
-CONFIG_DIR = Path(__file__).parent.parent / 'data'
-CONFIG_DIR.mkdir(exist_ok=True)
-CONFIG_FILE = CONFIG_DIR / 'scheduler_config.json'
+# ✅ KORRIGIERT: CONFIG_FILE unter config/, nicht data/!
+CONFIG_FILE = Path(__file__).parent.parent / 'config' / 'scheduler_config.json'
 
 class SchedulerConfig:
     """Persistiere Job-Konfigurationen in JSON"""
@@ -31,6 +30,9 @@ class SchedulerConfig:
     def save_jobs(jobs: List[Dict]) -> bool:
         """Speichere Job-Konfiguration in File"""
         try:
+            # ✅ Stelle sicher dass config/ Verzeichnis existiert
+            CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+            
             with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
                 json.dump(jobs, f, indent=2, ensure_ascii=False)
             return True

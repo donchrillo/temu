@@ -4,7 +4,7 @@ from typing import Optional
 from config.settings import DATA_DIR
 from src.db.repositories.order_repository import OrderRepository
 from src.db.repositories.order_item_repository import OrderItemRepository
-from src.modules.orders.service import OrderService
+from src.modules.orders.order_service import OrderService  # ← KORRIGIERT: order_service statt service!
 from src.db.connection import get_db_connection
 from src.services.log_service import log_service
 
