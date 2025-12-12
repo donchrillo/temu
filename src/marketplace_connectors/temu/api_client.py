@@ -3,7 +3,9 @@
 import requests
 import json
 import time
+from typing import Optional
 from src.marketplace_connectors.temu.signature import calculate_signature
+from src.services.log_service import log_service
 
 class TemuApiClient:
     """Base Client für TEMU Open API"""
@@ -24,15 +26,16 @@ class TemuApiClient:
         self.access_token = access_token
         self.endpoint = endpoint
         self.data_type = "JSON"
-        self.verbose = verbose  # ✅ IMPORTANT!
+        self.verbose = verbose
     
-    def call(self, api_type, request_params=None):
+    def call(self, api_type, request_params=None, job_id: Optional[str] = None):
         """
         Ruft TEMU API auf.
         
         Args:
             api_type: API-Typ (z.B. 'bg.order.list.v2.get')
             request_params: Dict mit zusätzlichen Parametern
+            job_id: Optional - für strukturiertes Logging
         
         Returns:
             API-Response als Dict oder None bei Fehler
@@ -69,14 +72,13 @@ class TemuApiClient:
         }
         
         try:
-            print(f"  → API Call: {api_type}")
+            if job_id:
+                log_service.log(job_id, "temu_api", "INFO", f"→ API Call: {api_type}")
             
             # ===== DEBUG: Nur wenn --verbose! =====
-            if self.verbose:
-                print(f"\n  DEBUG - Request Payload:")
-                print(f"  {'-'*60}")
-                print(json.dumps(payload, indent=2, default=str))
-                print(f"  {'-'*60}\n")
+            if self.verbose and job_id:
+                log_service.log(job_id, "temu_api", "DEBUG", 
+                              f"Payload: {json.dumps(payload, indent=2, default=str)}")
             
             response = requests.post(
                 self.endpoint,
@@ -89,36 +91,41 @@ class TemuApiClient:
             response_json = response.json()
             
             # ===== DEBUG: Nur wenn --verbose! =====
-            if self.verbose:
-                print(f"  DEBUG - Response:")
-                print(f"  {'-'*60}")
-                print(json.dumps(response_json, indent=2, default=str))
-                print(f"  {'-'*60}\n")
+            if self.verbose and job_id:
+                log_service.log(job_id, "temu_api", "DEBUG", 
+                              f"Response: {json.dumps(response_json, indent=2, default=str)}")
             
             # Prüfe auf API-Fehler
             if not response_json.get("success", False):
                 error_code = response_json.get("errorCode", "?")
                 error_msg = response_json.get("errorMsg", "Unbekannter Fehler")
-                print(f"  ✗ API Fehler (Code {error_code}): {error_msg}")
+                if job_id:
+                    log_service.log(job_id, "temu_api", "ERROR", 
+                                  f"API Fehler ({error_code}): {error_msg}")
+                else:
+                    print(f"✗ API Fehler ({error_code}): {error_msg}")
                 return None
             
-            print(f"  ✓ Response erhalten")
+            if job_id:
+                log_service.log(job_id, "temu_api", "INFO", "✓ Response erfolgreich")
+            
             return response_json
         
         except requests.exceptions.RequestException as e:
-            print(f"  ✗ Request Fehler: {e}")
-            
-            # ===== DEBUG: Nur wenn --verbose! =====
-            if self.verbose:
-                print(f"\n  DEBUG - Exception Details:")
-                print(f"  {'-'*60}")
-                import traceback
-                traceback.print_exc()
-                print(f"  {'-'*60}\n")
-            
+            error_msg = f"Request Fehler: {str(e)}"
+            if job_id:
+                log_service.log(job_id, "temu_api", "ERROR", error_msg)
+                if self.verbose:
+                    import traceback
+                    log_service.log(job_id, "temu_api", "ERROR", traceback.format_exc())
+            else:
+                print(f"✗ {error_msg}")
             return None
+        
         except json.JSONDecodeError as e:
-            print(f"  ✗ JSON Decode Fehler: {e}")
-            if self.verbose:
-                print(f"  Response Text: {response.text}")
+            error_msg = f"JSON Decode Fehler: {str(e)}"
+            if job_id:
+                log_service.log(job_id, "temu_api", "ERROR", error_msg)
+            else:
+                print(f"✗ {error_msg}")
             return None

@@ -7,28 +7,31 @@ from typing import Dict, List, Optional
 from config.settings import DATA_DIR
 from src.db.repositories.order_repository import OrderRepository, Order
 from src.db.repositories.order_item_repository import OrderItemRepository, OrderItem
+from src.services.log_service import log_service
 
 class OrderService:
     """Business Logic - Importiert API Responses mit Merge-Logik"""
     
-    def __init__(self, order_repo: OrderRepository = None, item_repo: OrderItemRepository = None):
+    def __init__(self, order_repo: OrderRepository = None, item_repo: OrderItemRepository = None, job_id: Optional[str] = None):
         self.order_repo = order_repo or OrderRepository()
         self.item_repo = item_repo or OrderItemRepository()
         self.api_response_dir = DATA_DIR / 'api_responses'
+        self.job_id = job_id  # Optional für Logging
     
-    def import_from_json_files(self) -> Dict:
+    def import_from_json_files(self, job_id: Optional[str] = None) -> Dict:
         """
         Importiert Orders aus JSON Files mit kompletter Merge-Logik
         MIT CONNECTION POOLING!
         
-        Merged Daten aus 3 API Calls:
-        - api_response_orders.json → Orders & Items
-        - api_response_shipping_all.json → Kundendaten & Adresse
-        - api_response_amount_all.json → Preise
-        
         Returns:
             dict mit imported/updated/total counts
         """
+        
+        job_id = job_id or self.job_id
+        
+        if job_id:
+            log_service.log(job_id, "order_service", "INFO", 
+                          "→ Importiere Orders aus JSON in Datenbank")
         
         # Lade alle JSON Responses
         orders_file = self.api_response_dir / 'api_response_orders.json'
@@ -39,60 +42,86 @@ class OrderService:
         required_files = [orders_file, shipping_file, amount_file]
         for f in required_files:
             if not f.exists():
-                print(f"✗ Datei nicht gefunden: {f}")
+                error_msg = f"Datei nicht gefunden: {f}"
+                if job_id:
+                    log_service.log(job_id, "order_service", "ERROR", f"✗ {error_msg}")
+                else:
+                    print(f"✗ {error_msg}")
                 return {'imported': 0, 'updated': 0, 'total': 0}
         
-        # Lade Responses
-        with open(orders_file, 'r', encoding='utf-8') as f:
-            orders_response = json.load(f)
+        try:
+            # Lade Responses
+            with open(orders_file, 'r', encoding='utf-8') as f:
+                orders_response = json.load(f)
+            
+            with open(shipping_file, 'r', encoding='utf-8') as f:
+                shipping_responses = json.load(f)
+            
+            with open(amount_file, 'r', encoding='utf-8') as f:
+                amount_responses = json.load(f)
+            
+            # Validiere Orders Response
+            if not orders_response.get('success'):
+                error_msg = "Orders API Response war nicht erfolgreich"
+                if job_id:
+                    log_service.log(job_id, "order_service", "ERROR", f"✗ {error_msg}")
+                else:
+                    print(f"✗ {error_msg}")
+                return {'imported': 0, 'updated': 0, 'total': 0}
+            
+            orders = orders_response.get('result', {}).get('pageItems', [])
+            
+            if job_id:
+                log_service.log(job_id, "order_service", "INFO", 
+                              f"  {len(orders)} Orders gefunden")
+            
+            # ===== IMPORT mit vollständiger Merge-Logik =====
+            from src.db.connection import get_db_connection
+            pooled_conn = get_db_connection(database='toci', use_pool=True)
+            
+            order_repo_with_pool = OrderRepository(connection=pooled_conn)
+            item_repo_with_pool = OrderItemRepository(connection=pooled_conn)
+            
+            result = self.import_from_api_response(
+                orders,
+                shipping_responses,
+                amount_responses,
+                order_repo_with_pool,
+                item_repo_with_pool,
+                job_id=job_id
+            )
+            
+            if job_id:
+                log_service.log(job_id, "order_service", "INFO", 
+                              f"✓ Import abgeschlossen: {result.get('total', 0)} Orders")
+                log_service.log(job_id, "order_service", "INFO", 
+                              f"  Neu: {result.get('imported', 0)}, Aktualisiert: {result.get('updated', 0)}")
+            
+            return result
         
-        with open(shipping_file, 'r', encoding='utf-8') as f:
-            shipping_responses = json.load(f)
-        
-        with open(amount_file, 'r', encoding='utf-8') as f:
-            amount_responses = json.load(f)
-        
-        # Validiere Orders Response
-        if not orders_response.get('success'):
-            print("✗ Orders API Response war nicht erfolgreich")
+        except Exception as e:
+            import traceback
+            error_trace = traceback.format_exc()
+            
+            if job_id:
+                log_service.log(job_id, "order_service", "ERROR", f"✗ Import Fehler: {str(e)}")
+                log_service.log(job_id, "order_service", "ERROR", error_trace)
+            
             return {'imported': 0, 'updated': 0, 'total': 0}
-        
-        orders = orders_response.get('result', {}).get('pageItems', [])
-        print(f"✓ {len(orders)} Orders geladen")
-        print(f"✓ {len(shipping_responses)} Versandinformationen vorhanden")
-        print(f"✓ {len(amount_responses)} Preisinformationen vorhanden\n")
-        
-        # ===== IMPORT mit vollständiger Merge-Logik =====
-        # ===== WICHTIG: Hole gepoolte Connection EINMAL! =====
-        from src.db.connection import get_db_connection
-        pooled_conn = get_db_connection(database='toci', use_pool=True)
-        
-        # Injiziere pooled Connection in Repositories
-        order_repo_with_pool = OrderRepository(connection=pooled_conn)
-        item_repo_with_pool = OrderItemRepository(connection=pooled_conn)
-        
-        # Nutze Repositories mit gepoolter Connection
-        result = self.import_from_api_response(
-            orders,
-            shipping_responses,
-            amount_responses,
-            order_repo_with_pool,
-            item_repo_with_pool
-        )
-        
-        return result
     
     def import_from_api_response(self, orders: list, shipping_responses: dict, 
                                  amount_responses: dict,
-                                 order_repo=None, item_repo=None) -> Dict:
+                                 order_repo=None, item_repo=None,
+                                 job_id: Optional[str] = None) -> Dict:
         """
         Business Logic: Merge + Import Orders
         MIT optionalen Repositories (für gepoolte Connections)
         
         Args:
             orders: List von Orders aus API
-            shipping_responses: Dict mit Versandinformationen (parentOrderSn -> response)
-            amount_responses: Dict mit Preisinformationen (parentOrderSn -> response)
+            shipping_responses: Dict mit Versandinformationen
+            amount_responses: Dict mit Preisinformationen
+            job_id: Optional - für strukturiertes Logging
         
         Returns:
             dict mit import statistics
@@ -112,14 +141,17 @@ class OrderService:
                 parent_order_sn = parent_order_map.get('parentOrderSn')
                 
                 if not parent_order_sn:
-                    print("⚠ Keine parentOrderSn gefunden")
+                    if job_id:
+                        log_service.log(job_id, "order_service", "WARNING", 
+                                      "⚠ Keine parentOrderSn gefunden")
+                    else:
+                        print("⚠ Keine parentOrderSn gefunden")
                     continue
                 
                 # ===== MERGE STEP 1: Kundendaten aus shipping_info =====
                 shipping_data = shipping_responses.get(parent_order_sn, {})
                 shipping_result = shipping_data.get('result', {})
                 
-                # Parse Name (Format: "Vorname Nachname")
                 vorname_empfaenger = ''
                 nachname_empfaenger = (shipping_result.get('receiptName', '') or '').strip()
                 
@@ -137,20 +169,17 @@ class OrderService:
                 email = (shipping_result.get('mail') or '').strip()
                 telefon = (shipping_result.get('mobile') or '').strip()
                 
-                # Land zu ISO konvertieren
                 land_iso = self._map_land_to_iso(land)
                 
-                # ===== MERGE STEP 2: Amount Daten (Preise & Versandkosten) =====
+                # ===== MERGE STEP 2: Amount Daten =====
                 amount_data = amount_responses.get(parent_order_sn, {})
                 amount_result = amount_data.get('result', {})
                 parent_amount_map = amount_result.get('parentOrderMap', {})
                 order_amount_list = amount_result.get('orderList', [])
                 
-                # Versandkosten (in Cents, daher /100)
                 versandkosten_brutto = parent_amount_map.get('shipAmountTotalTaxIncl', {}).get('amount', 0) / 100
                 versandkosten_netto = parent_amount_map.get('shippingAmountTotal', {}).get('amount', 0) / 100
                 
-                # Status & Datum
                 order_time = parent_order_map.get('parentOrderTime', 0)
                 kaufdatum = datetime.fromtimestamp(order_time) if order_time else datetime.now()
                 
@@ -161,7 +190,6 @@ class OrderService:
                 existing_order = order_repo.find_by_bestell_id(parent_order_sn)
                 
                 if existing_order:
-                    # UPDATE Order
                     order_db_id = existing_order.id
                     order = Order(
                         id=order_db_id,
@@ -183,9 +211,11 @@ class OrderService:
                     )
                     order_repo.save(order)
                     updated_count += 1
-                    print(f"  ↻ {parent_order_sn}: aktualisiert")
+                    
+                    if job_id:
+                        log_service.log(job_id, "order_service", "INFO", 
+                                      f"  ↻ {parent_order_sn}: aktualisiert")
                 else:
-                    # INSERT neue Order
                     order = Order(
                         id=None,
                         bestell_id=parent_order_sn,
@@ -206,9 +236,8 @@ class OrderService:
                     )
                     order_db_id = order_repo.save(order)
                     imported_count += 1
-                    print(f"  ✓ {parent_order_sn}: neu importiert")
-                
-                # ===== BUSINESS LOGIC: Import Order Items mit Preisen =====
+            
+                # ===== BUSINESS LOGIC: Import Order Items =====
                 order_list = order_item.get('orderList', [])
                 
                 for item_idx, order_item_data in enumerate(order_list):
@@ -217,13 +246,11 @@ class OrderService:
                     if not bestellartikel_id:
                         continue
                     
-                    # Artikel-Daten (original = sprachunabhängig!)
                     produktname = order_item_data.get('originalGoodsName', '')
                     variation = order_item_data.get('originalSpecName', '')
                     menge = float(order_item_data.get('originalOrderQuantity', 0))
                     sku_id = order_item_data.get('skuId', '')
                     
-                    # Extract SKU aus productList
                     sku = ''
                     product_list = order_item_data.get('productList', [])
                     if product_list and len(product_list) > 0:
@@ -236,17 +263,13 @@ class OrderService:
                     
                     if item_idx < len(order_amount_list):
                         amount_item = order_amount_list[item_idx]
-                        # Preise sind in Cents, daher /100
                         netto_einzelpreis = amount_item.get('unitRetailPriceVatExcl', {}).get('amount', 0) / 100
                         brutto_einzelpreis = amount_item.get('unitRetailPriceVatIncl', {}).get('amount', 0) / 100
-                        # MwSt ist in Millionsten, daher /1000000
                         mwst_satz = amount_item.get('productTaxRate', 19000000) / 1000000
                     
-                    # Prüfe ob Artikel bereits existiert
                     existing_item = item_repo.find_by_bestellartikel_id(bestellartikel_id)
                     
                     if existing_item:
-                        # UPDATE Item
                         item = OrderItem(
                             id=existing_item.id,
                             order_id=order_db_id,
@@ -265,7 +288,6 @@ class OrderService:
                         )
                         item_repo.save(item)
                     else:
-                        # INSERT neuer Item
                         item = OrderItem(
                             id=None,
                             order_id=order_db_id,
@@ -285,9 +307,16 @@ class OrderService:
                         item_repo.save(item)
             
             except Exception as e:
-                print(f"  ✗ Fehler bei Order {parent_order_sn}: {e}")
                 import traceback
-                traceback.print_exc()
+                error_trace = traceback.format_exc()
+                parent_order_sn = order_item.get('parentOrderMap', {}).get('parentOrderSn', 'unknown')
+                
+                if job_id:
+                    log_service.log(job_id, "order_service", "ERROR", 
+                                  f"✗ Fehler bei Order {parent_order_sn}: {str(e)}")
+                    log_service.log(job_id, "order_service", "ERROR", error_trace)
+                else:
+                    print(f"  ✗ Fehler bei Order {parent_order_sn}: {e}")
         
         return {
             'imported': imported_count,
@@ -320,6 +349,8 @@ class OrderService:
             'Sweden': 'SE',
             'Denmark': 'DK',
             'United Kingdom': 'GB',
+            'Switzerland': 'CH',
+            'Czech Republic': 'CZ',
             'Switzerland': 'CH',
             'Czech Republic': 'CZ',
             'Hungary': 'HU',

@@ -24,13 +24,24 @@ def get_db_connection(database='toci', use_pool=True):
         server_host = server_parts[0]
         server_port = server_parts[1] if len(server_parts) > 1 else '1433'
         
-        # Connection String
+        import platform
+
+        # Unterscheidung: Windows vs. Linux
+        if platform.system() == 'Linux':
+            driver = '{ODBC Driver 18 for SQL Server}'
+            extra_params = 'TrustServerCertificate=yes;'
+        else:
+            driver = '{SQL Server}'
+            extra_params = ''
+
+        # Connection String zusammenbauen
         conn_string = (
-            'DRIVER={SQL Server};'
+            f'DRIVER={driver};'
             f'SERVER={server_host},{server_port};'
             f'DATABASE={database};'
             f'UID={SQL_USERNAME};'
-            f'PWD={SQL_PASSWORD}'
+            f'PWD={SQL_PASSWORD};'
+            f'{extra_params}'
         )
         
         # ===== Connection Pooling =====
@@ -50,15 +61,10 @@ def get_db_connection(database='toci', use_pool=True):
                     del _connection_pools[pool_key]
             
             # Neue Connection erstellen & in Pool speichern
-            print(f"  → Neue Connection zu {database}...")
-            print(f"    Server: {server_host}:{server_port}")
-            print(f"    User: {SQL_USERNAME}")
-            
             conn = pyodbc.connect(conn_string, timeout=10)
             conn.autocommit = True  # ✅ AutoCommit ON für Pooling!
             
             _connection_pools[pool_key] = conn
-            print(f"  ✓ {database} Connection (gepooled)\n")
             return conn
         else:
             # Ohne Pooling (für Tests/Debug)
@@ -70,20 +76,11 @@ def get_db_connection(database='toci', use_pool=True):
         error_code = e.args[0] if e.args else 'Unknown'
         error_msg = e.args[1] if len(e.args) > 1 else str(e)
         
-        print(f"  ✗ DB Verbindungsfehler: {error_code}")
-        print(f"     Message: {error_msg}")
-        print(f"\n  Überprüfe:")
-        print(f"    1. SQL Server läuft:")
-        print(f"       PowerShell: Get-Service | Select-String MSSQL")
-        print(f"")
-        print(f"    2. Server erreichbar:")
-        print(f"       PowerShell: Test-NetConnection {server_host} -Port {server_port}")
-        print(f"       Sollte zeigen: TcpTestSucceeded : True")
-        print(f"")
-        print(f"    3. Credentials korrekt in .env:")
-        print(f"       SQL_SERVER={SQL_SERVER}")
-        print(f"       SQL_USERNAME={SQL_USERNAME}")
-        print(f"")
+        # ✅ NEU: Optional - nur bei kritischen Fehlern ausgeben
+        # Für Debugging: Uncomment diese Zeilen
+        # print(f"✗ DB Verbindungsfehler ({database}): {error_code}")
+        # print(f"  Message: {error_msg}")
+        
         raise
 
 def close_connection(conn):
@@ -101,10 +98,7 @@ def close_all_connections():
     for database, conn in _connection_pools.items():
         try:
             conn.close()
-            print(f"✓ {database} Connection geschlossen")
         except:
             pass
     
     _connection_pools = {}
-
-# ✅ Diese Datei BEHALTEN!

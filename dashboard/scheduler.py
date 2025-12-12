@@ -12,6 +12,7 @@ from pathlib import Path
 
 from dashboard.config import SchedulerConfig
 from dashboard.jobs import JobType, JobStatusEnum, JobConfig, JobSchedule
+from src.services.log_service import log_service
 
 class SchedulerService:
     """Verwaltet alle geplanten Jobs"""
@@ -80,15 +81,19 @@ class SchedulerService:
         return await loop.run_in_executor(None, lambda: sync_func(*args, **kwargs))
     
     async def _run_job(self, job_id: str):
-        """Führt einen Job aus und captured Logs"""
+        """✅ NEU: Mit strukturiertem Logging in SQL Server"""
         
         start_time = datetime.now()
         self.job_status[job_id]["status"] = JobStatusEnum.RUNNING
+        job_type = self.jobs[job_id].job_type
         
-        # Capture stdout/stderr
-        log_buffer = io.StringIO()
+        # ✅ Starte Log-Capturing in SQL Server
+        log_service.start_job_capture(job_id, job_type.value)
         
         try:
+            # Capture stdout/stderr
+            log_buffer = io.StringIO()
+            
             with redirect_stdout(log_buffer), redirect_stderr(log_buffer):
                 job_type = self.jobs[job_id].job_type
                 
@@ -101,7 +106,6 @@ class SchedulerService:
                 
                 # Führe entsprechenden Job aus
                 if job_type == JobType.SYNC_ORDERS:
-                    # ✅ KORRIGIERT: Nutze _async_wrapper mit kwargs!
                     from main import run_full_workflow_refactored
                     result = await self._async_wrapper(
                         run_full_workflow_refactored,
@@ -114,25 +118,39 @@ class SchedulerService:
                 elif job_type == JobType.FETCH_INVOICES:
                     print("ℹ Rechnungs-Fetch noch nicht implementiert")
             
+            # ✅ Speichere Logs in SQL Server
+            logs = log_buffer.getvalue().split('\n')
+            for log_line in logs:
+                if log_line.strip():
+                    # Bestimme Level
+                    level = "INFO"
+                    if "✗" in log_line or "Fehler" in log_line:
+                        level = "ERROR"
+                    elif "⚠" in log_line:
+                        level = "WARNING"
+                    
+                    log_service.log(job_id, job_type.value, level, log_line)
+            
             # Erfolg
             duration = (datetime.now() - start_time).total_seconds()
             self.job_status[job_id]["status"] = JobStatusEnum.SUCCESS
             self.job_status[job_id]["last_duration"] = duration
-            print(f"[Job] ✓ Erfolgreich (Dauer: {duration:.1f}s)")
+            
+            # ✅ Speichere Success-Status in DB
+            log_service.end_job_capture(success=True, duration=duration)
             
         except Exception as e:
-            # Fehler - mit vollständigem Traceback
             import traceback
             self.job_status[job_id]["status"] = JobStatusEnum.FAILED
             self.job_status[job_id]["last_error"] = str(e)
-            error_msg = f"\n✗ Job Fehler: {e}\n{traceback.format_exc()}"
-            log_buffer.write(error_msg)
-            print(error_msg)
+            
+            # ✅ Speichere Error in DB
+            log_service.end_job_capture(success=False, duration=(datetime.now() - start_time).total_seconds(), error=str(e))
+            log_service.log(job_id, job_type.value, "ERROR", traceback.format_exc())
         
         finally:
-            # Speichere Logs
-            logs = log_buffer.getvalue().split('\n')
-            self.job_logs[job_id] = [l for l in logs if l.strip()][-100:]
+            # ✅ Aktualisiere recent_logs aus DB
+            self.job_logs[job_id] = log_service.get_recent_logs(job_id, 50)
             
             self.job_status[job_id]["last_run"] = start_time
             job = self.scheduler.get_job(job_id)

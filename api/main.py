@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dashboard.scheduler import SchedulerService
 from dashboard.jobs import JobType
+from src.services.log_service import log_service
 
 # Globaler Scheduler
 scheduler = SchedulerService()
@@ -90,6 +91,52 @@ async def toggle_job(job_id: str, enabled: bool):
     scheduler.toggle_job(job_id, enabled)
     return {"status": "toggled", "job_id": job_id, "enabled": enabled}
 
+# ===== LOG ENDPOINTS =====
+
+@app.get("/api/logs")
+async def get_logs(job_id: str = None, level: str = None, limit: int = 100, offset: int = 0):
+    """Hole Logs mit Filtern"""
+    return log_service.get_logs(job_id, level, limit, offset)
+
+@app.get("/api/logs/stats")
+async def get_log_stats(job_id: str = None, days: int = 7):
+    """Hole Log-Statistiken"""
+    return log_service.get_statistics(job_id, days)
+
+@app.get("/api/logs/export")
+async def export_logs(job_id: str = None, format: str = "json", days: int = 7):
+    """✅ Export Logs als JSON/CSV"""
+    import csv
+    from io import StringIO
+    
+    logs = log_service.get_logs(job_id=job_id, limit=10000)
+    
+    if format == "csv":
+        output = StringIO()
+        writer = csv.DictWriter(output, fieldnames=logs[0].keys() if logs else [])
+        writer.writeheader()
+        writer.writerows(logs)
+        
+        return {
+            "status": "ok",
+            "format": "csv",
+            "data": output.getvalue()
+        }
+    
+    return {
+        "status": "ok",
+        "format": "json",
+        "data": logs
+    }
+
+# ===== MAINTENANCE =====
+
+@app.post("/api/logs/cleanup")
+async def cleanup_logs(days: int = 30):
+    """Lösche alte Logs"""
+    deleted = log_service.cleanup_old_logs(days)
+    return {"status": "ok", "deleted": deleted}
+
 # WebSocket für Live-Logs
 connected_clients: list[WebSocket] = []
 
@@ -146,7 +193,7 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
         "api.main:app",
-        host="127.0.0.1",
+        host="0.0.0.0",
         port=8000,
         reload=True
     )
