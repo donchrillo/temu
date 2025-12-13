@@ -9,6 +9,7 @@ from src.marketplace_connectors.temu.api_client import TemuApiClient
 from src.marketplace_connectors.temu.orders_api import TemuOrdersApi
 from src.marketplace_connectors.base_connector import BaseMarketplaceConnector
 from src.services.log_service import log_service
+from src.services.logger import app_logger
 
 API_RESPONSE_DIR = DATA_DIR / 'api_responses'
 API_RESPONSE_DIR.mkdir(exist_ok=True)
@@ -58,7 +59,7 @@ class TemuMarketplaceService(BaseMarketplaceConnector):
                 if job_id:
                     log_service.log(job_id, "temu_service", "ERROR", f"✗ {error_msg}")
                 else:
-                    print(f"✗ {error_msg}")
+                    app_logger.error(error_msg)
                 return False
             
             # Berechne Timestamps
@@ -88,7 +89,7 @@ class TemuMarketplaceService(BaseMarketplaceConnector):
                 if job_id:
                     log_service.log(job_id, "temu_service", "ERROR", f"✗ {error_msg}")
                 else:
-                    print(f"✗ {error_msg}")
+                    app_logger.error(error_msg)
                 return False
             
             # Speichere Orders JSON
@@ -157,7 +158,7 @@ class TemuMarketplaceService(BaseMarketplaceConnector):
                 log_service.log(job_id, "temu_service", "ERROR", f"✗ Fehler: {str(e)}")
                 log_service.log(job_id, "temu_service", "ERROR", error_trace)
             else:
-                print(f"✗ Fehler: {e}")
+                app_logger.error(f"Fehler beim Order-Abruf: {e}", exc_info=True)
             return False
     
     def fetch_shipping_info(self, order_id: str, job_id: Optional[str] = None) -> Dict:

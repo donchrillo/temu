@@ -8,6 +8,7 @@ from config.settings import DATA_DIR
 from src.db.repositories.order_repository import OrderRepository, Order
 from src.db.repositories.order_item_repository import OrderItemRepository, OrderItem
 from src.services.log_service import log_service
+from src.services.logger import app_logger
 
 class OrderService:
     """Business Logic - Importiert API Responses mit Merge-Logik"""
@@ -46,7 +47,7 @@ class OrderService:
                 if job_id:
                     log_service.log(job_id, "order_service", "ERROR", f"✗ {error_msg}")
                 else:
-                    print(f"✗ {error_msg}")
+                    app_logger.error(error_msg)
                 return {'imported': 0, 'updated': 0, 'total': 0}
         
         try:
@@ -106,6 +107,8 @@ class OrderService:
             if job_id:
                 log_service.log(job_id, "order_service", "ERROR", f"✗ Import Fehler: {str(e)}")
                 log_service.log(job_id, "order_service", "ERROR", error_trace)
+            else:
+                app_logger.error(f"Import Fehler: {e}", exc_info=True)
             
             return {'imported': 0, 'updated': 0, 'total': 0}
     
@@ -316,7 +319,7 @@ class OrderService:
                                   f"✗ Fehler bei Order {parent_order_sn}: {str(e)}")
                     log_service.log(job_id, "order_service", "ERROR", error_trace)
                 else:
-                    print(f"  ✗ Fehler bei Order {parent_order_sn}: {e}")
+                    app_logger.error(f"Fehler bei Order {parent_order_sn}: {e}", exc_info=True)
         
         return {
             'imported': imported_count,

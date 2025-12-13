@@ -13,8 +13,8 @@ from datetime import datetime
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dashboard.scheduler import SchedulerService
-from dashboard.job_models import JobType  # ← KORRIGIERT: job_models statt jobs!
 from src.services.log_service import log_service
+from src.services.logger import app_logger
 
 # Globaler Scheduler
 scheduler = SchedulerService()
@@ -24,21 +24,20 @@ scheduler = SchedulerService()
 async def lifespan(app: FastAPI):
     """Startup und Shutdown Events"""
     
-    # Startup
-    print("🚀 Starte TEMU Worker...")
-    
-    # ✅ NEU: Lade Jobs aus gespeicherter Konfiguration
-    scheduler.initialize_from_config()
-    
-    scheduler.start()
-    print("✓ Scheduler gestartet")
+    try:
+        # ✅ NEU: Lade Jobs aus gespeicherter Konfiguration
+        scheduler.initialize_from_config()
+        scheduler.start()
+    except Exception as e:
+        app_logger.error(f"Fehler beim Starten des Schedulers: {e}", exc_info=True)
+        raise
     
     yield
     
-    # Shutdown
-    print("🛑 Fahre TEMU Worker herunter...")
-    scheduler.stop()
-    print("✓ Scheduler gestoppt")
+    try:
+        scheduler.stop()
+    except Exception as e:
+        app_logger.error(f"Fehler beim Stoppen des Schedulers: {e}", exc_info=True)
 
 # Initialisiere FastAPI
 app = FastAPI(
@@ -74,10 +73,20 @@ async def get_job(job_id: str):
     return scheduler.get_job_status(job_id)
 
 @app.post("/api/jobs/{job_id}/run-now")
-async def trigger_job(job_id: str):
-    """Triggere Job sofort"""
-    scheduler.trigger_job_now(job_id)
-    return {"status": "triggered", "job_id": job_id}
+async def trigger_job(job_id: str, parent_order_status: int = 2, days_back: int = 7, 
+                      verbose: bool = False, log_to_db: bool = True):
+    """Triggere Job SOFORT mit optionalen Parametern"""
+    scheduler.trigger_job_now(job_id, parent_order_status, days_back, verbose, log_to_db)
+    return {
+        "status": "triggered", 
+        "job_id": job_id,
+        "params": {
+            "parent_order_status": parent_order_status,
+            "days_back": days_back,
+            "verbose": verbose,
+            "log_to_db": log_to_db
+        }
+    }
 
 @app.post("/api/jobs/{job_id}/schedule")
 async def update_schedule(job_id: str, interval_minutes: int):
@@ -98,6 +107,64 @@ async def get_logs(job_id: str = None, level: str = None, limit: int = 100, offs
     """Hole Logs mit Filtern"""
     return log_service.get_logs(job_id, level, limit, offset)
 
+@app.get("/api/logs/export")
+async def export_logs(job_id: str = None, format: str = "json", days: int = 7):
+    """✅ Export Logs als JSON/CSV"""
+    import csv
+    from io import StringIO
+    
+    try:
+        logs = log_service.get_logs(job_id=job_id, limit=10000)
+        
+        if format == "csv":
+            output = StringIO()
+            writer = csv.DictWriter(output, fieldnames=logs[0].keys() if logs else [])
+            writer.writeheader()
+            writer.writerows(logs)
+            
+            return {
+                "status": "ok",
+                "format": "csv",
+                "data": output.getvalue()
+            }
+        
+        return {
+            "status": "ok",
+            "format": "json",
+            "data": logs
+        }
+    except Exception as e:
+        app_logger.error(f"Export Logs Fehler: {e}", exc_info=True)
+        return {"status": "error", "message": str(e)}
+
+# ===== NEU: ERROR LOGS ENDPOINT =====
+
+@app.get("/api/logs/errors")
+async def get_error_logs(limit: int = 100, offset: int = 0, level: str = None, days: int = 7):
+    """Hole Error-Logs aus error_logs Tabelle"""
+    from src.db.repositories.log_repository import LogRepository
+    repo = LogRepository()
+    return {
+        "status": "ok",
+        "data": repo.get_error_logs(limit=limit, offset=offset, level=level, days=days),
+        "total": len(repo.get_error_logs(limit=10000, offset=0, level=level, days=days))
+    }
+
+@app.get("/api/logs/all")
+async def get_all_logs(limit: int = 100, offset: int = 0, days: int = 7):
+    """Hole Job-Logs UND Error-Logs kombiniert"""
+    from src.db.repositories.log_repository import LogRepository
+    repo = LogRepository()
+    
+    job_logs = repo.get_logs(limit=limit, offset=offset)
+    error_logs = repo.get_error_logs(limit=limit, offset=offset, days=days)
+    
+    return {
+        "status": "ok",
+        "job_logs": job_logs,
+        "error_logs": error_logs
+    }
+
 @app.get("/api/logs/stats")
 async def get_log_stats(job_id: str = None, days: int = 7):
     """Hole Log-Statistiken"""
@@ -109,33 +176,41 @@ async def export_logs(job_id: str = None, format: str = "json", days: int = 7):
     import csv
     from io import StringIO
     
-    logs = log_service.get_logs(job_id=job_id, limit=10000)
-    
-    if format == "csv":
-        output = StringIO()
-        writer = csv.DictWriter(output, fieldnames=logs[0].keys() if logs else [])
-        writer.writeheader()
-        writer.writerows(logs)
+    try:
+        logs = log_service.get_logs(job_id=job_id, limit=10000)
+        
+        if format == "csv":
+            output = StringIO()
+            writer = csv.DictWriter(output, fieldnames=logs[0].keys() if logs else [])
+            writer.writeheader()
+            writer.writerows(logs)
+            
+            return {
+                "status": "ok",
+                "format": "csv",
+                "data": output.getvalue()
+            }
         
         return {
             "status": "ok",
-            "format": "csv",
-            "data": output.getvalue()
+            "format": "json",
+            "data": logs
         }
-    
-    return {
-        "status": "ok",
-        "format": "json",
-        "data": logs
-    }
+    except Exception as e:
+        app_logger.error(f"Export Logs Fehler: {e}", exc_info=True)
+        return {"status": "error", "message": str(e)}
 
 # ===== MAINTENANCE =====
 
 @app.post("/api/logs/cleanup")
 async def cleanup_logs(days: int = 30):
     """Lösche alte Logs"""
-    deleted = log_service.cleanup_old_logs(days)
-    return {"status": "ok", "deleted": deleted}
+    try:
+        deleted = log_service.cleanup_old_logs(days)
+        return {"status": "ok", "deleted": deleted}
+    except Exception as e:
+        app_logger.error(f"Cleanup Logs Fehler: {e}", exc_info=True)
+        return {"status": "error", "message": str(e)}
 
 # WebSocket für Live-Logs
 connected_clients: list[WebSocket] = []
@@ -148,11 +223,9 @@ async def websocket_logs(websocket: WebSocket):
     
     try:
         while True:
-            # Sende aktuelle Jobs alle 2 Sekunden
             await asyncio.sleep(2)
             jobs = scheduler.get_all_jobs()
             
-            # Konvertiere datetime zu ISO-String für JSON Serialisierung
             jobs_serializable = []
             for job in jobs:
                 job_dict = job.copy()
@@ -167,7 +240,13 @@ async def websocket_logs(websocket: WebSocket):
             await websocket.send_json({"type": "jobs_update", "data": jobs_serializable})
     
     except Exception as e:
-        print(f"WebSocket Fehler: {e}")
+        # ✅ KORRIGIERT: Nur echte Fehler loggen, nicht WebSocket-Disconnects!
+        error_msg = str(e)
+        
+        # WebSocket-Disconnects sind NORMAL - nicht loggen!
+        if "ClientDisconnected" not in error_msg and "ConnectionClosed" not in error_msg:
+            app_logger.error(f"WebSocket Fehler: {e}", exc_info=True)
+    
     finally:
         if websocket in connected_clients:
             connected_clients.remove(websocket)

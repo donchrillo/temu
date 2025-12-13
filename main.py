@@ -18,6 +18,7 @@ from workflows.db_orders_to_xml import run_db_to_xml
 from workflows.tracking_to_db import run_update_tracking
 from workflows.db_tracking_to_api import run_db_to_api
 from src.services.log_service import log_service
+from src.services.logger import app_logger
 
 def parse_arguments():
     """Parse Command Line Arguments"""
@@ -90,14 +91,16 @@ def run_full_workflow_refactored(parent_order_status=2, days_back=7, verbose=Fal
         error_msg = f"Ungültiger Status Code: {parent_order_status}"
         if log_to_db:
             log_service.log(f"manual_run_{int(start_time.timestamp())}", "full_workflow", "ERROR", error_msg)
-        print(f"✗ {error_msg}")
+        else:
+            app_logger.error(error_msg)
         return False
     
     if days_back < 1:
         error_msg = "Days muss >= 1 sein"
         if log_to_db:
             log_service.log(f"manual_run_{int(start_time.timestamp())}", "full_workflow", "ERROR", error_msg)
-        print(f"✗ {error_msg}")
+        else:
+            app_logger.error(error_msg)
         return False
     
     status_map = {
@@ -135,7 +138,7 @@ def run_full_workflow_refactored(parent_order_status=2, days_back=7, verbose=Fal
             parent_order_status=parent_order_status,
             days_back=days_back,
             verbose=verbose,
-            job_id=job_id  # ← JOB_ID HINZUFÜGEN!
+            job_id=job_id
         )
         if log_to_db:
             log_service.log(job_id, "full_workflow", "INFO", "✓ Schritt 1: API → JSON erfolgreich")
@@ -146,7 +149,8 @@ def run_full_workflow_refactored(parent_order_status=2, days_back=7, verbose=Fal
         if log_to_db:
             log_service.log(job_id, "full_workflow", "ERROR", f"✗ Schritt 1 Fehler: {str(e)}")
             log_service.log(job_id, "full_workflow", "ERROR", error_trace)
-        print(f"✗ Schritt 1 Fehler: {e}")
+        else:
+            app_logger.error(f"Schritt 1 Fehler: {e}", exc_info=True)
         results['api_fetch'] = False
     
     # ========================================
@@ -156,7 +160,7 @@ def run_full_workflow_refactored(parent_order_status=2, days_back=7, verbose=Fal
         log_service.log(job_id, "full_workflow", "INFO", "[Schritt 2/5] JSON → Datenbank")
     
     try:
-        results['json_import'] = run_json_to_db(job_id=job_id)  # ← job_id hinzufügen
+        results['json_import'] = run_json_to_db(job_id=job_id)
         if log_to_db:
             log_service.log(job_id, "full_workflow", "INFO", "✓ Schritt 2: JSON → DB erfolgreich")
     
@@ -166,7 +170,8 @@ def run_full_workflow_refactored(parent_order_status=2, days_back=7, verbose=Fal
         if log_to_db:
             log_service.log(job_id, "full_workflow", "ERROR", f"✗ Schritt 2 Fehler: {str(e)}")
             log_service.log(job_id, "full_workflow", "ERROR", error_trace)
-        print(f"✗ Schritt 2 Fehler: {e}")
+        else:
+            app_logger.error(f"Schritt 2 Fehler: {e}", exc_info=True)
         results['json_import'] = False
     
     # ========================================
@@ -176,7 +181,7 @@ def run_full_workflow_refactored(parent_order_status=2, days_back=7, verbose=Fal
         log_service.log(job_id, "full_workflow", "INFO", "[Schritt 3/5] Datenbank → XML Export")
     
     try:
-        results['xml_export'] = run_db_to_xml(job_id=job_id)  # ← job_id hinzufügen
+        results['xml_export'] = run_db_to_xml(job_id=job_id)
         if log_to_db:
             log_service.log(job_id, "full_workflow", "INFO", "✓ Schritt 3: DB → XML erfolgreich")
     
@@ -186,7 +191,8 @@ def run_full_workflow_refactored(parent_order_status=2, days_back=7, verbose=Fal
         if log_to_db:
             log_service.log(job_id, "full_workflow", "ERROR", f"✗ Schritt 3 Fehler: {str(e)}")
             log_service.log(job_id, "full_workflow", "ERROR", error_trace)
-        print(f"✗ Schritt 3 Fehler: {e}")
+        else:
+            app_logger.error(f"Schritt 3 Fehler: {e}", exc_info=True)
         results['xml_export'] = False
     
     # ========================================
@@ -196,7 +202,7 @@ def run_full_workflow_refactored(parent_order_status=2, days_back=7, verbose=Fal
         log_service.log(job_id, "full_workflow", "INFO", "[Schritt 4/5] JTL → Tracking Update")
     
     try:
-        results['tracking'] = run_update_tracking(job_id=job_id)  # ← job_id hinzufügen
+        results['tracking'] = run_update_tracking(job_id=job_id)
         if log_to_db:
             log_service.log(job_id, "full_workflow", "INFO", "✓ Schritt 4: Tracking Update erfolgreich")
     
@@ -206,7 +212,8 @@ def run_full_workflow_refactored(parent_order_status=2, days_back=7, verbose=Fal
         if log_to_db:
             log_service.log(job_id, "full_workflow", "ERROR", f"✗ Schritt 4 Fehler: {str(e)}")
             log_service.log(job_id, "full_workflow", "ERROR", error_trace)
-        print(f"✗ Schritt 4 Fehler: {e}")
+        else:
+            app_logger.error(f"Schritt 4 Fehler: {e}", exc_info=True)
         results['tracking'] = False
     
     # ========================================
@@ -216,7 +223,7 @@ def run_full_workflow_refactored(parent_order_status=2, days_back=7, verbose=Fal
         log_service.log(job_id, "full_workflow", "INFO", "[Schritt 5/5] Tracking Export → TEMU API")
     
     try:
-        results['api_export'] = run_db_to_api(job_id=job_id)  # ← job_id hinzufügen
+        results['api_export'] = run_db_to_api(job_id=job_id)
         if log_to_db:
             log_service.log(job_id, "full_workflow", "INFO", "✓ Schritt 5: Tracking → API erfolgreich")
     
@@ -226,7 +233,8 @@ def run_full_workflow_refactored(parent_order_status=2, days_back=7, verbose=Fal
         if log_to_db:
             log_service.log(job_id, "full_workflow", "ERROR", f"✗ Schritt 5 Fehler: {str(e)}")
             log_service.log(job_id, "full_workflow", "ERROR", error_trace)
-        print(f"✗ Schritt 5 Fehler: {e}")
+        else:
+            app_logger.error(f"Schritt 5 Fehler: {e}", exc_info=True)
         results['api_export'] = False
     
     # ========================================
@@ -262,9 +270,9 @@ def run_full_workflow_refactored(parent_order_status=2, days_back=7, verbose=Fal
             error_msg = f"Fehlgeschlagene Schritte: {', '.join(failed_steps)}"
             log_service.end_job_capture(success=False, duration=duration.total_seconds(), error=error_msg)
     
-    # ✅ Nur Konsolen-Output wenn Fehler
+    # ✅ Nur Fehler-Ausgabe auf Konsole (kein SUCCESS Print!)
     if success_count < total_steps:
-        print(f"\n✗ Workflow FAILED: {success_count}/{total_steps} erfolgreich")
+        app_logger.error(f"Workflow FAILED: {success_count}/{total_steps} erfolgreich")
         return False
     
     return success_count == total_steps
@@ -282,7 +290,5 @@ if __name__ == "__main__":
         
         sys.exit(0 if success else 1)
     except Exception as e:
-        print(f"✗ FATAL ERROR: {e}")
-        import traceback
-        traceback.print_exc()
+        app_logger.error(f"FATAL ERROR: {e}", exc_info=True)
         sys.exit(1)

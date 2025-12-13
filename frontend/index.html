@@ -453,6 +453,7 @@
         <div class="tabs">
             <button class="tab-btn active" onclick="switchTab('jobs')">📊 Jobs</button>
             <button class="tab-btn" onclick="switchTab('logs')">📋 Logs</button>
+            <button class="tab-btn" onclick="switchTab('errors')">🚨 Errors</button>
             <button class="tab-btn" onclick="switchTab('stats')">📈 Statistiken</button>
         </div>
         
@@ -513,7 +514,50 @@
             </div>
         </div>
         
-        <!-- TAB 3: STATISTIKEN -->
+        <!-- TAB 3: ERROR LOGS -->
+        <div id="errors-tab" class="tab-content">
+            <div class="logs-section">
+                <div class="logs-header">
+                    <div class="logs-title">🚨 Exception & Error Logs</div>
+                    <div class="log-controls">
+                        <button class="btn-secondary" onclick="clearErrorFilter()">🔄 Reset</button>
+                    </div>
+                </div>
+                
+                <div class="log-filter">
+                    <div class="filter-group">
+                        <label>Level</label>
+                        <select id="filter-error-level" onchange="loadErrorLogs()">
+                            <option value="">— Alle Level —</option>
+                            <option value="ERROR">ERROR</option>
+                            <option value="CRITICAL">CRITICAL</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Tage</label>
+                        <select id="filter-error-days" onchange="loadErrorLogs()">
+                            <option value="1">1 Tag</option>
+                            <option value="7" selected>7 Tage</option>
+                            <option value="30">30 Tage</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Limit</label>
+                        <select id="filter-error-limit" onchange="loadErrorLogs()">
+                            <option value="50">50 Logs</option>
+                            <option value="100" selected>100 Logs</option>
+                            <option value="500">500 Logs</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="logs-container" id="errors-container">
+                    <div class="log-line">Warte auf Error-Logs...</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- TAB 4: STATISTIKEN -->
         <div id="stats-tab" class="tab-content">
             <div class="logs-section">
                 <div class="logs-header">
@@ -602,6 +646,8 @@
                 loadAllLogs();
             } else if (tabName === 'stats') {
                 loadStatistics();
+            } else if (tabName === 'errors') {
+                loadErrorLogs();
             }
         }
         
@@ -701,6 +747,31 @@
             }
         }
         
+        // ===== ERROR LOGS LADEN =====
+        async function loadErrorLogs() {
+            try {
+                const level = document.getElementById('filter-error-level').value || '';
+                const days = document.getElementById('filter-error-days').value || '7';
+                const limit = document.getElementById('filter-error-limit').value || 100;
+                
+                let url = `${API_URL}/logs/errors?limit=${limit}&days=${days}`;
+                if (level) url += `&level=${level}`;
+                
+                console.log("📥 Lade Error-Logs mit URL:", url);
+                
+                const response = await fetch(url);
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log(`📋 ${data.data.length} Error-Logs geladen`);
+                    renderErrorLogs(data.data);
+                } else {
+                    console.error("❌ API Error:", response.status);
+                }
+            } catch (e) {
+                console.error("❌ Error-Logs laden fehlgeschlagen:", e);
+            }
+        }
+        
         // ===== LOG FILTER & SUCHE =====
         function updateJobFilter() {
             const select = document.getElementById('filter-job');
@@ -733,6 +804,14 @@
             loadAllLogs();
         }
         
+        // ===== ERROR LOG FILTER & SUCHE =====
+        function clearErrorFilter() {
+            document.getElementById('filter-error-level').value = '';
+            document.getElementById('filter-error-days').value = '7';
+            document.getElementById('filter-error-limit').value = '100';
+            loadErrorLogs();
+        }
+        
         // ===== LOG RENDERING =====
         function renderLogs(logs) {
             const container = document.getElementById('logs-container');
@@ -753,7 +832,8 @@
                 return;
             }
             
-            container.innerHTML = filteredLogs
+            // ✅ WICHTIG: Reverse für DESC (neueste zuerst!)
+            container.innerHTML = filteredLogs.reverse()
                 .map(log => {
                     let className = 'log-line';
                     if (log.level === 'ERROR') {
@@ -778,7 +858,39 @@
                 })
                 .join('');
             
-            container.scrollTop = container.scrollHeight;
+            container.scrollTop = 0;  // ✅ Scroll nach oben (zu neuesten Logs)
+        }
+        
+        // ===== ERROR LOG RENDERING =====
+        function renderErrorLogs(errors) {
+            const container = document.getElementById('errors-container');
+            
+            if (!errors || errors.length === 0) {
+                container.innerHTML = '<div class="log-line">Keine Error-Logs vorhanden</div>';
+                return;
+            }
+            
+            // ✅ WICHTIG: Reverse für DESC (neueste zuerst!)
+            container.innerHTML = errors.reverse()
+                .map(err => {
+                    const timestamp = err.timestamp ? new Date(err.timestamp).toLocaleTimeString('de-DE') : '';
+                    const exceptionType = err.exception_type ? `[${err.exception_type}]` : '';
+                    
+                    return `
+                        <div class="log-line log-error">
+                            <strong>[${timestamp}]</strong> 
+                            <span style="color: #ef4444;">${exceptionType}</span><br>
+                            <strong>${err.module}::${err.function}</strong> (Zeile ${err.line_number})<br>
+                            ${escapeHtml(err.message)}<br>
+                            <span style="font-size: 11px; color: #94a3b8; margin-top: 5px; display: block;">
+                                📝 ${err.traceback_text ? err.traceback_text.substring(0, 200) + '...' : 'Kein Traceback'}
+                            </span>
+                        </div>
+                    `;
+                })
+                .join('');
+            
+            container.scrollTop = 0;  // ✅ Scroll nach oben (zu neuesten Logs)
         }
         
         // ===== STATISTIKEN =====
@@ -910,60 +1022,95 @@
         
         // ===== JOB CONTROL FUNKTIONEN =====
         async function triggerJob(jobId) {
+            // Dialog mit Parametern
+            const params = await showJobParameterDialog();
+            
+            if (params === null) return; // User canceled
+            
             try {
-                await fetch(`${API_URL}/jobs/${jobId}/run-now`, { method: "POST" });
-                alert("✓ Job gestartet!");
+                const url = `${API_URL}/jobs/${jobId}/run-now?` +
+                    `parent_order_status=${params.status}&` +
+                    `days_back=${params.days}&` +
+                    `verbose=${params.verbose}&` +
+                    `log_to_db=${params.log_to_db}`;
+                
+                const response = await fetch(url, { method: "POST" });
+                const data = await response.json();
+                
+                alert(`✓ Job gestartet mit Parametern:\n` +
+                      `Status: ${params.status}\n` +
+                      `Tage: ${params.days}\n` +
+                      `Verbose: ${params.verbose ? 'Ja' : 'Nein'}\n` +
+                      `Log-to-DB: ${params.log_to_db ? 'Ja' : 'Nein'}`);
             } catch (e) {
                 console.error("✗ Fehler:", e);
                 alert("✗ Fehler beim Starten");
             }
         }
         
-        function switchToJobLogs(jobId) {
-            document.getElementById('filter-job').value = jobId;
-            switchTab('logs');
-            setTimeout(() => loadAllLogs(), 100);
-        }
-        
-        function openIntervalDialog(jobId, currentInterval) {
-            const newInterval = prompt(`Neues Intervall in Minuten (aktuell: ${currentInterval}):`);
-            
-            if (newInterval && !isNaN(newInterval) && newInterval > 0) {
-                updateJobInterval(jobId, parseInt(newInterval));
-            } else if (newInterval !== null) {
-                alert("Bitte geben Sie eine gültige Zahl > 0 ein!");
-            }
-        }
-        
-        async function updateJobInterval(jobId, intervalMinutes) {
-            try {
-                const response = await fetch(
-                    `${API_URL}/jobs/${jobId}/schedule?interval_minutes=${intervalMinutes}`,
-                    { method: "POST" }
-                );
+        // ===== NEU: Parameter Dialog =====
+        async function showJobParameterDialog() {
+            return new Promise((resolve) => {
+                const html = `
+                    <div style="display: grid; gap: 15px;">
+                        <div>
+                            <label style="display: block; margin-bottom: 5px;">📊 Status:</label>
+                            <select id="dialog-status" style="width: 100%; padding: 8px;">
+                                <option value="2">2 - UN_SHIPPING (nicht versendet)</option>
+                                <option value="3">3 - CANCELLED (storniert)</option>
+                                <option value="4">4 - SHIPPED (versendet)</option>
+                                <option value="5">5 - RECEIPTED (Order received)</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label style="display: block; margin-bottom: 5px;">📅 Tage zurück:</label>
+                            <input type="number" id="dialog-days" value="7" min="1" max="365" 
+                                   style="width: 100%; padding: 8px;">
+                        </div>
+                        
+                        <div style="display: flex; gap: 10px;">
+                            <label style="display: flex; align-items: center; gap: 8px;">
+                                <input type="checkbox" id="dialog-verbose">
+                                🔍 Verbose Mode
+                            </label>
+                        </div>
+                        
+                        <div style="display: flex; gap: 10px;">
+                            <label style="display: flex; align-items: center; gap: 8px;">
+                                <input type="checkbox" id="dialog-log-to-db" checked>
+                                💾 Log to Database
+                            </label>
+                        </div>
+                    </div>
+                `;
                 
-                if (response.ok) {
-                    alert(`✓ Interval auf ${intervalMinutes} Minuten gesetzt!`);
-                }
-            } catch (e) {
-                console.error("✗ Fehler:", e);
-                alert("✗ Fehler beim Update");
-            }
-        }
-        
-        async function toggleJob(jobId, enabled) {
-            try {
-                const response = await fetch(
-                    `${API_URL}/jobs/${jobId}/toggle?enabled=${enabled}`,
-                    { method: "POST" }
-                );
+                const modal = document.createElement('div');
+                modal.className = 'modal active';
+                modal.innerHTML = `
+                    <div class="modal-content">
+                        <div class="modal-header">⚙️ Job Parameter</div>
+                        <div class="modal-body">${html}</div>
+                        <div class="modal-footer">
+                            <button class="btn-secondary" onclick="this.closest('.modal').remove(); 
+                                window.__jobParamResolve(null)">Abbrechen</button>
+                            <button class="btn-primary" onclick="
+                                const params = {
+                                    status: parseInt(document.getElementById('dialog-status').value),
+                                    days: parseInt(document.getElementById('dialog-days').value),
+                                    verbose: document.getElementById('dialog-verbose').checked,
+                                    log_to_db: document.getElementById('dialog-log-to-db').checked
+                                };
+                                this.closest('.modal').remove();
+                                window.__jobParamResolve(params);
+                            ">Starten</button>
+                        </div>
+                    </div>
+                `;
                 
-                if (response.ok) {
-                    alert(`✓ Job ist jetzt ${enabled ? 'AKTIV' : 'AUS'}!`);
-                }
-            } catch (e) {
-                console.error("✗ Fehler:", e);
-            }
+                document.body.appendChild(modal);
+                window.__jobParamResolve = resolve;
+            });
         }
         
         // ===== UTILITY FUNKTIONEN =====

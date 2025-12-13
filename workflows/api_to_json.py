@@ -4,6 +4,7 @@ from typing import Optional
 from config.settings import TEMU_APP_KEY, TEMU_APP_SECRET, TEMU_ACCESS_TOKEN, TEMU_API_ENDPOINT
 from src.marketplace_connectors.temu.service import TemuMarketplaceService
 from src.services.log_service import log_service
+from src.services.logger import app_logger
 
 def run_api_to_json(
     parent_order_status: int = 2, 
@@ -68,7 +69,7 @@ def run_api_to_json(
                           f"✗ API Abruf Fehler: {error_msg}")
             log_service.log(job_id, "api_to_json", "ERROR", error_trace)
         else:
-            print(f"✗ API Fehler: {error_msg}")
+            app_logger.error(f"API Abruf Fehler: {error_msg}", exc_info=True)
         
         return False
 

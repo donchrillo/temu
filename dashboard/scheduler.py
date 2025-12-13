@@ -13,6 +13,7 @@ from pathlib import Path
 from dashboard.scheduler_config import SchedulerConfig
 from dashboard.job_models import JobType, JobStatusEnum, JobConfig, JobSchedule  # ← KORRIGIERT: job_models statt jobs!
 from src.services.log_service import log_service
+from src.services.logger import app_logger
 
 class SchedulerService:
     """Verwaltet alle geplanten Jobs"""
@@ -68,7 +69,7 @@ class SchedulerService:
             self._run_job,
             trigger=IntervalTrigger(minutes=interval_minutes),
             id=job_id,
-            args=[job_id],
+            args=[job_id, 2, 7, False, True],  # ← Standard-Parameter!
             next_run_time=datetime.now() if enabled else None,
             misfire_grace_time=None,  # ✅ Ignoriere verpasste Zyklen komplett
             coalesce=True,  # ✅ Springe verpasste Ausführungen
@@ -87,8 +88,10 @@ class SchedulerService:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, lambda: sync_func(*args, **kwargs))
     
-    async def _run_job(self, job_id: str):
-        """✅ NEU: Mit strukturiertem Logging in SQL Server"""
+    async def _run_job(self, job_id: str, parent_order_status: int = 2, 
+                       days_back: int = 7, verbose: bool = False, 
+                       log_to_db: bool = True):
+        """✅ Mit strukturiertem Logging in SQL Server"""
         
         start_time = datetime.now()
         self.job_status[job_id]["status"] = JobStatusEnum.RUNNING
@@ -109,21 +112,23 @@ class SchedulerService:
                 if str(root_path) not in sys.path:
                     sys.path.insert(0, str(root_path))
                 
-                print(f"[{start_time.isoformat()}] Job gestartet: {job_type}")
+                app_logger.info(f"[{start_time.isoformat()}] Job gestartet: {job_type}")
                 
                 # Führe entsprechenden Job aus
                 if job_type == JobType.SYNC_ORDERS:
                     from main import run_full_workflow_refactored
                     result = await self._async_wrapper(
                         run_full_workflow_refactored,
-                        parent_order_status=2,
-                        days_back=7
+                        parent_order_status=parent_order_status,  # ← Parameter!
+                        days_back=days_back,                      # ← Parameter!
+                        verbose=verbose,                          # ← Parameter!
+                        log_to_db=log_to_db                       # ← Parameter!
                     )
-                    print(f"Job Ergebnis: {result}")
+                    app_logger.info(f"Job Ergebnis: {result}")
                 elif job_type == JobType.SYNC_INVENTORY:
-                    print("ℹ Inventur-Sync noch nicht implementiert")
+                    app_logger.info("ℹ Inventur-Sync noch nicht implementiert")
                 elif job_type == JobType.FETCH_INVOICES:
-                    print("ℹ Rechnungs-Fetch noch nicht implementiert")
+                    app_logger.info("ℹ Rechnungs-Fetch noch nicht implementiert")
             
             # ✅ Speichere Logs in SQL Server
             logs = log_buffer.getvalue().split('\n')
@@ -151,9 +156,10 @@ class SchedulerService:
             self.job_status[job_id]["status"] = JobStatusEnum.FAILED
             self.job_status[job_id]["last_error"] = str(e)
             
-            # ✅ Speichere Error in DB
+            # ✅ Speichere Error in DB + Logger
             log_service.end_job_capture(success=False, duration=(datetime.now() - start_time).total_seconds(), error=str(e))
             log_service.log(job_id, job_type.value, "ERROR", traceback.format_exc())
+            app_logger.error(f"Job {job_id} fehlgeschlagen: {e}", exc_info=True)
         
         finally:
             # ✅ Aktualisiere recent_logs aus DB
@@ -195,13 +201,12 @@ class SchedulerService:
         """Gib alle Jobs zurück"""
         return [self.get_job_status(job_id) for job_id in self.jobs.keys()]
     
-    def trigger_job_now(self, job_id: str):
-        """Triggere Job SOFORT (nicht nur reschedule)"""
+    def trigger_job_now(self, job_id: str, parent_order_status: int = 2, 
+                        days_back: int = 7, verbose: bool = False, 
+                        log_to_db: bool = True):
+        """Triggere Job SOFORT mit optionalen Parametern"""
         job = self.scheduler.get_job(job_id)
         if job:
-            # ✅ WICHTIG: remove_job + add_job mit SOFORT Lauf!
-            # Das zwingt den Scheduler sofort auszuführen!
-            
             # Speichere alte Konfiguration
             trigger = job.trigger
             func = job.func
@@ -210,13 +215,13 @@ class SchedulerService:
             # Entferne alten Job
             self.scheduler.remove_job(job_id)
             
-            # Füge neu hinzu mit sofortigem Start
+            # Füge neu hinzu mit sofortigem Start UND neuen Parametern!
             self.scheduler.add_job(
                 func,
                 trigger=trigger,
                 id=job_id,
-                args=args,
-                next_run_time=datetime.now()  # ← JETZT ausführen!
+                args=[job_id, parent_order_status, days_back, verbose, log_to_db],  # ← NEU!
+                next_run_time=datetime.now()
             )
     
     def update_job_schedule(self, job_id: str, interval_minutes: int):
@@ -255,4 +260,4 @@ class SchedulerService:
             })
         
         SchedulerConfig.save_jobs(jobs_list)
-        print("✓ Job-Konfiguration gespeichert")
+        # ✅ Kein Print mehr - erfolgreiche Speicherung wird im Log_Service geloggt

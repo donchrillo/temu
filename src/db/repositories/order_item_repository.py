@@ -2,6 +2,7 @@
 
 from typing import List, Optional
 from src.db.connection import get_db_connection
+from src.services.logger import app_logger
 from config.settings import TABLE_ORDER_ITEMS, DB_TOCI
 
 class OrderItem:
@@ -92,7 +93,7 @@ class OrderItemRepository:
                 return int(new_id)
         
         except Exception as e:
-            print(f"✗ DB Fehler bei save: {e}")
+            app_logger.error(f"DB Fehler bei save: {e}", exc_info=True)
             return 0
     
     def find_by_order_id(self, order_id: int) -> List[OrderItem]:
@@ -114,7 +115,7 @@ class OrderItemRepository:
             
             return [self._map_to_item(row) for row in rows]
         except Exception as e:
-            print(f"✗ DB Fehler bei find_by_order_id: {e}")
+            app_logger.error(f"DB Fehler bei find_by_order_id: {e}", exc_info=True)
             return []
     
     def find_by_bestellartikel_id(self, bestellartikel_id: str) -> Optional[OrderItem]:
@@ -136,7 +137,7 @@ class OrderItemRepository:
             
             return self._map_to_item(row) if row else None
         except Exception as e:
-            print(f"✗ DB Fehler bei find_by_bestellartikel_id: {e}")
+            app_logger.error(f"DB Fehler bei find_by_bestellartikel_id: {e}", exc_info=True)
             return None
     
     def _map_to_item(self, row) -> OrderItem:

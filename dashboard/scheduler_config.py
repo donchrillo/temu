@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Dict, List
 from datetime import datetime
+from src.services.logger import app_logger
 
 # ✅ KORRIGIERT: CONFIG_FILE unter config/, nicht data/!
 CONFIG_FILE = Path(__file__).parent.parent / 'config' / 'scheduler_config.json'
@@ -23,7 +24,7 @@ class SchedulerConfig:
                 jobs = json.load(f)
                 return jobs
         except Exception as e:
-            print(f"⚠ Fehler beim Laden der Job-Config: {e}")
+            app_logger.error(f"Fehler beim Laden der Job-Config: {e}", exc_info=True)
             return SchedulerConfig.get_default_jobs()
     
     @staticmethod
@@ -37,7 +38,7 @@ class SchedulerConfig:
                 json.dump(jobs, f, indent=2, ensure_ascii=False)
             return True
         except Exception as e:
-            print(f"✗ Fehler beim Speichern der Job-Config: {e}")
+            app_logger.error(f"Fehler beim Speichern der Job-Config: {e}", exc_info=True)
             return False
     
     @staticmethod
