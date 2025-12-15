@@ -2,6 +2,7 @@
 
 from typing import Optional, Dict, List
 from src.db.connection import get_db_connection
+from src.services.logger import app_logger
 from config.settings import DB_JTL
 
 class JtlRepository:
@@ -42,7 +43,7 @@ class JtlRepository:
             return True
         
         except Exception as e:
-            print(f"✗ JTL Insert Fehler: {e}")
+            app_logger.error(f"JTL Insert Fehler: {e}", exc_info=True)
             return False
     
     def get_imported_orders(self) -> Dict[str, bool]:
@@ -70,7 +71,7 @@ class JtlRepository:
             return {row[0]: True for row in rows}
         
         except Exception as e:
-            print(f"✗ JTL Query Fehler: {e}")
+            app_logger.error(f"JTL Query Fehler: {e}", exc_info=True)
             return {}
     
     def get_xml_import_status(self, bestell_id: str) -> Optional[str]:
@@ -110,7 +111,7 @@ class JtlRepository:
                 return 'processing'  # Wird gerade verarbeitet
         
         except Exception as e:
-            print(f"✗ JTL Status Query Fehler: {e}")
+            app_logger.error(f"JTL Status Query Fehler: {e}", exc_info=True)
             return None
     
     def get_import_errors(self, bestell_id: str = None) -> Dict[str, str]:
@@ -155,7 +156,7 @@ class JtlRepository:
             return {row[0]: row[1] for row in rows}
         
         except Exception as e:
-            print(f"✗ JTL Error Query Fehler: {e}")
+            app_logger.error(f"JTL Error Query Fehler: {e}", exc_info=True)
             return {}
     
     def get_tracking_from_lieferschein(self, bestell_id: str) -> Optional[Dict]:
@@ -220,12 +221,12 @@ class JtlRepository:
                 return {
                     'bestell_id': bestellnr,
                     'carrier': carrier_name or 'DHL',
-                    'carrier_id': carrier_id,  # ✅ RICHTIGE TEMU ID!
+                    'carrier_id': carrier_id,
                     'tracking_number': tracking_id or ''
                 }
             
             return None
         
         except Exception as e:
-            print(f"✗ JTL Lieferschein Query Fehler: {e}")
+            app_logger.error(f"JTL Lieferschein Query Fehler: {e}", exc_info=True)
             return None

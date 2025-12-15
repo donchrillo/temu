@@ -3,6 +3,7 @@
 from typing import Optional, List, Dict
 from datetime import datetime
 from src.db.connection import get_db_connection
+from src.services.logger import app_logger
 from config.settings import TABLE_ORDERS, TABLE_ORDER_ITEMS, DB_TOCI
 
 class Order:
@@ -68,7 +69,7 @@ class OrderRepository:
             
             return self._map_to_order(row) if row else None
         except Exception as e:
-            print(f"✗ DB Fehler bei find_by_bestell_id: {e}")
+            app_logger.error(f"DB Fehler bei find_by_bestell_id: {e}", exc_info=True)
             return None
     
     def save(self, order: Order) -> int:
@@ -131,7 +132,7 @@ class OrderRepository:
                 return int(new_id)
         
         except Exception as e:
-            print(f"✗ DB Fehler bei save: {e}")
+            app_logger.error(f"DB Fehler bei save: {e}", exc_info=True)
             return 0
     
     def find_by_status(self, status: str) -> List[Order]:
@@ -157,7 +158,7 @@ class OrderRepository:
             return [self._map_to_order(row) for row in rows]
         
         except Exception as e:
-            print(f"✗ DB Fehler bei find_by_status: {e}")
+            app_logger.error(f"DB Fehler bei find_by_status: {e}", exc_info=True)
             return []
     
     def update_order_tracking(self, order_id: int, tracking_number: str, 
@@ -180,7 +181,7 @@ class OrderRepository:
             return True
         
         except Exception as e:
-            print(f"✗ DB Fehler bei update_order_tracking: {e}")
+            app_logger.error(f"DB Fehler bei update_order_tracking: {e}", exc_info=True)
             return False
     
     def get_orders_for_tracking_export(self) -> List[Dict]:
@@ -248,7 +249,7 @@ class OrderRepository:
             return result
         
         except Exception as e:
-            print(f"✗ DB Fehler bei get_orders_for_tracking_export: {e}")
+            app_logger.error(f"DB Fehler bei get_orders_for_tracking_export: {e}", exc_info=True)
             return []
     
     def update_temu_tracking_status(self, order_id: int) -> bool:
@@ -275,7 +276,7 @@ class OrderRepository:
             return True
         
         except Exception as e:
-            print(f"✗ DB Fehler bei update_temu_tracking_status: {e}")
+            app_logger.error(f"DB Fehler bei update_temu_tracking_status: {e}", exc_info=True)
             return False
 
     def update_xml_export_status(self, order_id: int) -> bool:
@@ -304,7 +305,7 @@ class OrderRepository:
             return True
         
         except Exception as e:
-            print(f"✗ DB Fehler bei update_xml_export_status: {e}")
+            app_logger.error(f"DB Fehler bei update_xml_export_status: {e}", exc_info=True)
             return False
 
     def find_orders_for_tracking(self) -> List[Order]:
@@ -331,7 +332,7 @@ class OrderRepository:
             return [self._map_to_order(row) for row in rows]
         
         except Exception as e:
-            print(f"✗ DB Fehler bei find_orders_for_tracking: {e}")
+            app_logger.error(f"DB Fehler bei find_orders_for_tracking: {e}", exc_info=True)
             return []
 
     def _map_to_order(self, row) -> Order:

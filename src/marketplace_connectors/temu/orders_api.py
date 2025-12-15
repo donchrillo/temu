@@ -1,6 +1,8 @@
 """TEMU Orders API - Get Orders"""
 
+from typing import Optional
 from src.marketplace_connectors.temu.api_client import TemuApiClient
+from src.services.log_service import log_service
 
 class TemuOrdersApi:
     """Orders API Endpoint"""
@@ -15,16 +17,17 @@ class TemuOrdersApi:
         self.client = client
     
     def get_orders(self, page_number=1, page_size=100, parent_order_status=2, 
-                   create_after=None, create_before=None):
+                   create_after=None, create_before=None, job_id: Optional[str] = None):
         """
         Holt Bestellungsliste von TEMU API.
         
         Args:
             page_number: Seite (Standard: 1)
             page_size: Bestellungen pro Seite (Standard: 100, Max: 100)
-            parent_order_status: Order Status Filter (0=All, 1=PENDING, 2=UN_SHIPPING, etc.)
-            create_after: Unix timestamp - Start time für Order-Abfrage (optional)
-            create_before: Unix timestamp - End time für Order-Abfrage (optional)
+            parent_order_status: Order Status Filter
+            create_after: Unix timestamp - Start time (optional)
+            create_before: Unix timestamp - End time (optional)
+            job_id: Optional - für strukturiertes Logging
         
         Returns:
             API-Response oder None bei Fehler
@@ -36,21 +39,21 @@ class TemuOrdersApi:
             "parentOrderStatus": parent_order_status
         }
         
-        # Optionale Parameter hinzufügen
         if create_after is not None:
             request_params["createAfter"] = create_after
         
         if create_before is not None:
             request_params["createBefore"] = create_before
         
-        return self.client.call("bg.order.list.v2.get", request_params)
+        return self.client.call("bg.order.list.v2.get", request_params, job_id=job_id)
     
-    def get_shipping_info(self, parent_order_sn):
+    def get_shipping_info(self, parent_order_sn, job_id: Optional[str] = None):
         """
         Holt Versandinformationen für eine Bestellung.
         
         Args:
-            parent_order_sn: Parent Bestellnummer (z.B. 'PO-076-...')
+            parent_order_sn: Parent Bestellnummer
+            job_id: Optional - für strukturiertes Logging
         
         Returns:
             API-Response oder None bei Fehler
@@ -60,14 +63,15 @@ class TemuOrdersApi:
             "parentOrderSn": parent_order_sn
         }
         
-        return self.client.call("bg.order.shippinginfo.v2.get", request_params)
+        return self.client.call("bg.order.shippinginfo.v2.get", request_params, job_id=job_id)
     
-    def get_order_amount(self, parent_order_sn):
+    def get_order_amount(self, parent_order_sn, job_id: Optional[str] = None):
         """
         Holt Preisinformationen für eine Bestellung.
         
         Args:
             parent_order_sn: Parent Bestellnummer
+            job_id: Optional - für strukturiertes Logging
         
         Returns:
             API-Response oder None bei Fehler
@@ -77,26 +81,23 @@ class TemuOrdersApi:
             "parentOrderSn": parent_order_sn
         }
         
-        return self.client.call("bg.order.amount.query", request_params)
+        return self.client.call("bg.order.amount.query", request_params, job_id=job_id)
     
-    def upload_tracking_data(self, tracking_data_list):
+    def upload_tracking_data(self, tracking_data_list, job_id: Optional[str] = None):
         """
         Lädt Tracking-Daten zu TEMU API hoch
         
         Args:
-            tracking_data_list: Liste mit Dicts containing:
-                - bestell_id (parentOrderSn)
-                - order_sn
-                - quantity
-                - tracking_number
-                - carrier_id (Standard: 960246690 für externe Carrier)
+            tracking_data_list: Liste mit Tracking-Dicts
+            job_id: Optional - für strukturiertes Logging
         
         Returns:
             Tuple: (success: bool, error_code: str, error_msg: str)
         """
         
         if not tracking_data_list:
-            print("Keine Tracking-Daten zum Upload")
+            if job_id:
+                log_service.log(job_id, "orders_api", "INFO", "Keine Tracking-Daten zum Upload")
             return True, None, None
         
         # Gruppiere nach Carrier ID
@@ -128,32 +129,41 @@ class TemuOrdersApi:
                     "trackingNumber": item['tracking_number']
                 })
             
-            # API Request
             request_params = {
                 "sendRequestList": send_request_list,
                 "sendType": 0
             }
             
             try:
-                response = self.client.call("bg.logistics.shipment.v2.confirm", request_params)
+                response = self.client.call("bg.logistics.shipment.v2.confirm", request_params, job_id=job_id)
                 
                 if response and response.get('success'):
                     success_count += len(items)
-                    for item in items:
-                        print(f"  ✓ {item['order_sn']}: {item['tracking_number']} hochgeladen")
+                    if job_id:
+                        for item in items:
+                            log_service.log(job_id, "orders_api", "INFO", 
+                                          f"✓ {item['order_sn']}: {item['tracking_number']}")
                 else:
                     error_count += len(items)
                     last_error_code = response.get('errorCode', '?') if response else 'HTTP_ERROR'
                     last_error_msg = response.get('errorMsg', 'Unbekannter Fehler') if response else 'HTTP Error'
-                    print(f"  ✗ API Fehler ({last_error_code}): {last_error_msg}")
+                    if job_id:
+                        log_service.log(job_id, "orders_api", "ERROR", 
+                                      f"API Fehler ({last_error_code}): {last_error_msg}")
+                    else:
+                        print(f"✗ API Fehler ({last_error_code}): {last_error_msg}")
                     
             except Exception as e:
                 error_count += len(items)
                 last_error_msg = str(e)
-                print(f"  ✗ Fehler beim Upload: {e}")
+                if job_id:
+                    log_service.log(job_id, "orders_api", "ERROR", f"Upload Fehler: {e}")
+                else:
+                    print(f"✗ Fehler beim Upload: {e}")
         
-        print(f"\nTracking-Upload: {success_count} erfolgreich, {error_count} Fehler")
+        if job_id:
+            log_service.log(job_id, "orders_api", "INFO", 
+                          f"✓ Upload: {success_count} erfolgreich, {error_count} Fehler")
         
-        # WICHTIG: Return Tuple (nicht bool!)
         success = error_count == 0
         return success, last_error_code, last_error_msg

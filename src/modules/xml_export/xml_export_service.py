@@ -8,6 +8,7 @@ from pathlib import Path
 from src.db.repositories.order_repository import OrderRepository
 from src.db.repositories.order_item_repository import OrderItemRepository
 from src.db.repositories.jtl_repository import JtlRepository
+from src.services.log_service import log_service
 from config.settings import (
     JTL_WAEHRUNG, JTL_SPRACHE, JTL_K_BENUTZER, JTL_K_FIRMA,
     XML_OUTPUT_PATH, DATA_DIR
@@ -18,129 +19,148 @@ class XmlExportService:
     
     def __init__(self, order_repo: OrderRepository = None, 
                  item_repo: OrderItemRepository = None,
-                 jtl_repo: JtlRepository = None):  # ← Jetzt Repository statt Connection!
+                 jtl_repo: JtlRepository = None):
         """
         Args:
             order_repo: OrderRepository für TOCI
             item_repo: OrderItemRepository für TOCI
-            jtl_repo: JtlRepository für JTL DB Access  # ← WICHTIG!
+            jtl_repo: JtlRepository für JTL DB Access
         """
         self.order_repo = order_repo or OrderRepository()
         self.item_repo = item_repo or OrderItemRepository()
         self.jtl_repo = jtl_repo or JtlRepository()
     
-    def export_to_xml(self, save_to_disk=True, import_to_jtl=True) -> Dict:
+    def export_to_xml(self, save_to_disk=True, import_to_jtl=True, job_id: Optional[str] = None) -> Dict:
         """
         Generiert XML aus Orders und exportiert zu JTL
         
         Args:
             save_to_disk: Speichere XML auf Festplatte
             import_to_jtl: Importiere XML in JTL DB
+            job_id: Optional - für strukturiertes Logging
         
         Returns:
             dict mit Ergebnissen
         """
         
-        print("=" * 70)
-        print("Datenbank → XML Export")
-        print("=" * 70 + "\n")
-        
-        # ===== Hole Orders mit status='importiert' =====
-        orders = self._get_orders_to_export()
-        
-        if not orders:
-            print("✓ Keine neuen Orders zum Exportieren\n")
-            return {'exported': 0, 'jtl_imported': 0}
-        
-        print(f"✓ {len(orders)} Orders gefunden\n")
-        
-        # ===== Generate XML Root =====
-        root = ET.Element('tBestellungen')
-        exported_count = 0
-        jtl_import_count = 0
-        
-        # ===== Für jede Order: XML generieren =====
-        for order in orders:
-            try:
-                # Hole Items für diese Order
-                items = self.item_repo.find_by_order_id(order.id)
-                
-                # Generiere XML Element
-                bestellung_elem = self._generate_order_xml(order, items, root)
-                
-                # ✅ WICHTIG: Update Status NACH erfolgreichem Export!
-                if bestellung_elem is not None:
-                    # ===== Step 1: In JTL DB importieren =====
-                    if import_to_jtl and self.jtl_repo:
-                        jtl_success = self._import_to_jtl(order, bestellung_elem)
-                        if jtl_success:
-                            jtl_import_count += 1
-                    
-                    # ===== Step 2: Update Status in TOCI (WICHTIG!) =====
-                    # NUR wenn JTL Import erfolgreich ODER JTL disabled!
-                    status_success = self._update_order_status(order.id)
-                    
-                    if status_success or not import_to_jtl:
-                        exported_count += 1
-                        print(f"  ✓ {order.bestell_id}: XML generiert + Status gesetzt")
-                    else:
-                        print(f"  ✗ {order.bestell_id}: Status Update fehlgeschlagen")
-                else:
-                    print(f"  ✗ {order.bestell_id}: XML Generation fehlgeschlagen")
+        try:
+            if job_id:
+                log_service.log(job_id, "xml_export", "INFO", 
+                              "→ Generiere XML aus Orders")
             
-            except Exception as e:
-                print(f"  ✗ Fehler bei Order {order.bestell_id}: {e}")
-                import traceback
-                traceback.print_exc()
+            # ===== Hole Orders mit status='importiert' =====
+            orders = self._get_orders_to_export(job_id)
+            
+            if not orders:
+                if job_id:
+                    log_service.log(job_id, "xml_export", "INFO", 
+                                  "✓ Keine neuen Orders zum Exportieren")
+                return {'exported': 0, 'jtl_imported': 0, 'success': False}
+            
+            if job_id:
+                log_service.log(job_id, "xml_export", "INFO", 
+                              f"  {len(orders)} Orders zum Exportieren gefunden")
+            else:
+                print(f"✓ {len(orders)} Orders gefunden\n")
+            
+            # ===== Generate XML Root =====
+            root = ET.Element('tBestellungen')
+            exported_count = 0
+            jtl_import_count = 0
+            
+            # ===== Für jede Order: XML generieren =====
+            for order in orders:
+                try:
+                    # Hole Items für diese Order
+                    items = self.item_repo.find_by_order_id(order.id)
+                    
+                    # Generiere XML Element
+                    bestellung_elem = self._generate_order_xml(order, items, root)
+                    
+                    if bestellung_elem is not None:
+                        # ===== Step 1: In JTL DB importieren =====
+                        if import_to_jtl and self.jtl_repo:
+                            jtl_success = self._import_to_jtl(order, bestellung_elem, job_id)
+                            if jtl_success:
+                                jtl_import_count += 1
+                        
+                        # ===== Step 2: Update Status in TOCI =====
+                        status_success = self._update_order_status(order.id, job_id)
+                        
+                        if status_success or not import_to_jtl:
+                            exported_count += 1
+                            if job_id:
+                                log_service.log(job_id, "xml_export", "INFO", 
+                                              f"  ✓ {order.bestell_id}: XML generiert")
+                            else:
+                                print(f"  ✓ {order.bestell_id}: XML generiert + Status gesetzt")
+                        else:
+                            if job_id:
+                                log_service.log(job_id, "xml_export", "WARNING", 
+                                              f"  ⚠ {order.bestell_id}: Status Update fehlgeschlagen")
+                    else:
+                        if job_id:
+                            log_service.log(job_id, "xml_export", "WARNING", 
+                                          f"  ⚠ {order.bestell_id}: XML Generation fehlgeschlagen")
+                
+                except Exception as e:
+                    import traceback
+                    error_trace = traceback.format_exc()
+                    if job_id:
+                        log_service.log(job_id, "xml_export", "ERROR", 
+                                      f"  ✗ Fehler bei Order {order.bestell_id}: {str(e)}")
+                        log_service.log(job_id, "xml_export", "ERROR", error_trace)
+                    else:
+                        print(f"  ✗ Fehler bei Order {order.bestell_id}: {e}")
+            
+            # ===== Step 3: Speichere komplette XML auf Festplatte =====
+            if save_to_disk:
+                self._save_xml_to_disk(root, job_id)
+            
+            if job_id:
+                log_service.log(job_id, "xml_export", "INFO", 
+                              f"✓ XML Export erfolgreich: {exported_count} exportiert, {jtl_import_count} JTL importiert")
+            
+            return {
+                'exported': exported_count,
+                'jtl_imported': jtl_import_count,
+                'success': exported_count > 0,
+                'message': f'{exported_count} Orders exportiert'
+            }
         
-        # ===== Step 3: Speichere komplette XML auf Festplatte =====
-        if save_to_disk:
-            self._save_xml_to_disk(root)
-        
-        print(f"\n{'='*70}")
-        print(f"✓ XML Export erfolgreich!")
-        print(f"{'='*70}")
-        print(f"  Exportiert: {exported_count}")
-        print(f"  JTL Import: {jtl_import_count}")
-        print(f"  XML Status: xml_erstellt = 1 gesetzt")
-        print(f"{'='*70}\n")
-        
-        return {
-            'exported': exported_count,
-            'jtl_imported': jtl_import_count,
-            'success': exported_count > 0
-        }
+        except Exception as e:
+            import traceback
+            error_trace = traceback.format_exc()
+            if job_id:
+                log_service.log(job_id, "xml_export", "ERROR", 
+                              f"✗ XML Export Fehler: {str(e)}")
+                log_service.log(job_id, "xml_export", "ERROR", error_trace)
+            else:
+                print(f"✗ XML Export Fehler: {e}")
+            
+            return {'exported': 0, 'jtl_imported': 0, 'success': False}
     
-    def _get_orders_to_export(self) -> List:
+    def _get_orders_to_export(self, job_id: Optional[str] = None) -> List:
         """Hole Orders mit status='importiert' und xml_erstellt=0"""
         try:
-            # Hole ALLE Orders mit status='importiert'
             orders = self.order_repo.find_by_status('importiert')
-            
-            # Filtere: Nur Orders die NOCH NICHT zu XML exportiert wurden!
             orders_to_export = [
                 order for order in orders 
-                if not order.xml_erstellt  # ← WICHTIG: nur xml_erstellt=False
+                if not order.xml_erstellt
             ]
             
             return orders_to_export
         
         except Exception as e:
-            print(f"✗ Fehler beim Laden der Orders: {e}")
+            if job_id:
+                log_service.log(job_id, "xml_export", "ERROR", 
+                              f"✗ Fehler beim Laden der Orders: {str(e)}")
+            else:
+                print(f"✗ Fehler beim Laden der Orders: {e}")
             return []
     
     def _generate_order_xml(self, order, items, parent_elem) -> Optional[ET.Element]:
-        """
-        Generiere XML Element für eine Order
-        
-        Args:
-            order: Order Domain Model MIT ECHTEN DATEN
-            items: List von OrderItem MIT ECHTEN DATEN
-            parent_elem: Parent XML Element
-        
-        Returns:
-            bestellung Element
-        """
+        """Generiere XML Element für eine Order"""
         
         # ===== Haupt-Bestellung Element =====
         bestellung = ET.SubElement(
@@ -149,7 +169,7 @@ class XmlExportService:
             kBenutzer=JTL_K_BENUTZER
         )
         
-        # ===== Header Daten - JETZT mit echten Daten! =====
+        # ===== Header Daten =====
         ET.SubElement(bestellung, 'cSprache').text = JTL_SPRACHE
         ET.SubElement(bestellung, 'cWaehrung').text = JTL_WAEHRUNG
         ET.SubElement(bestellung, 'cBestellNr')
@@ -157,18 +177,15 @@ class XmlExportService:
         ET.SubElement(bestellung, 'cVersandartName').text = 'TEMU'
         ET.SubElement(bestellung, 'cVersandInfo')
         
-        # ✅ JETZT mit echtem Datum!
         ET.SubElement(bestellung, 'dVersandDatum').text = (
             order.versanddatum.strftime('%d.%m.%Y') if order.versanddatum else ''
         )
         
-        # ✅ JETZT mit echtem Tracking!
         ET.SubElement(bestellung, 'cTracking').text = order.trackingnummer or ''
         ET.SubElement(bestellung, 'dLieferDatum')
         ET.SubElement(bestellung, 'cKommentar')
         ET.SubElement(bestellung, 'cBemerkung')
         
-        # ✅ JETZT mit echtem Kaufdatum!
         ET.SubElement(bestellung, 'dErstellt').text = (
             order.kaufdatum.strftime('%d.%m.%Y') if order.kaufdatum else ''
         )
@@ -203,7 +220,6 @@ class XmlExportService:
         ET.SubElement(pos, 'cBarcode')
         ET.SubElement(pos, 'cEinheit')
         
-        # WICHTIG: Format mit .5f für Netto, .2f für Brutto!
         ET.SubElement(pos, 'fPreisEinzelNetto').text = f"{item.netto_einzelpreis:.5f}"
         ET.SubElement(pos, 'fPreis').text = f"{item.brutto_einzelpreis:.2f}"
         
@@ -213,7 +229,7 @@ class XmlExportService:
         ET.SubElement(pos, 'fRabatt').text = '0.00'
     
     def _add_shipping_costs_to_xml(self, bestellung_elem, order):
-        """Füge Versandkosten als Position hinzu - MIT echten Daten!"""
+        """Füge Versandkosten als Position hinzu"""
         versand_pos = ET.SubElement(bestellung_elem, 'twarenkorbpos')
         
         versandkosten_netto = float(order.versandkosten or 0)
@@ -292,16 +308,14 @@ class XmlExportService:
         ET.SubElement(zahlungsinfo, 'cIBAN')
         ET.SubElement(zahlungsinfo, 'cBIC')
     
-    def _import_to_jtl(self, order, bestellung_elem) -> bool:
+    def _import_to_jtl(self, order, bestellung_elem, job_id: Optional[str] = None) -> bool:
         """
         Importiere XML in JTL DB
-        
-        ❌ PROBLEM: Schreibt einzelne <tBestellung> ohne Root!
-        ✅ LÖSUNG: Wrap in <tBestellungen> Root!
         
         Args:
             order: Order Domain Model
             bestellung_elem: XML Element (einzelne Bestellung)
+            job_id: Optional - für strukturiertes Logging
         
         Returns:
             bool: True wenn erfolgreich
@@ -318,41 +332,59 @@ class XmlExportService:
             # Konvertiere zu XML String
             xml_string = self._prettify_xml(root)
             
-            # Schreibe in JTL DB (als komplette XML mit Root!)
+            # Schreibe in JTL DB
             return self.jtl_repo.insert_xml_import(xml_string)
         
         except Exception as e:
-            print(f"  ⚠ JTL Import Fehler für {order.bestell_id}: {e}")
+            if job_id:
+                log_service.log(job_id, "xml_export", "WARNING", 
+                              f"  ⚠ JTL Import Fehler für {order.bestell_id}: {str(e)}")
+            else:
+                print(f"  ⚠ JTL Import Fehler für {order.bestell_id}: {e}")
             return False
     
-    def _update_order_status(self, order_id: int) -> bool:
+    def _update_order_status(self, order_id: int, job_id: Optional[str] = None) -> bool:
         """
         Setze xml_erstellt = 1 NACH erfolgreichem XML Export
-        WICHTIG: Nur aufrufen wenn XML erfolgreich generiert wurde!
         
         Args:
             order_id: Order Datenbank ID
+            job_id: Optional - für strukturiertes Logging
         
         Returns:
             bool: True wenn erfolgreich
         """
         try:
             success = self.order_repo.update_xml_export_status(order_id)
-            if success:
-                print(f"  ✓ Status gesetzt: xml_erstellt = 1")
             return success
         except Exception as e:
-            print(f"✗ Status Update Fehler: {e}")
+            if job_id:
+                log_service.log(job_id, "xml_export", "ERROR", 
+                              f"✗ Status Update Fehler: {str(e)}")
+            else:
+                print(f"✗ Status Update Fehler: {e}")
             return False
     
-    def _save_xml_to_disk(self, root: ET.Element):
+    def _save_xml_to_disk(self, root: ET.Element, job_id: Optional[str] = None):
         """Speichere XML auf Festplatte"""
-        xml_string = self._prettify_xml(root)
+        try:
+            xml_string = self._prettify_xml(root)
+            
+            with open(str(XML_OUTPUT_PATH), 'w', encoding='ISO-8859-1') as f:
+                f.write(xml_string)
+            
+            if job_id:
+                log_service.log(job_id, "xml_export", "INFO", 
+                              f"  ✓ XML gespeichert: {XML_OUTPUT_PATH}")
+            else:
+                print(f"✓ XML gespeichert: {XML_OUTPUT_PATH}")
         
-        with open(str(XML_OUTPUT_PATH), 'w', encoding='ISO-8859-1') as f:
-            f.write(xml_string)
-        
-        print(f"✓ XML gespeichert: {XML_OUTPUT_PATH}")
+        except Exception as e:
+            if job_id:
+                log_service.log(job_id, "xml_export", "ERROR", 
+                              f"✗ XML Speicher-Fehler: {str(e)}")
+            else:
+                print(f"✗ XML Speicher-Fehler: {e}")
     
     def _prettify_xml(self, elem: ET.Element) -> str:
         """Formatiere XML schön"""

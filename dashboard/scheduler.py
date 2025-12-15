@@ -10,8 +10,10 @@ import sys
 from contextlib import redirect_stdout, redirect_stderr
 from pathlib import Path
 
-from dashboard.config import SchedulerConfig
-from dashboard.jobs import JobType, JobStatusEnum, JobConfig, JobSchedule
+from dashboard.scheduler_config import SchedulerConfig
+from dashboard.job_models import JobType, JobStatusEnum, JobConfig, JobSchedule  # ← KORRIGIERT: job_models statt jobs!
+from src.services.log_service import log_service
+from src.services.logger import app_logger
 
 class SchedulerService:
     """Verwaltet alle geplanten Jobs"""
@@ -37,7 +39,11 @@ class SchedulerService:
     def add_job(self, job_type: JobType, interval_minutes: int, description: str, enabled: bool = True):
         """Fügt einen neuen Job hinzu"""
         
-        job_id = f"{job_type}_{int(datetime.now().timestamp())}"
+        # VORHER:
+        # job_id = f"{job_type}_{int(datetime.now().timestamp())}"
+        
+        # NACHHER: ← .value nutzen!
+        job_id = f"{job_type.value}_{int(datetime.now().timestamp())}"
         
         config = JobConfig(
             job_type=job_type,
@@ -63,8 +69,11 @@ class SchedulerService:
             self._run_job,
             trigger=IntervalTrigger(minutes=interval_minutes),
             id=job_id,
-            args=[job_id],
-            next_run_time=datetime.now() if enabled else None
+            args=[job_id, 2, 7, False, True],  # ← Standard-Parameter!
+            next_run_time=datetime.now() if enabled else None,
+            misfire_grace_time=None,  # ✅ Ignoriere verpasste Zyklen komplett
+            coalesce=True,  # ✅ Springe verpasste Ausführungen
+            max_instances=1  # ✅ Nur 1 Instanz gleichzeitig
         )
         
         if not enabled:
@@ -79,16 +88,22 @@ class SchedulerService:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, lambda: sync_func(*args, **kwargs))
     
-    async def _run_job(self, job_id: str):
-        """Führt einen Job aus und captured Logs"""
+    async def _run_job(self, job_id: str, parent_order_status: int = 2, 
+                       days_back: int = 7, verbose: bool = False, 
+                       log_to_db: bool = True):
+        """✅ Mit strukturiertem Logging in SQL Server"""
         
         start_time = datetime.now()
         self.job_status[job_id]["status"] = JobStatusEnum.RUNNING
+        job_type = self.jobs[job_id].job_type
         
-        # Capture stdout/stderr
-        log_buffer = io.StringIO()
+        # ✅ Starte Log-Capturing in SQL Server
+        log_service.start_job_capture(job_id, job_type.value)
         
         try:
+            # Capture stdout/stderr
+            log_buffer = io.StringIO()
+            
             with redirect_stdout(log_buffer), redirect_stderr(log_buffer):
                 job_type = self.jobs[job_id].job_type
                 
@@ -97,47 +112,70 @@ class SchedulerService:
                 if str(root_path) not in sys.path:
                     sys.path.insert(0, str(root_path))
                 
-                print(f"[{start_time.isoformat()}] Job gestartet: {job_type}")
+                app_logger.info(f"[{start_time.isoformat()}] Job gestartet: {job_type}")
                 
                 # Führe entsprechenden Job aus
                 if job_type == JobType.SYNC_ORDERS:
-                    # ✅ KORRIGIERT: Nutze _async_wrapper mit kwargs!
                     from main import run_full_workflow_refactored
                     result = await self._async_wrapper(
                         run_full_workflow_refactored,
-                        parent_order_status=2,
-                        days_back=7
+                        parent_order_status=parent_order_status,  # ← Parameter!
+                        days_back=days_back,                      # ← Parameter!
+                        verbose=verbose,                          # ← Parameter!
+                        log_to_db=log_to_db                       # ← Parameter!
                     )
-                    print(f"Job Ergebnis: {result}")
+                    app_logger.info(f"Job Ergebnis: {result}")
                 elif job_type == JobType.SYNC_INVENTORY:
-                    print("ℹ Inventur-Sync noch nicht implementiert")
+                    app_logger.info("ℹ Inventur-Sync noch nicht implementiert")
                 elif job_type == JobType.FETCH_INVOICES:
-                    print("ℹ Rechnungs-Fetch noch nicht implementiert")
+                    app_logger.info("ℹ Rechnungs-Fetch noch nicht implementiert")
+            
+            # ✅ Speichere Logs in SQL Server
+            logs = log_buffer.getvalue().split('\n')
+            for log_line in logs:
+                if log_line.strip():
+                    # Bestimme Level
+                    level = "INFO"
+                    if "✗" in log_line or "Fehler" in log_line:
+                        level = "ERROR"
+                    elif "⚠" in log_line:
+                        level = "WARNING"
+                    
+                    log_service.log(job_id, job_type.value, level, log_line)
             
             # Erfolg
             duration = (datetime.now() - start_time).total_seconds()
             self.job_status[job_id]["status"] = JobStatusEnum.SUCCESS
             self.job_status[job_id]["last_duration"] = duration
-            print(f"[Job] ✓ Erfolgreich (Dauer: {duration:.1f}s)")
+            
+            # ✅ Speichere Success-Status in DB
+            log_service.end_job_capture(success=True, duration=duration)
             
         except Exception as e:
-            # Fehler - mit vollständigem Traceback
             import traceback
             self.job_status[job_id]["status"] = JobStatusEnum.FAILED
             self.job_status[job_id]["last_error"] = str(e)
-            error_msg = f"\n✗ Job Fehler: {e}\n{traceback.format_exc()}"
-            log_buffer.write(error_msg)
-            print(error_msg)
+            
+            # ✅ Speichere Error in DB + Logger
+            log_service.end_job_capture(success=False, duration=(datetime.now() - start_time).total_seconds(), error=str(e))
+            log_service.log(job_id, job_type.value, "ERROR", traceback.format_exc())
+            app_logger.error(f"Job {job_id} fehlgeschlagen: {e}", exc_info=True)
         
         finally:
-            # Speichere Logs
-            logs = log_buffer.getvalue().split('\n')
-            self.job_logs[job_id] = [l for l in logs if l.strip()][-100:]
+            # ✅ Aktualisiere recent_logs aus DB
+            self.job_logs[job_id] = log_service.get_recent_logs(job_id, 50)
             
             self.job_status[job_id]["last_run"] = start_time
             job = self.scheduler.get_job(job_id)
             if job:
-                self.job_status[job_id]["next_run"] = job.next_run_time
+                # ✅ KORRIGIERT: Berechne next_run neu basierend auf JETZT + Intervall!
+                interval_minutes = self.jobs[job_id].schedule.interval_minutes
+                from datetime import timedelta
+                next_run = datetime.now() + timedelta(minutes=interval_minutes)
+                
+                # Neuplanen mit aktueller Zeit
+                job.reschedule(trigger=IntervalTrigger(minutes=interval_minutes), next_run_time=next_run)
+                self.job_status[job_id]["next_run"] = next_run
     
     def start(self):
         """Starte Scheduler"""
@@ -163,13 +201,12 @@ class SchedulerService:
         """Gib alle Jobs zurück"""
         return [self.get_job_status(job_id) for job_id in self.jobs.keys()]
     
-    def trigger_job_now(self, job_id: str):
-        """Triggere Job SOFORT (nicht nur reschedule)"""
+    def trigger_job_now(self, job_id: str, parent_order_status: int = 2, 
+                        days_back: int = 7, verbose: bool = False, 
+                        log_to_db: bool = True):
+        """Triggere Job SOFORT mit optionalen Parametern"""
         job = self.scheduler.get_job(job_id)
         if job:
-            # ✅ WICHTIG: remove_job + add_job mit SOFORT Lauf!
-            # Das zwingt den Scheduler sofort auszuführen!
-            
             # Speichere alte Konfiguration
             trigger = job.trigger
             func = job.func
@@ -178,13 +215,13 @@ class SchedulerService:
             # Entferne alten Job
             self.scheduler.remove_job(job_id)
             
-            # Füge neu hinzu mit sofortigem Start
+            # Füge neu hinzu mit sofortigem Start UND neuen Parametern!
             self.scheduler.add_job(
                 func,
                 trigger=trigger,
                 id=job_id,
-                args=args,
-                next_run_time=datetime.now()  # ← JETZT ausführen!
+                args=[job_id, parent_order_status, days_back, verbose, log_to_db],  # ← NEU!
+                next_run_time=datetime.now()
             )
     
     def update_job_schedule(self, job_id: str, interval_minutes: int):
@@ -223,4 +260,4 @@ class SchedulerService:
             })
         
         SchedulerConfig.save_jobs(jobs_list)
-        print("✓ Job-Konfiguration gespeichert")
+        # ✅ Kein Print mehr - erfolgreiche Speicherung wird im Log_Service geloggt
