@@ -10,8 +10,8 @@ import sys
 from contextlib import redirect_stdout, redirect_stderr
 from pathlib import Path
 
-from dashboard.scheduler_config import SchedulerConfig
-from dashboard.job_models import JobType, JobStatusEnum, JobConfig, JobSchedule  # ← KORRIGIERT: job_models statt jobs!
+from scheduler.scheduler_config import SchedulerConfig
+from scheduler.job_models import JobType, JobStatusEnum, JobConfig, JobSchedule  # ← KORRIGIERT: job_models statt jobs!
 from src.services.log_service import log_service
 from src.services.logger import app_logger
 
@@ -112,7 +112,7 @@ class SchedulerService:
                 if str(root_path) not in sys.path:
                     sys.path.insert(0, str(root_path))
                 
-                app_logger.info(f"[{start_time.isoformat()}] Job gestartet: {job_type}")
+                app_logger.info(f"[{start_time.isoformat()}] Job CHX gestartet: {job_type}")
                 
                 # Führe entsprechenden Job aus
                 if job_type == JobType.SYNC_ORDERS:

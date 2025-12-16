@@ -15,7 +15,7 @@ from src.modules.orders.order_service import OrderService
 from src.modules.xml_export.xml_export_service import XmlExportService
 from src.modules.tracking.tracking_service import TrackingService
 from src.services.log_service import log_service
-from src.services.logger import app_logger
+
 
 
 def run_temu_orders(parent_order_status: int = 2, days_back: int = 7, verbose: bool = False) -> bool:
@@ -28,44 +28,43 @@ def run_temu_orders(parent_order_status: int = 2, days_back: int = 7, verbose: b
 
     valid_status = [2, 3, 4, 5]
     if parent_order_status not in valid_status:
-        _log(job_id, "ERROR", f"Ungültiger Status: {parent_order_status}")
+        log_service.log(job_id, "temu_orders""ERROR", f"Ungültiger Status: {parent_order_status}")
         return False
     if days_back < 1:
-        _log(job_id, "ERROR", "Days muss >= 1 sein")
+        log_service.log(job_id, "temu_orders", "ERROR", "Days muss >= 1 sein")
         return False
 
     log_service.start_job_capture(job_id, "temu_orders")
-    _log(job_id, "INFO", f"→ Start TEMU  Order Sync (Status: {parent_order_status}, Tage: {days_back})")
+    log_service.log(job_id, "temu_orders","INFO", f"→ Start TEMU  Order Sync (Status: {parent_order_status}, Tage: {days_back})")
 
     try:
-        _log(job_id, "INFO", "[1/6] TEMU API → JSON")
+        log_service.log(job_id,"temu_orders", "INFO", "[1/6] TEMU chx API → JSON")
         if not _step_1_api_to_json(parent_order_status, days_back, verbose, job_id):
             raise Exception("API Fetch fehlgeschlagen")
-        _log(job_id, "INFO", "✓ [1/6] API → JSON erfolgreich")
+        log_service.log(job_id, "temu_orders", "INFO", "✓ [1/6] API → JSON erfolgreich")
 
-        _log(job_id, "INFO", "[2/6] JSON → Datenbank")
+        log_service.log(job_id, "temu_orders", "INFO", "[2/6] JSON → Datenbank")
         result = _step_2_json_to_db(job_id)
-        _log(job_id, "INFO", f"✓ [2/6] JSON → DB: {result.get('imported', 0)} neu, {result.get('updated', 0)} aktualisiert")
+        log_service.log(job_id, "temu_orders", "INFO", f"✓ [2/6] JSON → DB: {result.get('imported', 0)} neu, {result.get('updated', 0)} aktualisiert")
 
-        _log(job_id, "INFO", "[3/6] Datenbank → XML Export")
+        log_service.log(job_id, "temu_orders", "INFO", "[3/6] Datenbank → XML Export")
         xml_result = _step_3_db_to_xml(job_id)
         if xml_result.get('success'):
-            _log(job_id, "INFO", f"✓ [3/6] DB → XML: {xml_result.get('exported', 0)} exportiert")
+            log_service.log(job_id, "temu_orders", "INFO", f"✓ [3/6] DB → XML: {xml_result.get('exported', 0)} exportiert")
         else:
-            _log(job_id, "INFO", f"✓ [3/6] DB → XML: {xml_result.get('message', 'Keine Orders')}")
+            log_service.log(job_id, "temu_orders", "INFO", f"✓ [3/6] DB → XML: {xml_result.get('message', 'Keine Orders')}")
 
-        _log(job_id, "INFO", "[4/6] JTL → Tracking Update")
+        log_service.log(job_id, "temu_orders", "INFO", "[4/6] JTL → Tracking Update")
         tracking_result = _step_4_tracking_to_db(job_id)
-        _log(job_id, "INFO", f"✓ [4/6] JTL → Tracking: {tracking_result.get('updated', 0)} aktualisiert")
+        log_service.log(job_id, "temu_orders", "INFO", f"✓ [4/6] JTL → Tracking: {tracking_result.get('updated', 0)} aktualisiert")
 
-        _log(job_id, "INFO", "[5/6] Tracking → TEMU API")
+        log_service.log(job_id, "temu_orders", "INFO", "[5/6] Tracking → TEMU API")
         if not _step_5_db_to_api(job_id):
-            _log(job_id, "WARNING", "⚠ [5/6] Tracking Export fehlgeschlagen")
+            log_service.log(job_id, "temu_orders", "WARNING", "⚠ [5/6] Tracking Export fehlgeschlagen")
         else:
-            _log(job_id, "INFO", "✓ [5/6] Tracking → API erfolgreich")
-
+            log_service.log(job_id, "temu_orders", "INFO", "✓ [5/6] Tracking → API erfolgreich")  
         duration = (datetime.now() - start_time).total_seconds()
-        _log(job_id, "INFO", f"✓ TEMU Order Sync erfolgreich ({duration:.1f}s)")
+        log_service.log(job_id, "temu_orders", "INFO", f"✓ TEMU Order Sync erfolgreich ({duration:.1f}s)")
         log_service.end_job_capture(success=True, duration=duration)
         return True
 
@@ -73,7 +72,7 @@ def run_temu_orders(parent_order_status: int = 2, days_back: int = 7, verbose: b
         import traceback
         duration = (datetime.now() - start_time).total_seconds()
         error_trace = traceback.format_exc()
-        _log(job_id, "ERROR", f"✗ TEMU Order Sync fehlgeschlagen: {str(e)}\n{error_trace}")
+        log_service.log(job_id, "temu_orders", "ERROR", f"✗ TEMU Order Sync fehlgeschlagen: {str(e)}\n{error_trace}")
         log_service.end_job_capture(success=False, duration=duration, error=str(e))
         return False
 
@@ -82,6 +81,8 @@ def _step_1_api_to_json(parent_order_status: int, days_back: int, verbose: bool,
     try:
         log_service.log(job_id, "api_to_json", "INFO",
                         f"→ Hole TEMU Orders (Status: {parent_order_status}, Tage: {days_back})")
+        # log_service.log(job_id, "api_to_json", "INFO",
+        #                f"→ Hole TEMU Orders (Status CHX: {parent_order_status}, Tage: {days_back})")        
         temu_service = TemuMarketplaceService(
             app_key=TEMU_APP_KEY,
             app_secret=TEMU_APP_SECRET,
@@ -217,11 +218,7 @@ def _step_5_db_to_api(job_id: str) -> bool:
         return False
 
 
-def _log(job_id: str, level: str, message: str):
-    """Alles in DB loggen; ERROR zusätzlich in app_logger."""
-    log_service.log(job_id, "temu_orders", level, message)
-    if level == "ERROR":
-        app_logger.error(message)
+
 
 if __name__ == "__main__":
     run_temu_orders(parent_order_status=2, days_back=7, verbose=False)

@@ -12,7 +12,7 @@ from datetime import datetime
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from dashboard.scheduler import SchedulerService
+from scheduler.scheduler import SchedulerService
 from src.services.log_service import log_service
 from src.services.logger import app_logger
 

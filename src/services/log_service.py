@@ -7,6 +7,7 @@ from contextlib import redirect_stdout, redirect_stderr
 from datetime import datetime
 from typing import Optional, List, Dict
 from src.db.repositories.log_repository import LogRepository
+from src.services.logger import app_logger
 
 class LogService:
     """Verwaltet strukturiertes Logging"""
@@ -28,7 +29,7 @@ class LogService:
     
     def log(self, job_id: str, job_type: str, level: str, message: str,
             status: str = None, duration: float = None, error_text: str = None):
-        """Speichere Log-Eintrag"""
+        """Speichere Log-Eintrag in DB und optional in app_logger"""
         
         # In Memory Buffer
         self.log_buffer.append(message)
@@ -43,6 +44,9 @@ class LogService:
             duration_seconds=duration,
             error_text=error_text
         )
+        # ERROR zusätzlich in app_logger
+        if level == "ERROR":
+            app_logger.error(message)
     
     def end_job_capture(self, success: bool = True, duration: float = 0, error: str = None):
         """Beende Job Capturing"""
