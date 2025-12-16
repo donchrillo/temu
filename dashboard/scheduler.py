@@ -116,13 +116,14 @@ class SchedulerService:
                 
                 # Führe entsprechenden Job aus
                 if job_type == JobType.SYNC_ORDERS:
-                    from main import run_full_workflow_refactored
+                    #from main import run_full_workflow_refactored
+                    # neuer workflow
+                    from workflows.temu_orders import run_temu_orders
                     result = await self._async_wrapper(
-                        run_full_workflow_refactored,
+                        run_temu_orders,
                         parent_order_status=parent_order_status,  # ← Parameter!
                         days_back=days_back,                      # ← Parameter!
-                        verbose=verbose,                          # ← Parameter!
-                        log_to_db=log_to_db                       # ← Parameter!
+                        verbose=verbose                           # ← Parameter!
                     )
                     app_logger.info(f"Job Ergebnis: {result}")
                 elif job_type == JobType.SYNC_INVENTORY:

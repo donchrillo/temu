@@ -42,7 +42,7 @@ async def lifespan(app: FastAPI):
 # Initialisiere FastAPI
 app = FastAPI(
     title="TEMU Worker",
-    version="1.0.0",
+    version="1.0.1",
     lifespan=lifespan
 )
 
