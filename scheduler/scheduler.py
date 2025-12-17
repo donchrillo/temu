@@ -13,7 +13,7 @@ from pathlib import Path
 from scheduler.scheduler_config import SchedulerConfig
 from scheduler.job_models import JobType, JobStatusEnum, JobConfig, JobSchedule  # ← KORRIGIERT: job_models statt jobs!
 from src.services.log_service import log_service
-from src.services.logger import app_logger
+
 
 class SchedulerService:
     """Verwaltet alle geplanten Jobs"""
@@ -112,7 +112,6 @@ class SchedulerService:
                 if str(root_path) not in sys.path:
                     sys.path.insert(0, str(root_path))
                 
-                app_logger.info(f"[{start_time.isoformat()}] Job CHX gestartet: {job_type}")
                 
                 # Führe entsprechenden Job aus
                 if job_type == JobType.SYNC_ORDERS:
@@ -125,11 +124,11 @@ class SchedulerService:
                         days_back=days_back,                      # ← Parameter!
                         verbose=verbose                           # ← Parameter!
                     )
-                    app_logger.info(f"Job Ergebnis: {result}")
+
                 elif job_type == JobType.SYNC_INVENTORY:
-                    app_logger.info("ℹ Inventur-Sync noch nicht implementiert")
+                    print("ℹ Inventur-Sync noch nicht implementiert")
                 elif job_type == JobType.FETCH_INVOICES:
-                    app_logger.info("ℹ Rechnungs-Fetch noch nicht implementiert")
+                    print("ℹ Rechnungs-Fetch noch nicht implementiert")
             
             # ✅ Speichere Logs in SQL Server
             logs = log_buffer.getvalue().split('\n')
@@ -160,7 +159,7 @@ class SchedulerService:
             # ✅ Speichere Error in DB + Logger
             log_service.end_job_capture(success=False, duration=(datetime.now() - start_time).total_seconds(), error=str(e))
             log_service.log(job_id, job_type.value, "ERROR", traceback.format_exc())
-            app_logger.error(f"Job {job_id} fehlgeschlagen: {e}", exc_info=True)
+
         
         finally:
             # ✅ Aktualisiere recent_logs aus DB

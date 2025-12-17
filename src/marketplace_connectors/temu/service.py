@@ -9,7 +9,7 @@ from src.marketplace_connectors.temu.api_client import TemuApiClient
 from src.marketplace_connectors.temu.orders_api import TemuOrdersApi
 from src.marketplace_connectors.base_connector import BaseMarketplaceConnector
 from src.services.log_service import log_service
-from src.services.logger import app_logger
+
 
 API_RESPONSE_DIR = DATA_DIR / 'api_responses'
 API_RESPONSE_DIR.mkdir(exist_ok=True)
@@ -49,31 +49,24 @@ class TemuMarketplaceService(BaseMarketplaceConnector):
         """
         
         try:
-            if job_id:
-                log_service.log(job_id, "temu_service", "INFO", 
+            
+            log_service.log(job_id, "temu_service", "INFO", 
                               "→ Hole Orders von TEMU API")
             
             # Validiere Credentials
             if not self.validate_credentials():
                 error_msg = "TEMU Credentials fehlen"
-                if job_id:
-                    log_service.log(job_id, "temu_service", "ERROR", f"✗ {error_msg}")
-                else:
-                    app_logger.error(error_msg)
-                return False
+                log_service.log(job_id, "temu_service", "ERROR", f"✗ {error_msg}")
+
             
             # Berechne Timestamps
             now = datetime.now()
             create_before = int(now.timestamp())
             create_after = int((now - timedelta(days=days_back)).timestamp())
-            
-            if job_id:
-                log_service.log(job_id, "temu_service", "INFO", 
-                              f"  Zeitraum: {days_back} Tage, Status: {parent_order_status}")
+
             
             # Abrufe Orders
-            if job_id:
-                log_service.log(job_id, "temu_service", "INFO", "  → Rufe Orders ab...")
+            log_service.log(job_id, "temu_service", "INFO", "  → Rufe Orders ab...")
             
             orders_response = self.orders_api.get_orders(
                 parent_order_status=parent_order_status,            
@@ -86,10 +79,7 @@ class TemuMarketplaceService(BaseMarketplaceConnector):
             
             if orders_response is None:
                 error_msg = "API Fehler beim Order-Abruf"
-                if job_id:
-                    log_service.log(job_id, "temu_service", "ERROR", f"✗ {error_msg}")
-                else:
-                    app_logger.error(error_msg)
+                log_service.log(job_id, "temu_service", "ERROR", f"✗ {error_msg}")
                 return False
             
             # Speichere Orders JSON
@@ -97,24 +87,21 @@ class TemuMarketplaceService(BaseMarketplaceConnector):
             with open(orders_file, 'w', encoding='utf-8') as f:
                 json.dump(orders_response, f, ensure_ascii=False, indent=2)
             
-            if job_id:
-                log_service.log(job_id, "temu_service", "INFO", "  ✓ Orders gespeichert")
+            log_service.log(job_id, "temu_service", "INFO", "  ✓ Orders gespeichert")  
+
             
             # Extrahiere Orders
             orders = orders_response.get("result", {}).get("pageItems", [])
             
             if not orders:
-                if job_id:
-                    log_service.log(job_id, "temu_service", "INFO", "  ✓ Keine Orders gefunden")
+                log_service.log(job_id, "temu_service", "INFO", "  ✓ Keine Orders gefunden")
                 return True
             
-            if job_id:
-                log_service.log(job_id, "temu_service", "INFO", f"  ✓ {len(orders)} Orders gefunden")
+            log_service.log(job_id, "temu_service", "INFO", f"  ✓ {len(orders)} Orders gefunden")
             
             # Abrufe Versand- & Preisinformationen
-            if job_id:
-                log_service.log(job_id, "temu_service", "INFO", 
-                              "  → Rufe Versand- und Preisinformationen ab...")
+            log_service.log(job_id, "temu_service", "INFO", 
+                          "  → Rufe Versand- und Preisinformationen ab...")
             
             shipping_responses = {}
             amount_responses = {}
@@ -143,10 +130,10 @@ class TemuMarketplaceService(BaseMarketplaceConnector):
             with open(amount_file, 'w', encoding='utf-8') as f:
                 json.dump(amount_responses, f, ensure_ascii=False, indent=2)
             
-            if job_id:
-                log_service.log(job_id, "temu_service", "INFO", 
+
+            log_service.log(job_id, "temu_service", "INFO", 
                               f"  ✓ Versand: {len(shipping_responses)}, Preise: {len(amount_responses)}")
-                log_service.log(job_id, "temu_service", "INFO", 
+            log_service.log(job_id, "temu_service", "INFO", 
                               "✓ API Orders erfolgreich heruntergeladen und gespeichert")
             
             return True
@@ -154,12 +141,8 @@ class TemuMarketplaceService(BaseMarketplaceConnector):
         except Exception as e:
             import traceback
             error_trace = traceback.format_exc()
-            if job_id:
-                log_service.log(job_id, "temu_service", "ERROR", f"✗ Fehler: {str(e)}")
-                log_service.log(job_id, "temu_service", "ERROR", error_trace)
-            else:
-                app_logger.error(f"Fehler beim Order-Abruf: {e}", exc_info=True)
-            return False
+            log_service.log(job_id, "temu_service", "ERROR", f"✗ Fehler: {str(e)}")
+
     
     def fetch_shipping_info(self, order_id: str, job_id: Optional[str] = None) -> Dict:
         """Hole Versandinformationen"""

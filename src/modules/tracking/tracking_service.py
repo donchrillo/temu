@@ -29,15 +29,14 @@ class TrackingService:
         """
         
         try:
-            if job_id:
-                log_service.log(job_id, "tracking_service", "INFO", 
+
+            log_service.log(job_id, "tracking_service", "INFO", 
                               "→ Hole Orders ohne Tracking...")
             
             orders_without_tracking = self.order_repo.find_orders_for_tracking()
             
             if not orders_without_tracking:
-                if job_id:
-                    log_service.log(job_id, "tracking_service", "INFO", 
+                log_service.log(job_id, "tracking_service", "INFO", 
                                   "✓ Keine Bestellungen ohne Tracking")
                 
                 return {
@@ -47,9 +46,8 @@ class TrackingService:
                     'tracking_data': []
                 }
             
-            if job_id:
-                log_service.log(job_id, "tracking_service", "INFO", 
-                              f"✓ {len(orders_without_tracking)} Bestellungen ohne Tracking")
+            log_service.log(job_id, "tracking_service", "INFO", 
+                              f"✓ {len(orders_without_tracking)} Bestellungen ohne Tracking gefunden")
             
             updated_count = 0
             error_count = 0
@@ -64,9 +62,8 @@ class TrackingService:
                     )
                     
                     if not tracking_info:
-                        if job_id:
-                            log_service.log(job_id, "tracking_service", "WARNING", 
-                                          f"⚠ {order.bestell_id}: Kein Tracking in JTL gefunden")
+                        log_service.log(job_id, "tracking_service", "WARNING", 
+                                      f"⚠ {order.bestell_id}: Kein Tracking in JTL gefunden")
                         # ← Kein else-Print!
                         error_count += 1
                         continue
@@ -80,29 +77,26 @@ class TrackingService:
                     )
                     
                     if success:
-                        if job_id:
-                            log_service.log(job_id, "tracking_service", "INFO", 
+
+                        log_service.log(job_id, "tracking_service", "INFO", 
                                       f"✓ {order.bestell_id}: {tracking_info['tracking_number']}")
                     else:
-                        if job_id:
-                            log_service.log(job_id, "tracking_service", "ERROR", 
+
+                        log_service.log(job_id, "tracking_service", "ERROR", 
                                           f"✗ {order.bestell_id}: DB Update fehlgeschlagen")
-                        else:
-                            print(f"  ✗ {order.bestell_id}: DB Update fehlgeschlagen")
                         error_count += 1
                 
                 except Exception as e:
-                    if job_id:
-                        log_service.log(job_id, "tracking_service", "ERROR", 
+
+                    log_service.log(job_id, "tracking_service", "ERROR", 
                                       f"✗ {order.bestell_id}: {str(e)}")
-                    else:
-                        print(f"  ✗ {order.bestell_id}: {e}")
+
                     error_count += 1
             
-            if job_id:
-                log_service.log(job_id, "tracking_service", "INFO", 
+
+            log_service.log(job_id, "tracking_service", "INFO", 
                               f"✓ Tracking-Sync: {updated_count} aktualisiert")
-                log_service.log(job_id, "tracking_service", "INFO", 
+            log_service.log(job_id, "tracking_service", "INFO", 
                               f"✓ {len(tracking_data_for_api)} bereit für API Upload")
             # ← Kein else-Print!
             
@@ -117,10 +111,10 @@ class TrackingService:
             import traceback
             error_trace = traceback.format_exc()
             
-            if job_id:
-                log_service.log(job_id, "tracking_service", "ERROR", 
+
+            log_service.log(job_id, "tracking_service", "ERROR", 
                               f"✗ Tracking Update Fehler: {str(e)}")
-                log_service.log(job_id, "tracking_service", "ERROR", error_trace)
+            log_service.log(job_id, "tracking_service", "ERROR", error_trace)
             
             return {
                 'updated': 0,
@@ -178,8 +172,8 @@ class TrackingService:
                         'carrier_id': carrier_id  # ✅ Richtige ID!
                     })
             
-            if job_id:
-                log_service.log(job_id, "tracking_service", "INFO", 
+
+            log_service.log(job_id, "tracking_service", "INFO", 
                               f"✓ {len(tracking_data_for_api)} Tracking-Daten für API vorbereitet")
             
             return tracking_data_for_api
@@ -188,11 +182,10 @@ class TrackingService:
             import traceback
             error_trace = traceback.format_exc()
             
-            if job_id:
-                log_service.log(job_id, "tracking_service", "ERROR", 
+
+            log_service.log(job_id, "tracking_service", "ERROR", 
                               f"✗ Prepare Tracking Fehler: {str(e)}")
-                log_service.log(job_id, "tracking_service", "ERROR", error_trace)
-            else:
-                print(f"✗ Fehler: {e}")
+            log_service.log(job_id, "tracking_service", "ERROR", error_trace)
+
             
             return []

@@ -30,8 +30,8 @@ class OrderService:
         
         job_id = job_id or self.job_id
         
-        if job_id:
-            log_service.log(job_id, "order_service", "INFO", 
+
+        log_service.log(job_id, "order_service", "INFO", 
                           "→ Importiere Orders aus JSON in Datenbank")
         
         # Lade alle JSON Responses
@@ -44,10 +44,7 @@ class OrderService:
         for f in required_files:
             if not f.exists():
                 error_msg = f"Datei nicht gefunden: {f}"
-                if job_id:
-                    log_service.log(job_id, "order_service", "ERROR", f"✗ {error_msg}")
-                else:
-                    app_logger.error(error_msg)
+                log_service.log(job_id, "order_service", "ERROR", f"✗ {error_msg}")
                 return {'imported': 0, 'updated': 0, 'total': 0}
         
         try:
@@ -64,16 +61,12 @@ class OrderService:
             # Validiere Orders Response
             if not orders_response.get('success'):
                 error_msg = "Orders API Response war nicht erfolgreich"
-                if job_id:
-                    log_service.log(job_id, "order_service", "ERROR", f"✗ {error_msg}")
-                else:
-                    print(f"✗ {error_msg}")
+                log_service.log(job_id, "order_service", "ERROR", f"✗ {error_msg}")
                 return {'imported': 0, 'updated': 0, 'total': 0}
             
             orders = orders_response.get('result', {}).get('pageItems', [])
             
-            if job_id:
-                log_service.log(job_id, "order_service", "INFO", 
+            log_service.log(job_id, "order_service", "INFO", 
                               f"  {len(orders)} Orders gefunden")
             
             # ===== IMPORT mit vollständiger Merge-Logik =====
@@ -92,10 +85,10 @@ class OrderService:
                 job_id=job_id
             )
             
-            if job_id:
-                log_service.log(job_id, "order_service", "INFO", 
+
+            log_service.log(job_id, "order_service", "INFO", 
                               f"✓ Import abgeschlossen: {result.get('total', 0)} Orders")
-                log_service.log(job_id, "order_service", "INFO", 
+            log_service.log(job_id, "order_service", "INFO", 
                               f"  Neu: {result.get('imported', 0)}, Aktualisiert: {result.get('updated', 0)}")
             
             return result
@@ -104,11 +97,9 @@ class OrderService:
             import traceback
             error_trace = traceback.format_exc()
             
-            if job_id:
-                log_service.log(job_id, "order_service", "ERROR", f"✗ Import Fehler: {str(e)}")
-                log_service.log(job_id, "order_service", "ERROR", error_trace)
-            else:
-                app_logger.error(f"Import Fehler: {e}", exc_info=True)
+            log_service.log(job_id, "order_service", "ERROR", f"✗ Import Fehler: {str(e)}")
+            log_service.log(job_id, "order_service", "ERROR", error_trace)
+
             
             return {'imported': 0, 'updated': 0, 'total': 0}
     
@@ -144,12 +135,10 @@ class OrderService:
                 parent_order_sn = parent_order_map.get('parentOrderSn')
                 
                 if not parent_order_sn:
-                    if job_id:
-                        log_service.log(job_id, "order_service", "WARNING", 
+
+                    log_service.log(job_id, "order_service", "WARNING", 
                                       "⚠ Keine parentOrderSn gefunden")
-                    else:
-                        print("⚠ Keine parentOrderSn gefunden")
-                    continue
+
                 
                 # ===== MERGE STEP 1: Kundendaten aus shipping_info =====
                 shipping_data = shipping_responses.get(parent_order_sn, {})
@@ -180,7 +169,6 @@ class OrderService:
                 parent_amount_map = amount_result.get('parentOrderMap', {})
                 order_amount_list = amount_result.get('orderList', [])
                 
-                versandkosten_brutto = parent_amount_map.get('shipAmountTotalTaxIncl', {}).get('amount', 0) / 100
                 versandkosten_netto = parent_amount_map.get('shippingAmountTotal', {}).get('amount', 0) / 100
                 
                 order_time = parent_order_map.get('parentOrderTime', 0)
@@ -215,8 +203,8 @@ class OrderService:
                     order_repo.save(order)
                     updated_count += 1
                     
-                    if job_id:
-                        log_service.log(job_id, "order_service", "INFO", 
+
+                    log_service.log(job_id, "order_service", "INFO", 
                                       f"  ↻ {parent_order_sn}: aktualisiert")
                 else:
                     order = Order(
@@ -314,13 +302,11 @@ class OrderService:
                 error_trace = traceback.format_exc()
                 parent_order_sn = order_item.get('parentOrderMap', {}).get('parentOrderSn', 'unknown')
                 
-                if job_id:
-                    log_service.log(job_id, "order_service", "ERROR", 
+
+                log_service.log(job_id, "order_service", "ERROR", 
                                   f"✗ Fehler bei Order {parent_order_sn}: {str(e)}")
-                    log_service.log(job_id, "order_service", "ERROR", error_trace)
-                else:
-                    app_logger.error(f"Fehler bei Order {parent_order_sn}: {e}", exc_info=True)
-        
+                log_service.log(job_id, "order_service", "ERROR", error_trace)
+
         return {
             'imported': imported_count,
             'updated': updated_count,
