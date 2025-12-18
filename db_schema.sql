@@ -113,3 +113,43 @@ BEGIN
     CREATE INDEX idx_bestell_id ON temu_xml_export(bestell_id);
 END
 GO
+
+-- Tabelle für Produkt-Mapping (TEMU SKU <-> JTL Artikel)
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'temu_products')
+BEGIN
+    CREATE TABLE temu_products (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        sku NVARCHAR(100) NOT NULL UNIQUE,     -- TEMU skuSn = JTL SKU
+        goods_id BIGINT NOT NULL,              -- Warennummer (Parent/Single)
+        sku_id BIGINT NULL,                    -- TEMU skuId (Child/Single, NULL für Parent)
+        goods_name NVARCHAR(500) NULL,         -- Optional: TEMU Titel
+        jtl_article_id INT NULL,               -- via SKU in JTL gemappt
+        is_active BIT DEFAULT 1,
+        synced_at DATETIME NULL,
+        created_at DATETIME DEFAULT GETDATE(),
+        updated_at DATETIME DEFAULT GETDATE()
+    );
+    CREATE INDEX idx_temu_products_goods_id ON temu_products(goods_id);
+    CREATE INDEX idx_temu_products_jtl_article_id ON temu_products(jtl_article_id);
+END
+GO
+
+-- Tabelle für Bestände (TEMU <-> JTL)
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'temu_inventory')
+BEGIN
+    CREATE TABLE temu_inventory (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        product_id INT NOT NULL,
+        jtl_article_id INT NULL,
+        jtl_stock INT NOT NULL DEFAULT 0,
+        temu_stock INT NOT NULL DEFAULT 0,
+        needs_sync BIT NOT NULL DEFAULT 0,      -- TRUE, wenn JTL != TEMU
+        last_synced_to_temu DATETIME NULL,
+        created_at DATETIME DEFAULT GETDATE(),
+        updated_at DATETIME DEFAULT GETDATE(),
+        FOREIGN KEY (product_id) REFERENCES temu_products(id) ON DELETE CASCADE
+    );
+    CREATE INDEX idx_temu_inventory_product_id ON temu_inventory(product_id);
+    CREATE INDEX idx_temu_inventory_needs_sync ON temu_inventory(needs_sync);
+END
+GO

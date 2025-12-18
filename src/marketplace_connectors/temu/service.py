@@ -7,6 +7,7 @@ from typing import Dict, Optional
 from config.settings import DATA_DIR
 from src.marketplace_connectors.temu.api_client import TemuApiClient
 from src.marketplace_connectors.temu.orders_api import TemuOrdersApi
+from src.marketplace_connectors.temu.inventory_api import TemuInventoryApi
 from src.marketplace_connectors.base_connector import BaseMarketplaceConnector
 from src.services.log_service import log_service
 
@@ -30,6 +31,7 @@ class TemuMarketplaceService(BaseMarketplaceConnector):
         
         self.client = TemuApiClient(app_key, app_secret, access_token, endpoint, verbose=verbose)
         self.orders_api = TemuOrdersApi(self.client)
+        self.inventory_api = TemuInventoryApi(self.client)
     
     def validate_credentials(self) -> bool:
         """Validiere TEMU Credentials"""

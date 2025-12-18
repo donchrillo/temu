@@ -11,13 +11,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from workflows.temu_orders import run_temu_orders
+from workflows.temu_inventory import run_temu_inventory
 from src.services.logger import app_logger
 
 
 def parse_arguments():
     """Parse Command Line Arguments"""
     parser = argparse.ArgumentParser(
-        description='TEMU ERP Workflow - Order Sync',
+        description='TEMU ERP Workflow - Order & Inventory Sync',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Beispiele:
@@ -56,16 +57,27 @@ Alle Logs werden automatisch in [dbo].[scheduler_logs] gespeichert.
         help='Verbose Output (Debug-Modus)'
     )
     
+    parser.add_argument(
+        '--workflow', '-w',
+        type=str,
+        choices=['orders', 'inventory'],
+        default='orders',
+        help='Workflow: orders oder inventory [default: orders]'
+    )
+    
     return parser.parse_args()
 
 
 def run(args):
-    """Hauptfunktion - führt TEMU Order Sync aus"""
-    success = run_temu_orders(
-        parent_order_status=args.status,
-        days_back=args.days,
-        verbose=args.verbose
-    )
+    """Hauptfunktion - führt TEMU Workflow aus"""
+    if args.workflow == 'inventory':
+        success = run_temu_inventory(verbose=args.verbose)
+    else:
+        success = run_temu_orders(
+            parent_order_status=args.status,
+            days_back=args.days,
+            verbose=args.verbose
+        )
     return success
 
 
