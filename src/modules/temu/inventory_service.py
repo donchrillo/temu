@@ -89,24 +89,28 @@ class InventoryService:
                       f"Produkte: {result['inserted']} neu, {result['updated']} aktualisiert")
         return result
     
-    def refresh_inventory_from_jtl(self, product_repo, inventory_repo, job_id: str) -> Dict[str, int]:
+    def refresh_inventory_from_jtl(self, product_repo, inventory_repo, jtl_repo, job_id: str) -> Dict[str, int]:
         """
         Liest JTL-Bestände und aktualisiert temu_inventory.
-        
-        Args:
-            product_repo: ProductRepository
-            inventory_repo: InventoryRepository
-            job_id: für Logging
-        
-        Returns:
-            {"inserted": n, "updated": n}
         """
         products = product_repo.fetch_all()
         items = []
         
         for p in products:
-            # TODO: echten Bestand aus JTL holen (SQL Query auf eazybusiness)
-            jtl_stock = 0  # Platzhalter
+            sku = p.get("sku")
+            
+            # Hole JTL Artikel-ID per SKU (falls noch nicht gemappt)
+            if not p.get("jtl_article_id") and sku:
+                jtl_article_id = jtl_repo.get_article_id_by_sku(sku)
+                if jtl_article_id:
+                    product_repo.update_jtl_article_id(p["id"], jtl_article_id)
+                    p["jtl_article_id"] = jtl_article_id
+            
+            # Hole JTL Bestand per Artikel-ID
+            jtl_stock = 0
+            if p.get("jtl_article_id"):
+                jtl_stock = jtl_repo.get_stock_by_article_id(p["jtl_article_id"])
+            
             items.append({
                 "product_id": p["id"],
                 "jtl_article_id": p.get("jtl_article_id"),

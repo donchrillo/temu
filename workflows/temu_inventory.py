@@ -2,6 +2,8 @@ import sys
 from pathlib import Path
 from datetime import datetime
 
+from src.db.repositories.jtl_common.jtl_repository import JtlRepository
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config.settings import TEMU_APP_KEY, TEMU_APP_SECRET, TEMU_ACCESS_TOKEN, TEMU_API_ENDPOINT
@@ -52,8 +54,7 @@ def _step_1_api_to_json(job_id: str, verbose: bool) -> bool:
         verbose=verbose
     )
     log_service.log(job_id, "api_to_json", "INFO", "→ Hole TEMU SKU-Liste (Status 2 & 3, pageSize=100)")
-    inv_service = InventoryService()
-    return inv_service.fetch_and_store_raw_skus(temu_service.inventory_api, job_id=job_id)
+    return temu_service.fetch_inventory_skus(job_id=job_id, page_size=100)
 
 
 def _step_2_json_to_db(job_id: str) -> None:
@@ -70,9 +71,10 @@ def _step_3_jtl_stock_to_inventory(job_id: str) -> None:
     jtl_conn = get_db_connection(database="eazybusiness", use_pool=True)
     product_repo = ProductRepository(connection=toci_conn)
     inventory_repo = InventoryRepository(connection=toci_conn)
+    jtl_repo = JtlRepository(connection=jtl_conn)  # 🆕 NEU!
     inv_service = InventoryService()
     log_service.log(job_id, "jtl_to_inventory", "INFO", "→ Lese JTL Bestände und aktualisiere temu_inventory")
-    stats = inv_service.refresh_inventory_from_jtl(product_repo, inventory_repo, job_id=job_id)
+    stats = inv_service.refresh_inventory_from_jtl(product_repo, inventory_repo, jtl_repo, job_id=job_id)  # 🆕 jtl_repo hinzugefügt!
     log_service.log(job_id, "jtl_to_inventory", "INFO", f"✓ Bestand aktualisiert: {stats}")
 
 

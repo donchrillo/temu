@@ -230,3 +230,57 @@ class JtlRepository:
         except Exception as e:
             app_logger.error(f"JTL Lieferschein Query Fehler: {e}", exc_info=True)
             return None
+    
+    def get_article_id_by_sku(self, sku: str) -> int:
+        """
+        Hole JTL Artikel-ID per SKU (cArtNr).
+        
+        Args:
+            sku: Artikel-Numer (SKU)
+        
+        Returns:
+            kArtikel (int) oder None wenn nicht gefunden
+        """
+        try:
+            conn = self._get_conn()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT kArtikel
+                FROM eazybusiness.dbo.tArtikel
+                WHERE cArtNr = ?
+            """, sku)
+            
+            row = cursor.fetchone()
+            return row[0] if row else None
+        
+        except Exception as e:
+            app_logger.error(f"JTL Article ID Query Fehler: {e}", exc_info=True)
+            return None
+    
+    def get_stock_by_article_id(self, article_id: int) -> int:
+        """
+        Hole verfügbaren Bestand aus JTL per Artikel-ID.
+        
+        Args:
+            article_id: kArtikel aus tArtikel
+        
+        Returns:
+            fVerfuegbar (int) oder 0 wenn nicht gefunden
+        """
+        try:
+            conn = self._get_conn()
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT fVerfuegbar
+                FROM eazybusiness.dbo.tlagerbestand
+                WHERE kArtikel = ?
+            """, article_id)
+            
+            row = cursor.fetchone()
+            return int(row[0]) if row and row[0] else 0
+        
+        except Exception as e:
+            app_logger.error(f"JTL Stock Query Fehler: {e}", exc_info=True)
+            return 0

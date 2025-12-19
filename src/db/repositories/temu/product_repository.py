@@ -45,3 +45,14 @@ WHEN NOT MATCHED THEN INSERT (sku, goods_id, sku_id, goods_name, jtl_article_id,
         cursor.execute("SELECT id, sku, goods_id, sku_id, goods_name, jtl_article_id, is_active FROM temu_products")
         cols = [c[0] for c in cursor.description]
         return [dict(zip(cols, row)) for row in cursor.fetchall()]
+
+    def update_jtl_article_id(self, product_id: int, jtl_article_id: int) -> bool:
+        """Aktualisiert jtl_article_id für ein Produkt"""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            UPDATE temu_products 
+            SET jtl_article_id = ?, updated_at = GETDATE()
+            WHERE id = ?
+        """, jtl_article_id, product_id)
+        self.conn.commit()
+        return True
