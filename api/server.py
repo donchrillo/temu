@@ -74,9 +74,9 @@ async def get_job(job_id: str):
 
 @app.post("/api/jobs/{job_id}/run-now")
 async def trigger_job(job_id: str, parent_order_status: int = 2, days_back: int = 7, 
-                      verbose: bool = False, log_to_db: bool = True):
+                      verbose: bool = False, log_to_db: bool = True, mode: str = "quick"):
     """Triggere Job SOFORT mit optionalen Parametern"""
-    scheduler.trigger_job_now(job_id, parent_order_status, days_back, verbose, log_to_db)
+    scheduler.trigger_job_now(job_id, parent_order_status, days_back, verbose, log_to_db, mode)
     return {
         "status": "triggered", 
         "job_id": job_id,
@@ -84,7 +84,8 @@ async def trigger_job(job_id: str, parent_order_status: int = 2, days_back: int 
             "parent_order_status": parent_order_status,
             "days_back": days_back,
             "verbose": verbose,
-            "log_to_db": log_to_db
+            "log_to_db": log_to_db,
+            "mode": mode
         }
     }
 
@@ -255,19 +256,26 @@ async def websocket_logs(websocket: WebSocket):
 # Serve Frontend
 frontend_dir = Path(__file__).parent.parent / "frontend"
 
-if (frontend_dir / "dist").exists():
-    app.mount("/static", StaticFiles(directory=str(frontend_dir / "dist")), name="static")
-    
-    @app.get("/")
-    async def root():
-        """Serve index.html"""
-        return FileResponse(str(frontend_dir / "dist" / "index.html"))
-else:
-    # Fallback wenn frontend/dist nicht existiert
-    @app.get("/")
-    async def root():
-        """Einfache HTML Fallback-Seite"""
-        return FileResponse(str(frontend_dir / "index.html"))
+# Mount static files (CSS, JS, etc.)
+app.mount("/static", StaticFiles(directory=str(frontend_dir)), name="static")
+
+@app.get("/")
+async def root():
+    """Serve index.html"""
+    return FileResponse(str(frontend_dir / "index.html"))
+
+@app.get("/temu")
+async def temu_dashboard():
+    """Serve TEMU dashboard page"""
+    return FileResponse(str(frontend_dir / "temu.html"))
+
+@app.get("/{filename}")
+async def serve_static(filename: str):
+    """Serve CSS/JS direkt aus frontend/"""
+    file_path = frontend_dir / filename
+    if file_path.exists() and file_path.suffix in ['.css', '.js', '.html']:
+        return FileResponse(str(file_path))
+    return {"error": "File not found"}
 
 if __name__ == "__main__":
     import uvicorn

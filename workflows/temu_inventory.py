@@ -17,22 +17,23 @@ from src.modules.temu.stock_sync_service import StockSyncService
 
 
 def run_temu_inventory(verbose: bool = False) -> bool:
+    """Vollständiger 4-Schritt Inventur-Workflow (CLI/Testing)"""
     start_time = datetime.now()
     job_id = f"temu_inventory_{int(start_time.timestamp())}"
     log_service.start_job_capture(job_id, "temu_inventory")
     try:
-        # [1/4] TEMU API -> JSON (Platzhalter)
-        if not _step_1_api_to_json(job_id, verbose):
+        # [1/4] TEMU API -> JSON
+        if not step_1_api_to_json(job_id, verbose):
             raise Exception("API Fetch fehlgeschlagen")
 
         # [2/4] JSON -> DB (temu_products)
-        _step_2_json_to_db(job_id)
+        step_2_json_to_db(job_id)
 
         # [3/4] JTL → temu_inventory (Initial/Delta)
-        _step_3_jtl_stock_to_inventory(job_id)
+        step_3_jtl_stock_to_inventory(job_id)
 
         # [4/4] temu_inventory → TEMU API (nur Deltas)
-        _step_4_sync_to_temu(job_id)
+        step_4_sync_to_temu(job_id)
 
         duration = (datetime.now() - start_time).total_seconds()
         log_service.end_job_capture(success=True, duration=duration)
@@ -45,7 +46,8 @@ def run_temu_inventory(verbose: bool = False) -> bool:
         return False
 
 
-def _step_1_api_to_json(job_id: str, verbose: bool) -> bool:
+def step_1_api_to_json(job_id: str, verbose: bool) -> bool:
+    """Schritt 1: TEMU API -> JSON (Status 2 & 3)"""
     temu_service = TemuMarketplaceService(
         app_key=TEMU_APP_KEY,
         app_secret=TEMU_APP_SECRET,
@@ -57,7 +59,8 @@ def _step_1_api_to_json(job_id: str, verbose: bool) -> bool:
     return temu_service.fetch_inventory_skus(job_id=job_id, page_size=100)
 
 
-def _step_2_json_to_db(job_id: str) -> None:
+def step_2_json_to_db(job_id: str) -> None:
+    """Schritt 2: JSON -> temu_products"""
     toci_conn = get_db_connection(database="toci", use_pool=True)
     product_repo = ProductRepository(connection=toci_conn)
     inv_service = InventoryService()
@@ -66,19 +69,21 @@ def _step_2_json_to_db(job_id: str) -> None:
     log_service.log(job_id, "json_to_db", "INFO", f"✓ Produkte importiert: {stats}")
 
 
-def _step_3_jtl_stock_to_inventory(job_id: str) -> None:
+def step_3_jtl_stock_to_inventory(job_id: str) -> None:
+    """Schritt 3: JTL Bestände -> temu_inventory (mit needs_sync Flagging)"""
     toci_conn = get_db_connection(database="toci", use_pool=True)
     jtl_conn = get_db_connection(database="eazybusiness", use_pool=True)
     product_repo = ProductRepository(connection=toci_conn)
     inventory_repo = InventoryRepository(connection=toci_conn)
-    jtl_repo = JtlRepository(connection=jtl_conn)  # 🆕 NEU!
+    jtl_repo = JtlRepository(connection=jtl_conn)
     inv_service = InventoryService()
     log_service.log(job_id, "jtl_to_inventory", "INFO", "→ Lese JTL Bestände und aktualisiere temu_inventory")
-    stats = inv_service.refresh_inventory_from_jtl(product_repo, inventory_repo, jtl_repo, job_id=job_id)  # 🆕 jtl_repo hinzugefügt!
+    stats = inv_service.refresh_inventory_from_jtl(product_repo, inventory_repo, jtl_repo, job_id=job_id)
     log_service.log(job_id, "jtl_to_inventory", "INFO", f"✓ Bestand aktualisiert: {stats}")
 
 
-def _step_4_sync_to_temu(job_id: str) -> None:
+def step_4_sync_to_temu(job_id: str) -> None:
+    """Schritt 4: temu_inventory (Deltas) -> TEMU API"""
     toci_conn = get_db_connection(database="toci", use_pool=True)
     inventory_repo = InventoryRepository(connection=toci_conn)
     temu_service = TemuMarketplaceService(
@@ -91,6 +96,13 @@ def _step_4_sync_to_temu(job_id: str) -> None:
     sync_service = StockSyncService()
     sync_service.sync_deltas_to_temu(temu_service.inventory_api, inventory_repo, job_id=job_id)
     log_service.log(job_id, "inventory_to_api", "INFO", "✓ Delta-Upload abgeschlossen")
+
+
+# Alias für Rückwärtskompatibilität (falls anderswo verwendet)
+_step_1_api_to_json = step_1_api_to_json
+_step_2_json_to_db = step_2_json_to_db
+_step_3_jtl_stock_to_inventory = step_3_jtl_stock_to_inventory
+_step_4_sync_to_temu = step_4_sync_to_temu
 
 
 if __name__ == "__main__":

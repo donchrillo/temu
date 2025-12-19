@@ -5,9 +5,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from datetime import datetime
 from typing import Dict, List
 import asyncio
-import io
 import sys
-from contextlib import redirect_stdout, redirect_stderr
 from pathlib import Path
 
 from workers.workers_config import WorkersConfig
@@ -69,7 +67,7 @@ class SchedulerService:
             self._run_job,
             trigger=IntervalTrigger(minutes=interval_minutes),
             id=job_id,
-            args=[job_id, 2, 7, False, True],  # ← Standard-Parameter!
+            args=[job_id, 2, 7, False, True, "quick"],  # ← Standard-Parameter + mode!
             next_run_time=datetime.now() if enabled else None,
             misfire_grace_time=None,  # ✅ Ignoriere verpasste Zyklen komplett
             coalesce=True,  # ✅ Springe verpasste Ausführungen
@@ -90,7 +88,7 @@ class SchedulerService:
     
     async def _run_job(self, job_id: str, parent_order_status: int = 2, 
                        days_back: int = 7, verbose: bool = False, 
-                       log_to_db: bool = True):
+                       log_to_db: bool = True, mode: str = "quick"):
         """✅ Mit strukturiertem Logging in SQL Server"""
         
         start_time = datetime.now()
@@ -101,51 +99,34 @@ class SchedulerService:
         log_service.start_job_capture(job_id, job_type.value)
         
         try:
-            # Capture stdout/stderr
-            log_buffer = io.StringIO()
-            
-            with redirect_stdout(log_buffer), redirect_stderr(log_buffer):
-                job_type = self.jobs[job_id].job_type
-                
-                # Füge root-Ordner zum Path hinzu
-                root_path = Path(__file__).parent.parent
-                if str(root_path) not in sys.path:
-                    sys.path.insert(0, str(root_path))
-                
-                
-                # Führe entsprechenden Job aus
-                if job_type == JobType.SYNC_ORDERS:
-                    #from main import run_full_workflow_refactored
-                    # neuer workflow
-                    from workflows.temu_orders import run_temu_orders
-                    result = await self._async_wrapper(
-                        run_temu_orders,
-                        parent_order_status=parent_order_status,  # ← Parameter!
-                        days_back=days_back,                      # ← Parameter!
-                        verbose=verbose                           # ← Parameter!
-                    )
+            # Füge root-Ordner zum Path hinzu (BEVOR wir importieren!)
+            root_path = Path(__file__).parent.parent
+            if str(root_path) not in sys.path:
+                sys.path.insert(0, str(root_path))
 
-                elif job_type == JobType.SYNC_INVENTORY:
-                    from workflows.temu_inventory_sync import run_temu_inventory_sync
-                    result = await self._async_wrapper(
-                        run_temu_inventory_sync,
-                        verbose=verbose
-                    )
-                elif job_type == JobType.FETCH_INVOICES:
-                    print("ℹ Rechnungs-Fetch noch nicht implementiert")
-            
-            # ✅ Speichere Logs in SQL Server
-            logs = log_buffer.getvalue().split('\n')
-            for log_line in logs:
-                if log_line.strip():
-                    # Bestimme Level
-                    level = "INFO"
-                    if "✗" in log_line or "Fehler" in log_line:
-                        level = "ERROR"
-                    elif "⚠" in log_line:
-                        level = "WARNING"
-                    
-                    log_service.log(job_id, job_type.value, level, log_line)
+            # Führe entsprechenden Job aus (Workflows loggen selbst strukturiert)
+            if job_type == JobType.SYNC_ORDERS:
+                from workflows.temu_orders import run_temu_orders
+                result = await self._async_wrapper(
+                    run_temu_orders,
+                    parent_order_status=parent_order_status,
+                    days_back=days_back,
+                    verbose=verbose
+                )
+                # Ergebnis-Zusammenfassung
+                log_service.log(job_id, job_type.value, "INFO", f"Job Ergebnis: {result}")
+
+            elif job_type == JobType.SYNC_INVENTORY:
+                from workflows.temu_inventory import step_1_api_to_json, step_2_json_to_db, step_3_jtl_stock_to_inventory, step_4_sync_to_temu
+                if mode == "full":
+                    await self._async_wrapper(step_1_api_to_json, job_id, verbose)
+                    await self._async_wrapper(step_2_json_to_db, job_id)
+                await self._async_wrapper(step_3_jtl_stock_to_inventory, job_id)
+                await self._async_wrapper(step_4_sync_to_temu, job_id)
+                log_service.log(job_id, job_type.value, "INFO", f"Inventory Sync abgeschlossen (mode={mode})")
+
+            elif job_type == JobType.FETCH_INVOICES:
+                log_service.log(job_id, job_type.value, "INFO", "Rechnungs-Fetch noch nicht implementiert")
             
             # Erfolg
             duration = (datetime.now() - start_time).total_seconds()
@@ -207,14 +188,13 @@ class SchedulerService:
     
     def trigger_job_now(self, job_id: str, parent_order_status: int = 2, 
                         days_back: int = 7, verbose: bool = False, 
-                        log_to_db: bool = True):
+                        log_to_db: bool = True, mode: str = "quick"):
         """Triggere Job SOFORT mit optionalen Parametern"""
         job = self.scheduler.get_job(job_id)
         if job:
             # Speichere alte Konfiguration
             trigger = job.trigger
             func = job.func
-            args = job.args
             
             # Entferne alten Job
             self.scheduler.remove_job(job_id)
@@ -224,7 +204,7 @@ class SchedulerService:
                 func,
                 trigger=trigger,
                 id=job_id,
-                args=[job_id, parent_order_status, days_back, verbose, log_to_db],  # ← NEU!
+                args=[job_id, parent_order_status, days_back, verbose, log_to_db, mode],  # ← NEU: mode hinzugefügt!
                 next_run_time=datetime.now()
             )
     
