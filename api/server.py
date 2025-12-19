@@ -108,64 +108,6 @@ async def get_logs(job_id: str = None, level: str = None, limit: int = 100, offs
     """Hole Logs mit Filtern"""
     return log_service.get_logs(job_id, level, limit, offset)
 
-@app.get("/api/logs/export")
-async def export_logs(job_id: str = None, format: str = "json", days: int = 7):
-    """✅ Export Logs als JSON/CSV"""
-    import csv
-    from io import StringIO
-    
-    try:
-        logs = log_service.get_logs(job_id=job_id, limit=10000)
-        
-        if format == "csv":
-            output = StringIO()
-            writer = csv.DictWriter(output, fieldnames=logs[0].keys() if logs else [])
-            writer.writeheader()
-            writer.writerows(logs)
-            
-            return {
-                "status": "ok",
-                "format": "csv",
-                "data": output.getvalue()
-            }
-        
-        return {
-            "status": "ok",
-            "format": "json",
-            "data": logs
-        }
-    except Exception as e:
-        app_logger.error(f"Export Logs Fehler: {e}", exc_info=True)
-        return {"status": "error", "message": str(e)}
-
-# ===== NEU: ERROR LOGS ENDPOINT =====
-
-@app.get("/api/logs/errors")
-async def get_error_logs(limit: int = 100, offset: int = 0, level: str = None, days: int = 7):
-    """Hole Error-Logs aus error_logs Tabelle"""
-    from src.db.repositories.common.log_repository import LogRepository
-    repo = LogRepository()
-    return {
-        "status": "ok",
-        "data": repo.get_error_logs(limit=limit, offset=offset, level=level, days=days),
-        "total": len(repo.get_error_logs(limit=10000, offset=0, level=level, days=days))
-    }
-
-@app.get("/api/logs/all")
-async def get_all_logs(limit: int = 100, offset: int = 0, days: int = 7):
-    """Hole Job-Logs UND Error-Logs kombiniert"""
-    from src.db.repositories.common.log_repository import LogRepository
-    repo = LogRepository()
-    
-    job_logs = repo.get_logs(limit=limit, offset=offset)
-    error_logs = repo.get_error_logs(limit=limit, offset=offset, days=days)
-    
-    return {
-        "status": "ok",
-        "job_logs": job_logs,
-        "error_logs": error_logs
-    }
-
 @app.get("/api/logs/stats")
 async def get_log_stats(job_id: str = None, days: int = 7):
     """Hole Log-Statistiken"""

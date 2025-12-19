@@ -46,27 +46,7 @@ class LogRepository:
                 END
             """)
             
-            # Tabelle 2: error_logs (Exceptions & Fehler)
-            cursor.execute("""
-                IF OBJECT_ID('dbo.error_logs', 'U') IS NULL
-                BEGIN
-                    CREATE TABLE [dbo].[error_logs] (
-                        [error_id] INT PRIMARY KEY IDENTITY(1,1),
-                        [level] VARCHAR(20) NOT NULL,
-                        [message] NVARCHAR(MAX) NOT NULL,
-                        [module] VARCHAR(255) NULL,
-                        [function_name] VARCHAR(255) NULL,  -- ✅ RENAMED: function → function_name
-                        [line_number] INT NULL,
-                        [exception_type] VARCHAR(255) NULL,
-                        [traceback_text] NVARCHAR(MAX) NULL,
-                        [timestamp] DATETIME2 NOT NULL DEFAULT GETDATE(),
-                        
-                        INDEX idx_timestamp (timestamp),
-                        INDEX idx_level (level),
-                        INDEX idx_exception_type (exception_type)
-                    );
-                END
-            """)
+            # Entfernt: Tabelle error_logs nicht mehr anlegen
             
             return True
         
@@ -125,7 +105,7 @@ class LogRepository:
                     [timestamp], [duration_seconds], [status], [error_text]
                 FROM [dbo].[scheduler_logs]
                 {where_sql}
-                ORDER BY [timestamp] DESC
+                ORDER BY [timestamp] DESC, [log_id] DESC
                 OFFSET ? ROWS
                 FETCH NEXT ? ROWS ONLY
             """
@@ -168,11 +148,12 @@ class LogRepository:
                     [message]
                 FROM [dbo].[scheduler_logs]
                 WHERE job_id = ?
-                ORDER BY [timestamp] DESC
+                ORDER BY [timestamp] DESC, [log_id] DESC
             """, (limit, job_id))
             
             rows = cursor.fetchall()
-            return [row[0] for row in rows][::-1]  # Reverse für chronologische Reihenfolge
+            # Neueste zuerst zurückgeben (keine Reverse)
+            return [row[0] for row in rows]
         
         except Exception as e:
             app_logger.error(f"Get Job Logs Error: {e}", exc_info=True)
@@ -240,75 +221,6 @@ class LogRepository:
             app_logger.error(f"Cleanup Error: {e}", exc_info=True)
             return 0
     
-    def insert_error_log(self, level: str, message: str, module: str = None,
-                        function: str = None, line_number: int = None,
-                        exception_type: str = None, traceback_text: str = None) -> bool:
-        """Speichere Error/Exception in error_logs Tabelle"""
-        
-        try:
-            conn = self._get_conn()
-            cursor = conn.cursor()
-            
-            cursor.execute("""
-                INSERT INTO [dbo].[error_logs]
-                (level, message, module, function_name, line_number, exception_type, traceback_text, timestamp)
-                VALUES (?, ?, ?, ?, ?, ?, ?, GETDATE())
-            """, (level, message, module, function, line_number, exception_type, traceback_text))
-            
-            conn.commit()
-            return True
-        
-        except Exception as e:
-            app_logger.error(f"Insert Error Log Failed: {e}", exc_info=True)
-            return False
+    # Entfernt: insert_error_log – Error-Logs werden nicht mehr unterstützt
     
-    def get_error_logs(self, limit: int = 100, offset: int = 0,
-                      level: str = None, days: int = 7) -> list:
-        """Hole Error-Logs mit Filtern"""
-        
-        try:
-            conn = self._get_conn()
-            cursor = conn.cursor()
-            
-            where_clauses = [f"timestamp >= DATEADD(day, -{days}, GETDATE())"]
-            params = []
-            
-            if level:
-                where_clauses.append("level = ?")
-                params.append(level)
-            
-            where_sql = " AND ".join(where_clauses)
-            
-            query = f"""
-                SELECT
-                    [error_id], [level], [message], [module], [function_name],
-                    [line_number], [exception_type], [traceback_text], [timestamp]
-                FROM [dbo].[error_logs]
-                WHERE {where_sql}
-                ORDER BY [timestamp] DESC
-                OFFSET ? ROWS
-                FETCH NEXT ? ROWS ONLY
-            """
-            
-            params.extend([offset, limit])
-            cursor.execute(query, params)
-            rows = cursor.fetchall()
-            
-            return [
-                {
-                    'error_id': row[0],
-                    'level': row[1],
-                    'message': row[2],
-                    'module': row[3],
-                    'function': row[4],
-                    'line_number': row[5],
-                    'exception_type': row[6],
-                    'traceback_text': row[7],
-                    'timestamp': row[8].isoformat() if row[8] else None
-                }
-                for row in rows
-            ]
-        
-        except Exception as e:
-            app_logger.error(f"Get Error Logs Failed: {e}", exc_info=True)
-            return []
+    # Entfernt: get_error_logs – Error-Logs werden nicht mehr unterstützt

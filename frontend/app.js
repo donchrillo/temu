@@ -208,17 +208,27 @@ function renderLogs(logs) {
     let filteredLogs = logs;
     if (searchText) {
         filteredLogs = logs.filter(log => 
-            log.message.toLowerCase().includes(searchText) ||
+            (log.message || '').toLowerCase().includes(searchText) ||
             (log.job_id && log.job_id.toLowerCase().includes(searchText))
         );
     }
+
+    // Sicherstellen: neueste zuerst (stabile Sortierung mit Tie-Breaker)
+    filteredLogs = [...filteredLogs].sort((a, b) => {
+        const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+        const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+        if (tb !== ta) return tb - ta;
+        const ida = typeof a.log_id === 'number' ? a.log_id : (parseInt(a.id || 0, 10) || 0);
+        const idb = typeof b.log_id === 'number' ? b.log_id : (parseInt(b.id || 0, 10) || 0);
+        return idb - ida;
+    });
     
     if (!filteredLogs || filteredLogs.length === 0) {
         container.innerHTML = '<div class="log-line">Keine Logs vorhanden</div>';
         return;
     }
     
-    container.innerHTML = filteredLogs.reverse()
+    container.innerHTML = filteredLogs
         .map(log => {
             let className = 'log-line';
             if (log.level === 'ERROR') {
@@ -237,7 +247,7 @@ function renderLogs(logs) {
                 <div class="${className}">
                     <strong>[${timestamp}]</strong> 
                     <span style="color: #94a3b8;">[${log.level}]</span>
-                    ${escapeHtml(log.message)}
+                    ${escapeHtml(log.message || '')}
                 </div>
             `;
         })
@@ -246,36 +256,6 @@ function renderLogs(logs) {
     container.scrollTop = 0;
 }
 
-// ===== ERROR LOG RENDERING =====
-function renderErrorLogs(errors) {
-    const container = document.getElementById('errors-container');
-    
-    if (!errors || errors.length === 0) {
-        container.innerHTML = '<div class="log-line">Keine Error-Logs vorhanden</div>';
-        return;
-    }
-    
-    container.innerHTML = errors.reverse()
-        .map(err => {
-            const timestamp = err.timestamp ? new Date(err.timestamp).toLocaleTimeString('de-DE') : '';
-            const exceptionType = err.exception_type ? `[${err.exception_type}]` : '';
-            
-            return `
-                <div class="log-line log-error">
-                    <strong>[${timestamp}]</strong> 
-                    <span style="color: #ef4444;">${exceptionType}</span><br>
-                    <strong>${err.module}::${err.function}</strong> (Zeile ${err.line_number})<br>
-                    ${escapeHtml(err.message)}<br>
-                    <span style="font-size: 11px; color: #94a3b8; margin-top: 5px; display: block;">
-                        📝 ${err.traceback_text ? err.traceback_text.substring(0, 200) + '...' : 'Kein Traceback'}
-                    </span>
-                </div>
-            `;
-        })
-        .join('');
-    
-    container.scrollTop = 0;
-}
 
 // ===== STATISTIKEN =====
 async function loadStatistics() {
