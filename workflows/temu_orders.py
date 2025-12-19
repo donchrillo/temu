@@ -11,9 +11,9 @@ from src.db.connection import get_db_connection
 from src.db.repositories.temu.order_repository import OrderRepository
 from src.db.repositories.temu.order_item_repository import OrderItemRepository
 from src.db.repositories.jtl_common.jtl_repository import JtlRepository
-from src.modules.orders.order_service import OrderService
+from src.modules.temu.order_service import OrderService
 from src.modules.xml_export.xml_export_service import XmlExportService
-from src.modules.tracking.tracking_service import TrackingService
+from src.modules.temu.tracking_service import TrackingService
 from src.services.log_service import log_service
 
 

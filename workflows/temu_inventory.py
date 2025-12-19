@@ -7,11 +7,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from config.settings import TEMU_APP_KEY, TEMU_APP_SECRET, TEMU_ACCESS_TOKEN, TEMU_API_ENDPOINT
 from src.services.log_service import log_service
 from src.db.connection import get_db_connection
-from src.db.repositories.product_repository import ProductRepository
-from src.db.repositories.inventory_repository import InventoryRepository
+from src.db.repositories.temu.product_repository import ProductRepository
+from src.db.repositories.temu.inventory_repository import InventoryRepository
 from src.marketplace_connectors.temu.service import TemuMarketplaceService
-from src.modules.inventory.inventory_service import InventoryService
-from src.modules.inventory.stock_sync_service import StockSyncService
+from src.modules.temu.inventory_service import InventoryService
+from src.modules.temu.stock_sync_service import StockSyncService
 
 
 def run_temu_inventory(verbose: bool = False) -> bool:
