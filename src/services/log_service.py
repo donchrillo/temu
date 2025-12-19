@@ -6,7 +6,7 @@ import logging
 from contextlib import redirect_stdout, redirect_stderr
 from datetime import datetime
 from typing import Optional, List, Dict
-from src.db.repositories.log_repository import LogRepository
+from src.db.repositories.common.log_repository import LogRepository
 from src.services.logger import app_logger
 
 class LogService:

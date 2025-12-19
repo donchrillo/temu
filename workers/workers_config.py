@@ -6,10 +6,10 @@ from typing import Dict, List
 from datetime import datetime
 from src.services.logger import app_logger
 
-# ✅ KORRIGIERT: CONFIG_FILE unter config/, nicht data/!
-CONFIG_FILE = Path(__file__).parent.parent / 'config' / 'scheduler_config.json'
+# ✅ KORRIGIERT: CONFIG_FILE unter workers/config/
+CONFIG_FILE = Path(__file__).parent / 'config' / 'workers_config.json'
 
-class SchedulerConfig:
+class WorkersConfig:
     """Persistiere Job-Konfigurationen in JSON"""
     
     @staticmethod
@@ -17,7 +17,7 @@ class SchedulerConfig:
         """Lade Job-Konfiguration aus File"""
         if not CONFIG_FILE.exists():
             # Erste Ausführung: Standard-Jobs zurückgeben
-            return SchedulerConfig.get_default_jobs()
+            return WorkersConfig.get_default_jobs()
         
         try:
             with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
@@ -25,7 +25,7 @@ class SchedulerConfig:
                 return jobs
         except Exception as e:
             app_logger.error(f"Fehler beim Laden der Job-Config: {e}", exc_info=True)
-            return SchedulerConfig.get_default_jobs()
+            return WorkersConfig.get_default_jobs()
     
     @staticmethod
     def save_jobs(jobs: List[Dict]) -> bool:
@@ -68,23 +68,23 @@ class SchedulerConfig:
     @staticmethod
     def update_job_interval(job_type: str, interval_minutes: int) -> bool:
         """Update Interval für einen Job"""
-        jobs = SchedulerConfig.load_jobs()
+        jobs = WorkersConfig.load_jobs()
         
         for job in jobs:
             if job['job_type'] == job_type:
                 job['interval_minutes'] = interval_minutes
-                return SchedulerConfig.save_jobs(jobs)
+                return WorkersConfig.save_jobs(jobs)
         
         return False
     
     @staticmethod
     def toggle_job(job_type: str, enabled: bool) -> bool:
         """Enable/Disable einen Job"""
-        jobs = SchedulerConfig.load_jobs()
+        jobs = WorkersConfig.load_jobs()
         
         for job in jobs:
             if job['job_type'] == job_type:
                 job['enabled'] = enabled
-                return SchedulerConfig.save_jobs(jobs)
+                return WorkersConfig.save_jobs(jobs)
         
         return False

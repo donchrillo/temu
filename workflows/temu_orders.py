@@ -8,9 +8,9 @@ from config.settings import (
 )
 from src.marketplace_connectors.temu.service import TemuMarketplaceService
 from src.db.connection import get_db_connection
-from src.db.repositories.order_repository import OrderRepository
-from src.db.repositories.order_item_repository import OrderItemRepository
-from src.db.repositories.jtl_repository import JtlRepository
+from src.db.repositories.temu.order_repository import OrderRepository
+from src.db.repositories.temu.order_item_repository import OrderItemRepository
+from src.db.repositories.jtl_common.jtl_repository import JtlRepository
 from src.modules.orders.order_service import OrderService
 from src.modules.xml_export.xml_export_service import XmlExportService
 from src.modules.tracking.tracking_service import TrackingService

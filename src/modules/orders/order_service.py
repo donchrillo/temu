@@ -5,8 +5,8 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional
 from config.settings import DATA_DIR
-from src.db.repositories.order_repository import OrderRepository, Order
-from src.db.repositories.order_item_repository import OrderItemRepository, OrderItem
+from src.db.repositories.temu.order_repository import OrderRepository, Order
+from src.db.repositories.temu.order_item_repository import OrderItemRepository, OrderItem
 from src.services.log_service import log_service
 from src.services.logger import app_logger
 

@@ -10,8 +10,8 @@ import sys
 from contextlib import redirect_stdout, redirect_stderr
 from pathlib import Path
 
-from scheduler.scheduler_config import SchedulerConfig
-from scheduler.job_models import JobType, JobStatusEnum, JobConfig, JobSchedule  # ← KORRIGIERT: job_models statt jobs!
+from workers.workers_config import WorkersConfig
+from workers.job_models import JobType, JobStatusEnum, JobConfig, JobSchedule  # ← KORRIGIERT: job_models statt jobs!
 from src.services.log_service import log_service
 
 
@@ -26,7 +26,7 @@ class SchedulerService:
     
     def initialize_from_config(self):
         """✅ NEU: Lade Jobs aus gespeicherter Konfiguration"""
-        job_configs = SchedulerConfig.load_jobs()
+        job_configs = WorkersConfig.load_jobs()
         
         for job_config in job_configs:
             self.add_job(
@@ -259,5 +259,5 @@ class SchedulerService:
                 'description': job_config.description
             })
         
-        SchedulerConfig.save_jobs(jobs_list)
+        WorkersConfig.save_jobs(jobs_list)
         # ✅ Kein Print mehr - erfolgreiche Speicherung wird im Log_Service geloggt

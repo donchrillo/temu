@@ -12,7 +12,7 @@ from datetime import datetime
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from scheduler.scheduler import SchedulerService
+from workers.worker_service import SchedulerService
 from src.services.log_service import log_service
 from src.services.logger import app_logger
 
@@ -142,7 +142,7 @@ async def export_logs(job_id: str = None, format: str = "json", days: int = 7):
 @app.get("/api/logs/errors")
 async def get_error_logs(limit: int = 100, offset: int = 0, level: str = None, days: int = 7):
     """Hole Error-Logs aus error_logs Tabelle"""
-    from src.db.repositories.log_repository import LogRepository
+    from src.db.repositories.common.log_repository import LogRepository
     repo = LogRepository()
     return {
         "status": "ok",
@@ -153,7 +153,7 @@ async def get_error_logs(limit: int = 100, offset: int = 0, level: str = None, d
 @app.get("/api/logs/all")
 async def get_all_logs(limit: int = 100, offset: int = 0, days: int = 7):
     """Hole Job-Logs UND Error-Logs kombiniert"""
-    from src.db.repositories.log_repository import LogRepository
+    from src.db.repositories.common.log_repository import LogRepository
     repo = LogRepository()
     
     job_logs = repo.get_logs(limit=limit, offset=offset)
@@ -240,11 +240,12 @@ async def websocket_logs(websocket: WebSocket):
             await websocket.send_json({"type": "jobs_update", "data": jobs_serializable})
     
     except Exception as e:
-        # ✅ KORRIGIERT: Nur echte Fehler loggen, nicht WebSocket-Disconnects!
-        error_msg = str(e)
+        # ✅ KORRIGIERT: Nur echte Fehler loggen, nicht normale Disconnects!
+        from starlette.websockets import WebSocketDisconnect
+        from uvicorn.protocols.utils import ClientDisconnected
         
-        # WebSocket-Disconnects sind NORMAL - nicht loggen!
-        if "ClientDisconnected" not in error_msg and "ConnectionClosed" not in error_msg:
+        if not isinstance(e, (WebSocketDisconnect, ClientDisconnected)):
+            # Echter Fehler - loggen!
             app_logger.error(f"WebSocket Fehler: {e}", exc_info=True)
     
     finally:

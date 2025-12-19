@@ -5,9 +5,9 @@ from xml.dom import minidom
 from datetime import datetime
 from typing import Dict, List, Optional
 from pathlib import Path
-from src.db.repositories.order_repository import OrderRepository
-from src.db.repositories.order_item_repository import OrderItemRepository
-from src.db.repositories.jtl_repository import JtlRepository
+from src.db.repositories.temu.order_repository import OrderRepository
+from src.db.repositories.temu.order_item_repository import OrderItemRepository
+from src.db.repositories.jtl_common.jtl_repository import JtlRepository
 from src.services.log_service import log_service
 from config.settings import (
     JTL_WAEHRUNG, JTL_SPRACHE, JTL_K_BENUTZER, JTL_K_FIRMA,
