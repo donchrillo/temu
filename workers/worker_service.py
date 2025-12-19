@@ -126,7 +126,11 @@ class SchedulerService:
                     )
 
                 elif job_type == JobType.SYNC_INVENTORY:
-                    print("ℹ Inventur-Sync noch nicht implementiert")
+                    from workflows.temu_inventory_sync import run_temu_inventory_sync
+                    result = await self._async_wrapper(
+                        run_temu_inventory_sync,
+                        verbose=verbose
+                    )
                 elif job_type == JobType.FETCH_INVOICES:
                     print("ℹ Rechnungs-Fetch noch nicht implementiert")
             

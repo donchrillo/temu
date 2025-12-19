@@ -261,25 +261,38 @@ class JtlRepository:
     def get_stock_by_article_id(self, article_id: int) -> int:
         """
         Hole verfügbaren Bestand aus JTL per Artikel-ID.
+        Berechnet: fBestand - nPuffer (Lager 2), min. 0
         
         Args:
             article_id: kArtikel aus tArtikel
         
         Returns:
-            fVerfuegbar (int) oder 0 wenn nicht gefunden
+            Verfügbarer Bestand (int) oder 0 wenn nicht gefunden
         """
         try:
             conn = self._get_conn()
             cursor = conn.cursor()
             
             cursor.execute("""
-                SELECT fVerfuegbar
-                FROM eazybusiness.dbo.tlagerbestand
-                WHERE kArtikel = ?
+                SELECT 
+                    fBestand,
+                    nPuffer 
+                FROM eazybusiness.dbo.tArtikel
+                JOIN eazybusiness.dbo.vLagerbestandProLager
+                    ON tArtikel.kArtikel = vLagerbestandProLager.kArtikel
+                WHERE 
+                    tArtikel.kArtikel = ?
+                    AND kWarenlager = 2
             """, article_id)
             
             row = cursor.fetchone()
-            return int(row[0]) if row and row[0] else 0
+            if row:
+                fbestand, npuffer = row[0], row[1]
+                # Verfügbarer Bestand = fBestand - nPuffer, mindestens 0
+                available = max(0, int(fbestand) - int(npuffer))
+                return available
+            
+            return 0
         
         except Exception as e:
             app_logger.error(f"JTL Stock Query Fehler: {e}", exc_info=True)
