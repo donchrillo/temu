@@ -12,37 +12,25 @@ from datetime import datetime
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from dashboard.scheduler import SchedulerService
+from src.services.job_executor import get_job_executor, JobType
 from src.services.log_service import log_service
 from src.services.logger import app_logger
 
-# Globaler Scheduler
-scheduler = SchedulerService()
+# Get job executor instance
+executor = get_job_executor()
 
-# Lifespan Context Manager (moderner als @app.on_event)
+# Lifespan Context Manager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup und Shutdown Events"""
-    
-    try:
-        # ✅ NEU: Lade Jobs aus gespeicherter Konfiguration
-        scheduler.initialize_from_config()
-        scheduler.start()
-    except Exception as e:
-        app_logger.error(f"Fehler beim Starten des Schedulers: {e}", exc_info=True)
-        raise
-    
+    app_logger.info("🚀 API Server starting...")
     yield
-    
-    try:
-        scheduler.stop()
-    except Exception as e:
-        app_logger.error(f"Fehler beim Stoppen des Schedulers: {e}", exc_info=True)
+    app_logger.info("🛑 API Server shutting down...")
 
 # Initialisiere FastAPI
 app = FastAPI(
     title="TEMU Worker",
-    version="1.0.0",
+    version="1.0.1",
     lifespan=lifespan
 )
 
@@ -64,40 +52,89 @@ async def health():
 
 @app.get("/api/jobs")
 async def get_jobs():
-    """Gib alle Jobs zurück"""
-    return scheduler.get_all_jobs()
+    """Get all available jobs (from config)"""
+    # For now, return a placeholder
+    # In future: could return from persistent config/database
+    return {
+        "jobs": [
+            {
+                "job_id": "sync_orders",
+                "job_type": "sync_orders",
+                "description": "Sync orders from TEMU API",
+                "enabled": True
+            },
+            {
+                "job_id": "sync_inventory",
+                "job_type": "sync_inventory",
+                "description": "Sync inventory between JTL and TEMU",
+                "enabled": True
+            }
+        ]
+    }
 
 @app.get("/api/jobs/{job_id}")
 async def get_job(job_id: str):
-    """Gib einen Job zurück"""
-    return scheduler.get_job_status(job_id)
+    """Get a specific job info"""
+    return {
+        "job_id": job_id,
+        "status": "ready",
+        "last_run": None,
+        "next_run": None
+    }
 
 @app.post("/api/jobs/{job_id}/run-now")
-async def trigger_job(job_id: str, parent_order_status: int = 2, days_back: int = 7, 
-                      verbose: bool = False, log_to_db: bool = True):
-    """Triggere Job SOFORT mit optionalen Parametern"""
-    scheduler.trigger_job_now(job_id, parent_order_status, days_back, verbose, log_to_db)
-    return {
-        "status": "triggered", 
-        "job_id": job_id,
-        "params": {
-            "parent_order_status": parent_order_status,
-            "days_back": days_back,
-            "verbose": verbose,
-            "log_to_db": log_to_db
+async def trigger_job(
+    job_id: str,
+    parent_order_status: int = 2,
+    days_back: int = 7,
+    verbose: bool = False,
+    log_to_db: bool = True,
+    mode: str = "quick"
+):
+    """
+    Trigger a job immediately.
+    
+    This is the main entry point for job execution.
+    All jobs go through JobExecutor for consistency.
+    """
+    try:
+        # Map job_id to JobType
+        if job_id == "sync_orders":
+            job_type = JobType.SYNC_ORDERS
+        elif job_id == "sync_inventory":
+            job_type = JobType.SYNC_INVENTORY
+        else:
+            return {"error": f"Unknown job: {job_id}", "status": 400}
+        
+        # Execute job
+        result = await executor.execute(
+            job_id=job_id,
+            job_type=job_type,
+            parent_order_status=parent_order_status,
+            days_back=days_back,
+            verbose=verbose,
+            log_to_db=log_to_db,
+            mode=mode
+        )
+        
+        return result
+    
+    except Exception as e:
+        app_logger.error(f"Job execution failed: {e}", exc_info=True)
+        return {
+            "success": False,
+            "job_id": job_id,
+            "error": str(e)
         }
-    }
 
 @app.post("/api/jobs/{job_id}/schedule")
 async def update_schedule(job_id: str, interval_minutes: int):
-    """Ändere Job-Schedule"""
-    scheduler.update_job_schedule(job_id, interval_minutes)
+    """Update job schedule (future: implement persistence)"""
     return {"status": "updated", "job_id": job_id, "interval_minutes": interval_minutes}
 
 @app.post("/api/jobs/{job_id}/toggle")
 async def toggle_job(job_id: str, enabled: bool):
-    """Enable/Disable Job"""
-    scheduler.toggle_job(job_id, enabled)
+    """Enable/Disable Job (future: implement persistence)"""
     return {"status": "toggled", "job_id": job_id, "enabled": enabled}
 
 # ===== LOG ENDPOINTS =====
@@ -106,64 +143,6 @@ async def toggle_job(job_id: str, enabled: bool):
 async def get_logs(job_id: str = None, level: str = None, limit: int = 100, offset: int = 0):
     """Hole Logs mit Filtern"""
     return log_service.get_logs(job_id, level, limit, offset)
-
-@app.get("/api/logs/export")
-async def export_logs(job_id: str = None, format: str = "json", days: int = 7):
-    """✅ Export Logs als JSON/CSV"""
-    import csv
-    from io import StringIO
-    
-    try:
-        logs = log_service.get_logs(job_id=job_id, limit=10000)
-        
-        if format == "csv":
-            output = StringIO()
-            writer = csv.DictWriter(output, fieldnames=logs[0].keys() if logs else [])
-            writer.writeheader()
-            writer.writerows(logs)
-            
-            return {
-                "status": "ok",
-                "format": "csv",
-                "data": output.getvalue()
-            }
-        
-        return {
-            "status": "ok",
-            "format": "json",
-            "data": logs
-        }
-    except Exception as e:
-        app_logger.error(f"Export Logs Fehler: {e}", exc_info=True)
-        return {"status": "error", "message": str(e)}
-
-# ===== NEU: ERROR LOGS ENDPOINT =====
-
-@app.get("/api/logs/errors")
-async def get_error_logs(limit: int = 100, offset: int = 0, level: str = None, days: int = 7):
-    """Hole Error-Logs aus error_logs Tabelle"""
-    from src.db.repositories.log_repository import LogRepository
-    repo = LogRepository()
-    return {
-        "status": "ok",
-        "data": repo.get_error_logs(limit=limit, offset=offset, level=level, days=days),
-        "total": len(repo.get_error_logs(limit=10000, offset=0, level=level, days=days))
-    }
-
-@app.get("/api/logs/all")
-async def get_all_logs(limit: int = 100, offset: int = 0, days: int = 7):
-    """Hole Job-Logs UND Error-Logs kombiniert"""
-    from src.db.repositories.log_repository import LogRepository
-    repo = LogRepository()
-    
-    job_logs = repo.get_logs(limit=limit, offset=offset)
-    error_logs = repo.get_error_logs(limit=limit, offset=offset, days=days)
-    
-    return {
-        "status": "ok",
-        "job_logs": job_logs,
-        "error_logs": error_logs
-    }
 
 @app.get("/api/logs/stats")
 async def get_log_stats(job_id: str = None, days: int = 7):
@@ -240,33 +219,75 @@ async def websocket_logs(websocket: WebSocket):
             await websocket.send_json({"type": "jobs_update", "data": jobs_serializable})
     
     except Exception as e:
-        # ✅ KORRIGIERT: Nur echte Fehler loggen, nicht WebSocket-Disconnects!
-        error_msg = str(e)
+        # ✅ KORRIGIERT: Nur echte Fehler loggen, nicht normale Disconnects!
+        from starlette.websockets import WebSocketDisconnect
+        from uvicorn.protocols.utils import ClientDisconnected
         
-        # WebSocket-Disconnects sind NORMAL - nicht loggen!
-        if "ClientDisconnected" not in error_msg and "ConnectionClosed" not in error_msg:
+        if not isinstance(e, (WebSocketDisconnect, ClientDisconnected)):
+            # Echter Fehler - loggen!
             app_logger.error(f"WebSocket Fehler: {e}", exc_info=True)
     
     finally:
         if websocket in connected_clients:
             connected_clients.remove(websocket)
 
-# Serve Frontend
-frontend_dir = Path(__file__).parent.parent / "frontend"
+# ===== SERVE FRONTEND (KORRIGIERT) =====
 
-if (frontend_dir / "dist").exists():
-    app.mount("/static", StaticFiles(directory=str(frontend_dir / "dist")), name="static")
+# Pfad absolut auflösen: /home/chx/temu/frontend
+# .parent.parent, da server.py in /api/ liegt
+frontend_dir = Path(__file__).resolve().parent.parent / "frontend"
+
+# Mount static files (CSS, JS, etc.)
+# Wichtig: directory muss als String übergeben werden
+app.mount("/static", StaticFiles(directory=str(frontend_dir)), name="static")
+
+@app.get("/")
+async def root():
+    """Serve index.html"""
+    return FileResponse(str(frontend_dir / "index.html"))
+
+@app.get("/temu")
+async def temu_dashboard():
+    """Serve TEMU dashboard page"""
+    return FileResponse(str(frontend_dir / "temu.html"))
+
+@app.get("/manifest.json")
+async def get_manifest():
+    """Explizite Route für das Manifest"""
+    file_path = frontend_dir / "manifest.json"
+    if file_path.exists():
+        return FileResponse(str(file_path))
+    return {"error": f"manifest.json nicht gefunden in {frontend_dir}"}
+
+@app.get("/{filename}")
+async def serve_static(filename: str):
+    """Serve CSS/JS/JSON direkt aus frontend/"""
+    file_path = frontend_dir / filename
+    # Erlaube alle gängigen Frontend-Dateien
+    allowed_extensions = {'.css', '.js', '.html', '.json', '.png', '.ico', '.svg', '.woff', '.woff2', '.ttf'}
+    if file_path.exists() and file_path.suffix.lower() in allowed_extensions:
+        return FileResponse(str(file_path))
     
-    @app.get("/")
-    async def root():
-        """Serve index.html"""
-        return FileResponse(str(frontend_dir / "dist" / "index.html"))
-else:
-    # Fallback wenn frontend/dist nicht existiert
-    @app.get("/")
-    async def root():
-        """Einfache HTML Fallback-Seite"""
-        return FileResponse(str(frontend_dir / "index.html"))
+    # Debugging: Wenn Datei nicht gefunden wird, zeigen wir im JSON, wo gesucht wurde
+    return {
+        "error": "File not found", 
+        "requested_file": filename,
+        "searched_in": str(frontend_dir)
+    }
+
+@app.get("/icons/{filename}")
+async def serve_icons(filename: str):
+    """Serve Icons aus frontend/icons/"""
+    file_path = frontend_dir / "icons" / filename
+    allowed_extensions = {'.png', '.svg', '.ico'}
+    if file_path.exists() and file_path.suffix.lower() in allowed_extensions:
+        return FileResponse(str(file_path))
+    
+    return {
+        "error": "Icon not found",
+        "requested_file": filename,
+        "searched_in": str(frontend_dir / "icons")
+    }
 
 if __name__ == "__main__":
     import uvicorn

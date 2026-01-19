@@ -2,11 +2,11 @@ module.exports = {
   apps: [
     {
       name: "temu-api",
-      script: ".venv/bin/uvicorn",
-      args: "api.server:app --host 0.0.0.0 --port 8000",
-      interpreter: "/home/chx/temu/.venv/bin/python3",
+      script: "/home/chx/temu/.venv/bin/python3",
+      args: "-m uvicorn api.server:app --host 0.0.0.0 --port 8000",
+      cwd: "/home/chx/temu",
       env: {
-        NODE_ENV: "production"
+        PYTHONPATH: "/home/chx/temu"
       },
       autorestart: true,
       watch: false,
