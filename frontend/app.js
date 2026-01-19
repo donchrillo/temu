@@ -2,10 +2,16 @@
 const HOST = window.location.hostname === 'localhost' 
     ? 'localhost' 
     : window.location.hostname;
-const PORT = window.location.port || '8000';
 
-const API_URL = `http://${HOST}:${PORT}/api`;
-const WS_URL = `ws://${HOST}:${PORT}/ws/logs`;
+// Automatisch das richtige Protokoll verwenden (http/https und ws/wss)
+const PROTOCOL = window.location.protocol === 'https:' ? 'https:' : 'http:';
+const WS_PROTOCOL = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+
+// Port nur verwenden wenn nicht Standard-Port (80/443)
+const PORT = window.location.port ? `:${window.location.port}` : '';
+
+const API_URL = `${PROTOCOL}//${HOST}${PORT}/api`;
+const WS_URL = `${WS_PROTOCOL}//${HOST}${PORT}/ws/logs`;
 
 console.log("🔗 API URL:", API_URL);
 console.log("🔗 WS URL:", WS_URL);

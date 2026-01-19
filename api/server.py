@@ -195,10 +195,14 @@ async def websocket_logs(websocket: WebSocket):
         if websocket in connected_clients:
             connected_clients.remove(websocket)
 
-# Serve Frontend
-frontend_dir = Path(__file__).parent.parent / "frontend"
+# ===== SERVE FRONTEND (KORRIGIERT) =====
+
+# Pfad absolut auflösen: /home/chx/temu/frontend
+# .parent.parent, da server.py in /api/ liegt
+frontend_dir = Path(__file__).resolve().parent.parent / "frontend"
 
 # Mount static files (CSS, JS, etc.)
+# Wichtig: directory muss als String übergeben werden
 app.mount("/static", StaticFiles(directory=str(frontend_dir)), name="static")
 
 @app.get("/")
@@ -211,13 +215,43 @@ async def temu_dashboard():
     """Serve TEMU dashboard page"""
     return FileResponse(str(frontend_dir / "temu.html"))
 
+@app.get("/manifest.json")
+async def get_manifest():
+    """Explizite Route für das Manifest"""
+    file_path = frontend_dir / "manifest.json"
+    if file_path.exists():
+        return FileResponse(str(file_path))
+    return {"error": f"manifest.json nicht gefunden in {frontend_dir}"}
+
 @app.get("/{filename}")
 async def serve_static(filename: str):
-    """Serve CSS/JS direkt aus frontend/"""
+    """Serve CSS/JS/JSON direkt aus frontend/"""
     file_path = frontend_dir / filename
-    if file_path.exists() and file_path.suffix in ['.css', '.js', '.html']:
+    # Erlaube alle gängigen Frontend-Dateien
+    allowed_extensions = {'.css', '.js', '.html', '.json', '.png', '.ico', '.svg', '.woff', '.woff2', '.ttf'}
+    if file_path.exists() and file_path.suffix.lower() in allowed_extensions:
         return FileResponse(str(file_path))
-    return {"error": "File not found"}
+    
+    # Debugging: Wenn Datei nicht gefunden wird, zeigen wir im JSON, wo gesucht wurde
+    return {
+        "error": "File not found", 
+        "requested_file": filename,
+        "searched_in": str(frontend_dir)
+    }
+
+@app.get("/icons/{filename}")
+async def serve_icons(filename: str):
+    """Serve Icons aus frontend/icons/"""
+    file_path = frontend_dir / "icons" / filename
+    allowed_extensions = {'.png', '.svg', '.ico'}
+    if file_path.exists() and file_path.suffix.lower() in allowed_extensions:
+        return FileResponse(str(file_path))
+    
+    return {
+        "error": "Icon not found",
+        "requested_file": filename,
+        "searched_in": str(frontend_dir / "icons")
+    }
 
 if __name__ == "__main__":
     import uvicorn

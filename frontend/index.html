@@ -15,9 +15,26 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js').catch(console.error);
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(reg => {
+                        console.log('✓ Service Worker registriert:', reg);
+                        // Prüfe installability
+                        if (window.BeforeInstallPromptEvent) {
+                            console.log('✓ PWA sollte installierbar sein');
+                        }
+                    })
+                    .catch(err => {
+                        console.error('✗ Service Worker Fehler:', err);
+                    });
             });
         }
+        
+        // Debug PWA Installierbarkeit
+        window.addEventListener('beforeinstallprompt', (e) => {
+            console.log('✓ beforeinstallprompt Event gefeuert - PWA ist installierbar!');
+            e.preventDefault();
+            window.deferredPrompt = e;
+        });
     </script>
     <style>
         .landing {

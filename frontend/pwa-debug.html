@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>PWA Debug</title>
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <style>
+        body {
+            font-family: monospace;
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 20px;
+            max-width: 100%;
+        }
+        .check {
+            margin: 10px 0;
+            padding: 10px;
+            border-left: 4px solid;
+        }
+        .pass {
+            border-color: #10b981;
+            background: rgba(16, 185, 129, 0.1);
+        }
+        .fail {
+            border-color: #ef4444;
+            background: rgba(239, 68, 68, 0.1);
+        }
+        .warn {
+            border-color: #f59e0b;
+            background: rgba(245, 158, 11, 0.1);
+        }
+        pre {
+            background: #1e293b;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 PWA Installation Debug</h1>
+    <div id="checks"></div>
+
+    <script>
+        const checks = document.getElementById('checks');
+
+        async function addCheck(title, condition, details = '') {
+            const div = document.createElement('div');
+            div.className = `check ${condition ? 'pass' : 'fail'}`;
+            div.innerHTML = `<strong>${condition ? '✓' : '✗'} ${title}</strong>${details ? `<pre>${details}</pre>` : ''}`;
+            checks.appendChild(div);
+        }
+
+        async function runChecks() {
+            // 1. HTTPS Check
+            addCheck('HTTPS/TLS', window.location.protocol === 'https:', `Protocol: ${window.location.protocol}`);
+
+            // 2. Manifest Check
+            try {
+                const manifestLink = document.querySelector('link[rel="manifest"]');
+                const manifestUrl = manifestLink?.href || '/manifest.json';
+                const response = await fetch(manifestUrl);
+                const manifest = await response.json();
+                addCheck('Manifest erreichbar', response.ok, `Status: ${response.status}\nContent-Type: ${response.headers.get('content-type')}`);
+                
+                // Manifest Fields
+                const requiredFields = ['name', 'short_name', 'start_url', 'display', 'icons'];
+                let allOk = true;
+                let details = '';
+                for (const field of requiredFields) {
+                    const ok = field in manifest;
+                    details += `${ok ? '✓' : '✗'} ${field}\n`;
+                    if (!ok) allOk = false;
+                }
+                addCheck('Manifest erforderliche Felder', allOk, details);
+
+                // Icons Check
+                let iconsOk = true;
+                let iconDetails = '';
+                for (const icon of (manifest.icons || [])) {
+                    const iconResponse = await fetch(icon.src);
+                    const ok = iconResponse.ok;
+                    iconDetails += `${ok ? '✓' : '✗'} ${icon.src} (${icon.sizes})\n`;
+                    if (!ok) iconsOk = false;
+                }
+                addCheck('Icons erreichbar', iconsOk, iconDetails);
+
+            } catch (e) {
+                addCheck('Manifest Check', false, `Error: ${e.message}`);
+            }
+
+            // 3. Service Worker Check
+            if ('serviceWorker' in navigator) {
+                addCheck('Service Worker Support', true, 'Navigator.serviceWorker verfügbar');
+                
+                try {
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    addCheck('Service Worker registriert', registrations.length > 0, `Registrierungen: ${registrations.length}`);
+                    
+                    for (const reg of registrations) {
+                        let details = `Scope: ${reg.scope}\n`;
+                        details += `Active: ${reg.active ? '✓' : '✗'}\n`;
+                        details += `Installing: ${reg.installing ? '✓' : '✗'}\n`;
+                        details += `Waiting: ${reg.waiting ? '✓' : '✗'}`;
+                        addCheck(`Service Worker Detail`, true, details);
+                    }
+                } catch (e) {
+                    addCheck('Service Worker Registrierungen', false, `Error: ${e.message}`);
+                }
+            } else {
+                addCheck('Service Worker Support', false, 'Nicht verfügbar');
+            }
+
+            // 4. beforeinstallprompt Event
+            let promptFired = false;
+            window.addEventListener('beforeinstallprompt', (e) => {
+                promptFired = true;
+                e.preventDefault();
+                window.deferredPrompt = e;
+                addCheck('beforeinstallprompt Event', true, 'Event wurde gefeuert - PWA ist installierbar!');
+            });
+
+            // 5. Display Mode Check
+            const displayMode = window.matchMedia('(display-mode: standalone)').matches ? 'standalone' : 'browser';
+            addCheck('Display Mode', displayMode === 'standalone', `Current: ${displayMode}`);
+
+            // 6. Meta Tags Check
+            const metaTags = {
+                'viewport': document.querySelector('meta[name="viewport"]'),
+                'theme-color': document.querySelector('meta[name="theme-color"]'),
+                'mobile-web-app-capable': document.querySelector('meta[name="mobile-web-app-capable"]'),
+                'apple-mobile-web-app-capable': document.querySelector('meta[name="apple-mobile-web-app-capable"]')
+            };
+            let metaOk = true;
+            let metaDetails = '';
+            for (const [name, element] of Object.entries(metaTags)) {
+                const ok = !!element;
+                metaDetails += `${ok ? '✓' : '✗'} <meta name="${name}">\n`;
+                if (!ok) metaOk = false;
+            }
+            addCheck('Meta Tags', metaOk, metaDetails);
+
+            // 7. Warte kurz und checke wieder
+            setTimeout(() => {
+                if (!promptFired) {
+                    const check = document.querySelector('.fail');
+                    if (check) {
+                        addCheck('beforeinstallprompt nach 3s', false, 'Event wurde nicht gefeuert - Debug erforderlich!');
+                    }
+                }
+            }, 3000);
+        }
+
+        runChecks().catch(console.error);
+    </script>
+</body>
+</html>
