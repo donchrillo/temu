@@ -5,13 +5,13 @@ from xml.dom import minidom
 from datetime import datetime
 from typing import Dict, List, Optional
 from pathlib import Path
-from src.db.repositories.temu.order_repository import OrderRepository
-from src.db.repositories.temu.order_item_repository import OrderItemRepository
-from src.db.repositories.jtl_common.jtl_repository import JtlRepository
+from src.db.repositories.order_repository import OrderRepository
+from src.db.repositories.order_item_repository import OrderItemRepository
+from src.db.repositories.jtl_repository import JtlRepository
 from src.services.log_service import log_service
 from config.settings import (
     JTL_WAEHRUNG, JTL_SPRACHE, JTL_K_BENUTZER, JTL_K_FIRMA,
-    XML_OUTPUT_PATH
+    XML_OUTPUT_PATH, DATA_DIR
 )
 
 class XmlExportService:
@@ -44,23 +44,24 @@ class XmlExportService:
         """
         
         try:
-
-            log_service.log(job_id, "xml_export", "INFO", 
+            if job_id:
+                log_service.log(job_id, "xml_export", "INFO", 
                               "→ Generiere XML aus Orders")
             
             # ===== Hole Orders mit status='importiert' =====
             orders = self._get_orders_to_export(job_id)
             
             if not orders:
-
-                log_service.log(job_id, "xml_export", "INFO", 
+                if job_id:
+                    log_service.log(job_id, "xml_export", "INFO", 
                                   "✓ Keine neuen Orders zum Exportieren")
                 return {'exported': 0, 'jtl_imported': 0, 'success': False}
             
-
-            else:
+            if job_id:
                 log_service.log(job_id, "xml_export", "INFO", 
                               f"  {len(orders)} Orders zum Exportieren gefunden")
+            else:
+                print(f"✓ {len(orders)} Orders gefunden\n")
             
             # ===== Generate XML Root =====
             root = ET.Element('tBestellungen')
@@ -88,34 +89,36 @@ class XmlExportService:
                         
                         if status_success or not import_to_jtl:
                             exported_count += 1
-
-                            log_service.log(job_id, "xml_export", "INFO", 
+                            if job_id:
+                                log_service.log(job_id, "xml_export", "INFO", 
                                               f"  ✓ {order.bestell_id}: XML generiert")
-
+                            else:
+                                print(f"  ✓ {order.bestell_id}: XML generiert + Status gesetzt")
                         else:
-
-                            log_service.log(job_id, "xml_export", "WARNING", 
+                            if job_id:
+                                log_service.log(job_id, "xml_export", "WARNING", 
                                               f"  ⚠ {order.bestell_id}: Status Update fehlgeschlagen")
                     else:
-
-                        log_service.log(job_id, "xml_export", "WARNING", 
+                        if job_id:
+                            log_service.log(job_id, "xml_export", "WARNING", 
                                           f"  ⚠ {order.bestell_id}: XML Generation fehlgeschlagen")
                 
                 except Exception as e:
                     import traceback
                     error_trace = traceback.format_exc()
-
-                    log_service.log(job_id, "xml_export", "ERROR", 
+                    if job_id:
+                        log_service.log(job_id, "xml_export", "ERROR", 
                                       f"  ✗ Fehler bei Order {order.bestell_id}: {str(e)}")
-                    log_service.log(job_id, "xml_export", "ERROR", error_trace)
-
+                        log_service.log(job_id, "xml_export", "ERROR", error_trace)
+                    else:
+                        print(f"  ✗ Fehler bei Order {order.bestell_id}: {e}")
             
             # ===== Step 3: Speichere komplette XML auf Festplatte =====
             if save_to_disk:
                 self._save_xml_to_disk(root, job_id)
             
-
-            log_service.log(job_id, "xml_export", "INFO", 
+            if job_id:
+                log_service.log(job_id, "xml_export", "INFO", 
                               f"✓ XML Export erfolgreich: {exported_count} exportiert, {jtl_import_count} JTL importiert")
             
             return {
@@ -128,11 +131,12 @@ class XmlExportService:
         except Exception as e:
             import traceback
             error_trace = traceback.format_exc()
-
-            log_service.log(job_id, "xml_export", "ERROR", 
+            if job_id:
+                log_service.log(job_id, "xml_export", "ERROR", 
                               f"✗ XML Export Fehler: {str(e)}")
-            log_service.log(job_id, "xml_export", "ERROR", error_trace)
-
+                log_service.log(job_id, "xml_export", "ERROR", error_trace)
+            else:
+                print(f"✗ XML Export Fehler: {e}")
             
             return {'exported': 0, 'jtl_imported': 0, 'success': False}
     
@@ -148,9 +152,11 @@ class XmlExportService:
             return orders_to_export
         
         except Exception as e:
-
-            log_service.log(job_id, "xml_export", "ERROR", 
+            if job_id:
+                log_service.log(job_id, "xml_export", "ERROR", 
                               f"✗ Fehler beim Laden der Orders: {str(e)}")
+            else:
+                print(f"✗ Fehler beim Laden der Orders: {e}")
             return []
     
     def _generate_order_xml(self, order, items, parent_elem) -> Optional[ET.Element]:
@@ -330,10 +336,11 @@ class XmlExportService:
             return self.jtl_repo.insert_xml_import(xml_string)
         
         except Exception as e:
-
-            log_service.log(job_id, "xml_export", "WARNING", 
+            if job_id:
+                log_service.log(job_id, "xml_export", "WARNING", 
                               f"  ⚠ JTL Import Fehler für {order.bestell_id}: {str(e)}")
-
+            else:
+                print(f"  ⚠ JTL Import Fehler für {order.bestell_id}: {e}")
             return False
     
     def _update_order_status(self, order_id: int, job_id: Optional[str] = None) -> bool:
@@ -351,10 +358,11 @@ class XmlExportService:
             success = self.order_repo.update_xml_export_status(order_id)
             return success
         except Exception as e:
-
-            log_service.log(job_id, "xml_export", "ERROR", 
+            if job_id:
+                log_service.log(job_id, "xml_export", "ERROR", 
                               f"✗ Status Update Fehler: {str(e)}")
-
+            else:
+                print(f"✗ Status Update Fehler: {e}")
             return False
     
     def _save_xml_to_disk(self, root: ET.Element, job_id: Optional[str] = None):
@@ -365,16 +373,18 @@ class XmlExportService:
             with open(str(XML_OUTPUT_PATH), 'w', encoding='ISO-8859-1') as f:
                 f.write(xml_string)
             
-
-            log_service.log(job_id, "xml_export", "INFO", 
+            if job_id:
+                log_service.log(job_id, "xml_export", "INFO", 
                               f"  ✓ XML gespeichert: {XML_OUTPUT_PATH}")
-
+            else:
+                print(f"✓ XML gespeichert: {XML_OUTPUT_PATH}")
         
         except Exception as e:
-
-            log_service.log(job_id, "xml_export", "ERROR", 
+            if job_id:
+                log_service.log(job_id, "xml_export", "ERROR", 
                               f"✗ XML Speicher-Fehler: {str(e)}")
-
+            else:
+                print(f"✗ XML Speicher-Fehler: {e}")
     
     def _prettify_xml(self, elem: ET.Element) -> str:
         """Formatiere XML schön"""

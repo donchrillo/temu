@@ -96,7 +96,8 @@ class TemuOrdersApi:
         """
         
         if not tracking_data_list:
-            log_service.log(job_id, "orders_api", "INFO", "Keine Tracking-Daten zum Upload")
+            if job_id:
+                log_service.log(job_id, "orders_api", "INFO", "Keine Tracking-Daten zum Upload")
             return True, None, None
         
         # Gruppiere nach Carrier ID
@@ -138,26 +139,30 @@ class TemuOrdersApi:
                 
                 if response and response.get('success'):
                     success_count += len(items)
-
-                    for item in items:
-                        log_service.log(job_id, "orders_api", "INFO", 
+                    if job_id:
+                        for item in items:
+                            log_service.log(job_id, "orders_api", "INFO", 
                                           f"✓ {item['order_sn']}: {item['tracking_number']}")
                 else:
                     error_count += len(items)
                     last_error_code = response.get('errorCode', '?') if response else 'HTTP_ERROR'
                     last_error_msg = response.get('errorMsg', 'Unbekannter Fehler') if response else 'HTTP Error'
-
-                    log_service.log(job_id, "orders_api", "ERROR", 
+                    if job_id:
+                        log_service.log(job_id, "orders_api", "ERROR", 
                                       f"API Fehler ({last_error_code}): {last_error_msg}")
+                    else:
+                        print(f"✗ API Fehler ({last_error_code}): {last_error_msg}")
                     
             except Exception as e:
                 error_count += len(items)
                 last_error_msg = str(e)
-                log_service.log(job_id, "orders_api", "ERROR", f"Upload Fehler: {e}")
-
+                if job_id:
+                    log_service.log(job_id, "orders_api", "ERROR", f"Upload Fehler: {e}")
+                else:
+                    print(f"✗ Fehler beim Upload: {e}")
         
-
-        log_service.log(job_id, "orders_api", "INFO", 
+        if job_id:
+            log_service.log(job_id, "orders_api", "INFO", 
                           f"✓ Upload: {success_count} erfolgreich, {error_count} Fehler")
         
         success = error_count == 0

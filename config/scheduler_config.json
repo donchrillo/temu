@@ -1,0 +1,20 @@
+[
+  {
+    "job_type": "sync_orders",
+    "interval_minutes": 15,
+    "enabled": true,
+    "description": "Synchronisiere neue Aufträge von TEMU API"
+  },
+  {
+    "job_type": "sync_inventory",
+    "interval_minutes": 5,
+    "enabled": false,
+    "description": "Aktualisiere Bestandszahlen"
+  },
+  {
+    "job_type": "fetch_invoices",
+    "interval_minutes": 60,
+    "enabled": false,
+    "description": "Hole Rechnungen von TEMU"
+  }
+]

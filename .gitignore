@@ -1,22 +1,19 @@
 # Environment
-config/.env
-*.env
-.env.local
+.env
+.venv
+venv/
 __pycache__/
 *.pyc
 *.pyo
-*.pyd
-.Python
-
-# Daten
-data/
-data/api_responses/
-data/inventory_raw/
-logs/
 
 # IDE
 .vscode/
 .idea/
+
+# Daten
+data/
+api_responses/
+logs/
 
 # OS
 .DS_Store

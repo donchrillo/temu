@@ -72,11 +72,11 @@ class TemuApiClient:
         }
         
         try:
-
-            log_service.log(job_id, "temu_api", "INFO", f"→ API Call: {api_type}")
+            if job_id:
+                log_service.log(job_id, "temu_api", "INFO", f"→ API Call: {api_type}")
             
             # ===== DEBUG: Nur wenn --verbose! =====
-            if self.verbose :
+            if self.verbose and job_id:
                 log_service.log(job_id, "temu_api", "DEBUG", 
                               f"Payload: {json.dumps(payload, indent=2, default=str)}")
             
@@ -91,7 +91,7 @@ class TemuApiClient:
             response_json = response.json()
             
             # ===== DEBUG: Nur wenn --verbose! =====
-            if self.verbose :
+            if self.verbose and job_id:
                 log_service.log(job_id, "temu_api", "DEBUG", 
                               f"Response: {json.dumps(response_json, indent=2, default=str)}")
             
@@ -99,24 +99,33 @@ class TemuApiClient:
             if not response_json.get("success", False):
                 error_code = response_json.get("errorCode", "?")
                 error_msg = response_json.get("errorMsg", "Unbekannter Fehler")
-                log_service.log(job_id, "temu_api", "ERROR", 
-                              f"API Fehler ({error_code}): {error_msg}")
+                if job_id:
+                    log_service.log(job_id, "temu_api", "ERROR", 
+                                  f"API Fehler ({error_code}): {error_msg}")
+                else:
+                    print(f"✗ API Fehler ({error_code}): {error_msg}")
                 return None
             
-            log_service.log(job_id, "temu_api", "INFO", "✓ Response erfolgreich")  
+            if job_id:
+                log_service.log(job_id, "temu_api", "INFO", "✓ Response erfolgreich")
             
             return response_json
         
         except requests.exceptions.RequestException as e:
             error_msg = f"Request Fehler: {str(e)}"
-            
-            log_service.log(job_id, "temu_api", "ERROR", error_msg)
-            if self.verbose:
-                import traceback
-                log_service.log(job_id, "temu_api", "ERROR", traceback.format_exc())
+            if job_id:
+                log_service.log(job_id, "temu_api", "ERROR", error_msg)
+                if self.verbose:
+                    import traceback
+                    log_service.log(job_id, "temu_api", "ERROR", traceback.format_exc())
+            else:
+                print(f"✗ {error_msg}")
             return None
         
         except json.JSONDecodeError as e:
             error_msg = f"JSON Decode Fehler: {str(e)}"
-            log_service.log(job_id, "temu_api", "ERROR", error_msg)
+            if job_id:
+                log_service.log(job_id, "temu_api", "ERROR", error_msg)
+            else:
+                print(f"✗ {error_msg}")
             return None
