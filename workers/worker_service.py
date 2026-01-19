@@ -106,9 +106,10 @@ class SchedulerService:
 
             # Führe entsprechenden Job aus (Workflows loggen selbst strukturiert)
             if job_type == JobType.SYNC_ORDERS:
-                from workflows.temu_orders import run_temu_orders
+                from src.modules.temu.order_workflow_service import OrderWorkflowService
+                service = OrderWorkflowService()
                 result = await self._async_wrapper(
-                    run_temu_orders,
+                    service.run_complete_workflow,
                     parent_order_status=parent_order_status,
                     days_back=days_back,
                     verbose=verbose
@@ -117,12 +118,13 @@ class SchedulerService:
                 log_service.log(job_id, job_type.value, "INFO", f"Job Ergebnis: {result}")
 
             elif job_type == JobType.SYNC_INVENTORY:
-                from workflows.temu_inventory import step_1_api_to_json, step_2_json_to_db, step_3_jtl_stock_to_inventory, step_4_sync_to_temu
-                if mode == "full":
-                    await self._async_wrapper(step_1_api_to_json, job_id, verbose)
-                    await self._async_wrapper(step_2_json_to_db, job_id)
-                await self._async_wrapper(step_3_jtl_stock_to_inventory, job_id)
-                await self._async_wrapper(step_4_sync_to_temu, job_id)
+                from src.modules.temu.inventory_workflow_service import InventoryWorkflowService
+                service = InventoryWorkflowService()
+                result = await self._async_wrapper(
+                    service.run_complete_workflow,
+                    mode=mode,
+                    verbose=verbose
+                )
                 log_service.log(job_id, job_type.value, "INFO", f"Inventory Sync abgeschlossen (mode={mode})")
 
             elif job_type == JobType.FETCH_INVOICES:
