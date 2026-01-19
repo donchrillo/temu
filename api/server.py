@@ -12,32 +12,20 @@ from datetime import datetime
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from workers.worker_service import SchedulerService
+from src.services.job_executor import get_job_executor, JobType
 from src.services.log_service import log_service
 from src.services.logger import app_logger
 
-# Globaler Scheduler
-scheduler = SchedulerService()
+# Get job executor instance
+executor = get_job_executor()
 
-# Lifespan Context Manager (moderner als @app.on_event)
+# Lifespan Context Manager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup und Shutdown Events"""
-    
-    try:
-        # ✅ NEU: Lade Jobs aus gespeicherter Konfiguration
-        scheduler.initialize_from_config()
-        scheduler.start()
-    except Exception as e:
-        app_logger.error(f"Fehler beim Starten des Schedulers: {e}", exc_info=True)
-        raise
-    
+    app_logger.info("🚀 API Server starting...")
     yield
-    
-    try:
-        scheduler.stop()
-    except Exception as e:
-        app_logger.error(f"Fehler beim Stoppen des Schedulers: {e}", exc_info=True)
+    app_logger.info("🛑 API Server shutting down...")
 
 # Initialisiere FastAPI
 app = FastAPI(
@@ -64,41 +52,89 @@ async def health():
 
 @app.get("/api/jobs")
 async def get_jobs():
-    """Gib alle Jobs zurück"""
-    return scheduler.get_all_jobs()
+    """Get all available jobs (from config)"""
+    # For now, return a placeholder
+    # In future: could return from persistent config/database
+    return {
+        "jobs": [
+            {
+                "job_id": "sync_orders",
+                "job_type": "sync_orders",
+                "description": "Sync orders from TEMU API",
+                "enabled": True
+            },
+            {
+                "job_id": "sync_inventory",
+                "job_type": "sync_inventory",
+                "description": "Sync inventory between JTL and TEMU",
+                "enabled": True
+            }
+        ]
+    }
 
 @app.get("/api/jobs/{job_id}")
 async def get_job(job_id: str):
-    """Gib einen Job zurück"""
-    return scheduler.get_job_status(job_id)
+    """Get a specific job info"""
+    return {
+        "job_id": job_id,
+        "status": "ready",
+        "last_run": None,
+        "next_run": None
+    }
 
 @app.post("/api/jobs/{job_id}/run-now")
-async def trigger_job(job_id: str, parent_order_status: int = 2, days_back: int = 7, 
-                      verbose: bool = False, log_to_db: bool = True, mode: str = "quick"):
-    """Triggere Job SOFORT mit optionalen Parametern"""
-    scheduler.trigger_job_now(job_id, parent_order_status, days_back, verbose, log_to_db, mode)
-    return {
-        "status": "triggered", 
-        "job_id": job_id,
-        "params": {
-            "parent_order_status": parent_order_status,
-            "days_back": days_back,
-            "verbose": verbose,
-            "log_to_db": log_to_db,
-            "mode": mode
+async def trigger_job(
+    job_id: str,
+    parent_order_status: int = 2,
+    days_back: int = 7,
+    verbose: bool = False,
+    log_to_db: bool = True,
+    mode: str = "quick"
+):
+    """
+    Trigger a job immediately.
+    
+    This is the main entry point for job execution.
+    All jobs go through JobExecutor for consistency.
+    """
+    try:
+        # Map job_id to JobType
+        if job_id == "sync_orders":
+            job_type = JobType.SYNC_ORDERS
+        elif job_id == "sync_inventory":
+            job_type = JobType.SYNC_INVENTORY
+        else:
+            return {"error": f"Unknown job: {job_id}", "status": 400}
+        
+        # Execute job
+        result = await executor.execute(
+            job_id=job_id,
+            job_type=job_type,
+            parent_order_status=parent_order_status,
+            days_back=days_back,
+            verbose=verbose,
+            log_to_db=log_to_db,
+            mode=mode
+        )
+        
+        return result
+    
+    except Exception as e:
+        app_logger.error(f"Job execution failed: {e}", exc_info=True)
+        return {
+            "success": False,
+            "job_id": job_id,
+            "error": str(e)
         }
-    }
 
 @app.post("/api/jobs/{job_id}/schedule")
 async def update_schedule(job_id: str, interval_minutes: int):
-    """Ändere Job-Schedule"""
-    scheduler.update_job_schedule(job_id, interval_minutes)
+    """Update job schedule (future: implement persistence)"""
     return {"status": "updated", "job_id": job_id, "interval_minutes": interval_minutes}
 
 @app.post("/api/jobs/{job_id}/toggle")
 async def toggle_job(job_id: str, enabled: bool):
-    """Enable/Disable Job"""
-    scheduler.toggle_job(job_id, enabled)
+    """Enable/Disable Job (future: implement persistence)"""
     return {"status": "toggled", "job_id": job_id, "enabled": enabled}
 
 # ===== LOG ENDPOINTS =====
