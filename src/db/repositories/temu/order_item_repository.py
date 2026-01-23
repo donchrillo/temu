@@ -6,6 +6,7 @@ from sqlalchemy.engine import Connection
 from src.services.logger import app_logger
 from src.db.connection import get_engine
 from config.settings import TABLE_ORDER_ITEMS, DB_TOCI
+from src.db.repositories.base import BaseRepository
 
 class OrderItem:
     """Domain Model für Order Item"""
@@ -30,28 +31,8 @@ class OrderItem:
         self.gesamtpreis_brutto = gesamtpreis_brutto
         self.mwst_satz = mwst_satz
 
-class OrderItemRepository:
+class OrderItemRepository(BaseRepository):
     """Data Access Layer - ONLY DB Operations"""
-    
-    def __init__(self, connection: Optional[Connection] = None):
-        """Optionale Injektierte Connection (für Pooling)"""
-        self._conn = connection
-    
-    def _execute_sql(self, sql: str, params: dict = None):
-        """
-        Helper: Führt SQL aus und committet NUR, wenn wir keine externe Connection haben.
-        """
-        if params is None:
-            params = {}
-            
-        if self._conn:
-            return self._conn.execute(text(sql), params)
-        else:
-            engine = get_engine(DB_TOCI)
-            with engine.connect() as conn:
-                result = conn.execute(text(sql), params)
-                conn.commit()
-                return result
 
     def save(self, item: OrderItem) -> int:
         """INSERT oder UPDATE OrderItem"""
@@ -71,7 +52,7 @@ class OrderItemRepository:
             }
 
             if item.id:
-                # UPDATE
+                # UPDATE - nutze _execute_stmt
                 sql = f"""
                     UPDATE {TABLE_ORDER_ITEMS} SET
                         bestellartikel_id = :bestellartikel_id,
@@ -88,11 +69,10 @@ class OrderItemRepository:
                     WHERE id = :id
                 """
                 params["id"] = item.id
-                self._execute_sql(sql, params)
+                self._execute_stmt(sql, params)
                 return item.id
             else:
-                # INSERT
-                # Hier müssen wir params erweitern
+                # INSERT - Speziallogik für @@IDENTITY + Transaktions-Commit
                 params.update({
                     "order_id": item.order_id,
                     "bestell_id": item.bestell_id
@@ -113,17 +93,16 @@ class OrderItemRepository:
                     SELECT @@IDENTITY AS new_id;
                 """
                 
-                # Sonderlogik für INSERT + Return Value (wie im OrderRepo)
+                # Manuelle Logik: Fetch BEVOR Connection zugeht
                 if self._conn:
                     result = self._conn.execute(text(sql), params)
                     row = result.first()
                     return int(row[0]) if row else 0
                 else:
-                    engine = get_engine(DB_TOCI)
-                    with engine.connect() as conn:
+                    with get_engine(DB_TOCI).connect() as conn:
                         result = conn.execute(text(sql), params)
                         row = result.first()
-                        conn.commit() # Erst committen, wenn wir das Ergebnis haben
+                        conn.commit()
                         return int(row[0]) if row else 0
         
         except Exception as e:
@@ -141,16 +120,8 @@ class OrderItemRepository:
                 FROM {TABLE_ORDER_ITEMS}
                 WHERE order_id = :order_id
             """
-            
-            if self._conn:
-                result = self._conn.execute(text(sql), {"order_id": order_id})
-                return [self._map_to_item(row) for row in result.all()]
-            else:
-                engine = get_engine(DB_TOCI)
-                with engine.connect() as conn:
-                    result = conn.execute(text(sql), {"order_id": order_id})
-                    return [self._map_to_item(row) for row in result.all()]
-
+            rows = self._fetch_all(sql, {"order_id": order_id})
+            return [self._map_to_item(row) for row in rows]
         except Exception as e:
             app_logger.error(f"OrderItemRepository find_by_order_id: {e}", exc_info=True)
             return []
@@ -166,30 +137,35 @@ class OrderItemRepository:
                 FROM {TABLE_ORDER_ITEMS}
                 WHERE bestellartikel_id = :bestellartikel_id
             """
-            
-            if self._conn:
-                result = self._conn.execute(text(sql), {"bestellartikel_id": bestellartikel_id})
-                row = result.first()
-            else:
-                engine = get_engine(DB_TOCI)
-                with engine.connect() as conn:
-                    result = conn.execute(text(sql), {"bestellartikel_id": bestellartikel_id})
-                    row = result.first()
-
+            row = self._fetch_one(sql, {"bestellartikel_id": bestellartikel_id})
             return self._map_to_item(row) if row else None
         except Exception as e:
             app_logger.error(f"OrderItemRepository find_by_bestellartikel_id: {e}", exc_info=True)
             return None
     
-    def _map_to_item(self, row) -> OrderItem:
-        """Konvertiere DB Row zu OrderItem Object"""
+    def _map_to_item(self, row) -> Optional[OrderItem]:
+        """Konvertiere DB Row zu OrderItem Object (Key-Based mit row._mapping)"""
         if not row:
             return None
-        return OrderItem(
-            id=row[0], order_id=row[1], bestell_id=row[2],
-            bestellartikel_id=row[3], produktname=row[4], sku=row[5],
-            sku_id=row[6], variation=row[7], menge=row[8],
-            netto_einzelpreis=row[9], brutto_einzelpreis=row[10],
-            gesamtpreis_netto=row[11], gesamtpreis_brutto=row[12],
-            mwst_satz=row[13]
-        )
+        
+        try:
+            r = row._mapping
+            return OrderItem(
+                id=r['id'],
+                order_id=r['order_id'],
+                bestell_id=r['bestell_id'],
+                bestellartikel_id=r['bestellartikel_id'],
+                produktname=r['produktname'],
+                sku=r['sku'],
+                sku_id=r['sku_id'],
+                variation=r['variation'],
+                menge=r['menge'],
+                netto_einzelpreis=r['netto_einzelpreis'],
+                brutto_einzelpreis=r['brutto_einzelpreis'],
+                gesamtpreis_netto=r['gesamtpreis_netto'],
+                gesamtpreis_brutto=r['gesamtpreis_brutto'],
+                mwst_satz=r['mwst_satz']
+            )
+        except Exception as e:
+            app_logger.error(f"OrderItemRepository _map_to_item: {e}", exc_info=True)
+            return None

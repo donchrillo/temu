@@ -1,42 +1,23 @@
 """JTL Repository - SQLAlchemy + Raw SQL (Final)"""
 
 from typing import Optional, Dict, List
-from sqlalchemy import text
+from sqlalchemy import text, bindparam
 from sqlalchemy.engine import Connection
 from src.services.logger import app_logger
-from src.db.connection import get_engine
 from config.settings import DB_JTL
+from src.db.repositories.base import BaseRepository
 
-class JtlRepository:
+class JtlRepository(BaseRepository):
     """Data Access Layer - ONLY JTL DB Operations"""
     
     def __init__(self, connection: Optional[Connection] = None):
-        """Optionale Injektierte Connection (für Pooling/Transaktionen)"""
-        self._conn = connection
-    
-    def _execute_sql(self, sql: str, params: dict = None):
-        """
-        Führt SQL aus (Schreiboperationen).
-        - Nutzt injizierte Connection (ohne Commit)
-        - ODER erstellt eigene Connection (mit Commit)
-        """
-        if params is None:
-            params = {}
-            
-        if self._conn:
-            return self._conn.execute(text(sql), params)
-        else:
-            # WICHTIG: Hier DB_JTL nutzen!
-            engine = get_engine(DB_JTL)
-            with engine.connect() as conn:
-                result = conn.execute(text(sql), params)
-                conn.commit()
-                return result
+        """Optionale injizierte Connection; setzt DB auf JTL."""
+        super().__init__(connection, db_name=DB_JTL)
 
     def insert_xml_import(self, xml_string: str) -> bool:
         """Importiere XML in JTL tXMLBestellImport Tabelle"""
         try:
-            self._execute_sql("""
+            self._execute_stmt("""
                 INSERT INTO [dbo].[tXMLBestellImport] (cText, nPlattform, nRechnung)
                 VALUES (:xml_string, 5, 0)
             """, {"xml_string": xml_string})
@@ -54,16 +35,8 @@ class JtlRepository:
                 WHERE nPlattform = 5
                 AND [cBestellungInetBestellNr] IS NOT NULL
             """
-            
-            if self._conn:
-                result = self._conn.execute(text(sql))
-            else:
-                with get_engine(DB_JTL).connect() as conn:
-                    result = conn.execute(text(sql))
-                    # Liste sofort bauen, solange Connection offen ist
-                    return {row[0]: True for row in result.all()}
-            
-            return {row[0]: True for row in result.all()}
+            rows = self._fetch_all(sql)
+            return {row[0]: True for row in rows}
         except Exception as e:
             app_logger.error(f"JTL get_imported_orders: {e}", exc_info=True)
             return {}
@@ -78,15 +51,7 @@ class JtlRepository:
                 ORDER BY [kXMLBestellImport] DESC
             """
             params = {"bestell_id": bestell_id}
-
-            if self._conn:
-                result = self._conn.execute(text(sql), params)
-                row = result.first()
-            else:
-                with get_engine(DB_JTL).connect() as conn:
-                    result = conn.execute(text(sql), params)
-                    row = result.first()
-            
+            row = self._fetch_one(sql, params)
             if not row:
                 return 'pending'
             
@@ -119,14 +84,8 @@ class JtlRepository:
                     AND [cFehlerText] IS NOT NULL
                     AND [cFehlerText] != ''
                 """
-            
-            if self._conn:
-                result = self._conn.execute(text(sql), params)
-                return {row[0]: row[1] for row in result.all()}
-            else:
-                with get_engine(DB_JTL).connect() as conn:
-                    result = conn.execute(text(sql), params)
-                    return {row[0]: row[1] for row in result.all()}
+            rows = self._fetch_all(sql, params)
+            return {row[0]: row[1] for row in rows}
                     
         except Exception as e:
             app_logger.error(f"JTL get_import_errors: {e}", exc_info=True)
@@ -140,14 +99,7 @@ class JtlRepository:
                 FROM [eazybusiness].[dbo].[tArtikel]
                 WHERE [cArtNr] = :sku
             """
-            if self._conn:
-                result = self._conn.execute(text(sql), {"sku": sku})
-                row = result.first()
-            else:
-                with get_engine(DB_JTL).connect() as conn:
-                    result = conn.execute(text(sql), {"sku": sku})
-                    row = result.first()
-            
+            row = self._fetch_one(sql, {"sku": sku})
             return int(row[0]) if row else None
         except Exception as e:
             app_logger.error(f"JTL get_article_id_by_sku: {e}", exc_info=True)
@@ -166,14 +118,7 @@ class JtlRepository:
                   AND v.[kWarenlager] = 2
             """
             params = {"article_id": article_id}
-            if self._conn:
-                result = self._conn.execute(text(sql), params)
-                row = result.first()
-            else:
-                with get_engine(DB_JTL).connect() as conn:
-                    result = conn.execute(text(sql), params)
-                    row = result.first()
-
+            row = self._fetch_one(sql, params)
             if not row:
                 return 0
             f_bestand, n_puffer = float(row[0]), int(row[1])
@@ -191,8 +136,6 @@ class JtlRepository:
         """
         if not article_ids:
             return {}
-        
-        from sqlalchemy import bindparam
         
         # Deduplizieren
         ids = list(set(article_ids))
@@ -214,26 +157,13 @@ class JtlRepository:
                     WHERE t.[kArtikel] IN :ids
                       AND v.[kWarenlager] = 2
                 """).bindparams(bindparam('ids', expanding=True))
-                
-                if self._conn:
-                    res = self._conn.execute(sql, {"ids": chunk})
-                    for row in res.all():
-                        k_artikel = int(row[0])
-                        f_bestand = float(row[1])
-                        n_puffer = int(row[2])
-                        available = max(0, int(f_bestand) - n_puffer)
-                        result_map[k_artikel] = float(available)
-                else:
-                    # Fallback falls standalone
-                    engine = get_engine(DB_JTL)
-                    with engine.connect() as conn:
-                        res = conn.execute(sql, {"ids": chunk})
-                        for row in res.all():
-                            k_artikel = int(row[0])
-                            f_bestand = float(row[1])
-                            n_puffer = int(row[2])
-                            available = max(0, int(f_bestand) - n_puffer)
-                            result_map[k_artikel] = float(available)
+                rows = self._fetch_all(sql, {"ids": chunk})
+                for row in rows:
+                    k_artikel = int(row[0])
+                    f_bestand = float(row[1])
+                    n_puffer = int(row[2])
+                    available = max(0, int(f_bestand) - n_puffer)
+                    result_map[k_artikel] = float(available)
                             
             return result_map
             
@@ -241,7 +171,7 @@ class JtlRepository:
             app_logger.error(f"JTL get_stocks_by_article_ids: {e}", exc_info=True)
             return {}
     
-    def get_tracking_from_lieferschein(self, bestell_id: str) -> Optional[Dict]:
+    def get_tracking_from_lieferschein(self, bestell_id: str) -> Optional[Dict[str, str]]:
         """Hole Tracking aus JTL Lieferscheindaten"""
         try:
             # Nutzung der Versand-Views analog zum Legacy-Code
@@ -256,14 +186,7 @@ class JtlRepository:
                 WHERE ls.[cBestellungInetBestellNr] = :bestell_id
             """
             params = {"bestell_id": bestell_id}
-            if self._conn:
-                result = self._conn.execute(text(sql), params)
-                row = result.first()
-            else:
-                with get_engine(DB_JTL).connect() as conn:
-                    result = conn.execute(text(sql), params)
-                    row = result.first()
-            
+            row = self._fetch_one(sql, params)
             if not row:
                 return None
             

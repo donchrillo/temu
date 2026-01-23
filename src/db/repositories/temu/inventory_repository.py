@@ -6,26 +6,9 @@ from sqlalchemy.engine import Connection
 from src.services.logger import app_logger
 from src.db.connection import get_engine
 from config.settings import DB_TOCI
+from src.db.repositories.base import BaseRepository
 
-class InventoryRepository:
-    def __init__(self, connection: Any = None):
-        """Optional injektierte Connection"""
-        self._conn = connection
-
-    def _execute_sql(self, sql, params=None):
-        """Standard Helper für einfache Queries"""
-        if params is None:
-            params = {}
-        
-        if self._conn:
-            return self._conn.execute(sql, params)
-        else:
-            engine = get_engine(DB_TOCI)
-            with engine.connect() as conn:
-                result = conn.execute(sql, params)
-                conn.commit()
-                return result
-
+class InventoryRepository(BaseRepository):
     def upsert_inventory(self, items: List[Dict[str, Any]]) -> Dict[str, int]:
         """
         Upsert inventory items via MERGE.
@@ -91,16 +74,8 @@ class InventoryRepository:
                 JOIN temu_products p ON inv.product_id = p.id
                 WHERE inv.needs_sync = 1 AND p.is_active = 1
             """)
-
-            if self._conn:
-                result = self._conn.execute(sql)
-                return [dict(row) for row in result.mappings().all()]
-            else:
-                engine = get_engine(DB_TOCI)
-                with engine.connect() as conn:
-                    result = conn.execute(sql)
-                    return [dict(row) for row in result.mappings().all()]
-
+            rows = self._fetch_all(sql)
+            return [dict(row._mapping) for row in rows]
         except Exception as e:
             app_logger.error(f"InventoryRepository get_needs_sync: {e}", exc_info=True)
             return []
@@ -126,8 +101,7 @@ class InventoryRepository:
                 WHERE id IN :ids
             """).bindparams(bindparam('ids', expanding=True))
             
-            # Hier reicht unser einfacher _execute_sql Helper
-            result = self._execute_sql(sql, {"ids": inventory_ids_only})
+            result = self._execute_stmt(sql, {"ids": inventory_ids_only})
             return result.rowcount
             
         except Exception as e:

@@ -6,26 +6,9 @@ from sqlalchemy.engine import Connection
 from src.services.logger import app_logger
 from src.db.connection import get_engine
 from config.settings import DB_TOCI
+from src.db.repositories.base import BaseRepository
 
-class ProductRepository:
-    def __init__(self, connection: Any = None):
-        """Optional injektierte Connection"""
-        self._conn = connection
-
-    def _execute_sql(self, sql, params=None):
-        """Standard Helper für einfache Queries"""
-        if params is None:
-            params = {}
-        
-        if self._conn:
-            return self._conn.execute(sql, params)
-        else:
-            engine = get_engine(DB_TOCI)
-            with engine.connect() as conn:
-                result = conn.execute(sql, params)
-                conn.commit()
-                return result
-
+class ProductRepository(BaseRepository):
     def upsert_products(self, products: List[Dict[str, Any]]) -> Dict[str, int]:
         """
         Upsert products via MERGE.
@@ -94,8 +77,7 @@ class ProductRepository:
                 WHERE sku NOT IN :skus
             """).bindparams(bindparam('skus', expanding=True))
             
-            # Helper nutzen
-            result = self._execute_sql(sql, {"skus": list(active_skus)})
+            result = self._execute_stmt(sql, {"skus": list(active_skus)})
             return result.rowcount
             
         except Exception as e:
@@ -106,16 +88,8 @@ class ProductRepository:
         """Fetch all products"""
         try:
             sql = text("SELECT id, sku, goods_id, sku_id, goods_name, jtl_article_id, is_active FROM temu_products")
-            
-            if self._conn:
-                result = self._conn.execute(sql)
-                return [dict(row) for row in result.mappings().all()]
-            else:
-                engine = get_engine(DB_TOCI)
-                with engine.connect() as conn:
-                    result = conn.execute(sql)
-                    return [dict(row) for row in result.mappings().all()]
-                    
+            rows = self._fetch_all(sql)
+            return [dict(row._mapping) for row in rows]
         except Exception as e:
             app_logger.error(f"ProductRepository fetch_all: {e}", exc_info=True)
             return []
@@ -124,7 +98,7 @@ class ProductRepository:
         """Update JTL article ID for a product"""
         try:
             sql = text("UPDATE temu_products SET jtl_article_id = :jtl_id, updated_at = GETDATE() WHERE id = :product_id")
-            self._execute_sql(sql, {"jtl_id": jtl_article_id, "product_id": product_id})
+            self._execute_stmt(sql, {"jtl_id": jtl_article_id, "product_id": product_id})
             return True
         except Exception as e:
             app_logger.error(f"ProductRepository update_jtl_article_id: {e}", exc_info=True)
