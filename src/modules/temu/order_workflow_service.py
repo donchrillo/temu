@@ -20,12 +20,31 @@ from src.services.log_service import log_service
 class OrderWorkflowService:
     """
     Orchestriert den kompletten TEMU Order Sync Workflow (5 Steps)
-    Separiert von CLI-Wrapper für bessere Testbarkeit und Wiederverwendbarkeit
+    Mit Dependency Injection und Shared Connections für bessere Performance
     """
     
-    def __init__(self):
-        """Initialisiere Service ohne externe Dependencies"""
-        pass
+    def __init__(
+        self,
+        temu_service: TemuMarketplaceService = None,
+        order_service: OrderService = None,
+        xml_service: XmlExportService = None,
+        tracking_service: TrackingService = None
+    ):
+        """
+        Initialisiere Service mit optionalen Dependencies
+        Falls nicht injected, werden sie lazy erstellt bei Bedarf
+        """
+        self._temu_service = temu_service
+        self._order_service = order_service
+        self._xml_service = xml_service
+        self._tracking_service = tracking_service
+        
+        # Shared DB Connections (lazy loaded)
+        self._toci_conn = None
+        self._jtl_conn = None
+        self._order_repo = None
+        self._item_repo = None
+        self._jtl_repo = None
     
     def run_complete_workflow(
         self, 
@@ -114,6 +133,79 @@ class OrderWorkflowService:
             log_service.end_job_capture(success=False, duration=duration, error=str(e))
             return False
     
+    def _get_toci_connection(self):
+        """Lazy-load TOCI connection (singleton für Workflow)"""
+        if self._toci_conn is None:
+            self._toci_conn = get_db_connection(database='toci', use_pool=True)
+        return self._toci_conn
+    
+    def _get_jtl_connection(self):
+        """Lazy-load JTL connection (singleton für Workflow)"""
+        if self._jtl_conn is None:
+            self._jtl_conn = get_db_connection(database='eazybusiness', use_pool=True)
+        return self._jtl_conn
+    
+    def _get_order_repo(self):
+        """Lazy-load OrderRepository (singleton für Workflow)"""
+        if self._order_repo is None:
+            self._order_repo = OrderRepository(connection=self._get_toci_connection())
+        return self._order_repo
+    
+    def _get_item_repo(self):
+        """Lazy-load OrderItemRepository (singleton für Workflow)"""
+        if self._item_repo is None:
+            self._item_repo = OrderItemRepository(connection=self._get_toci_connection())
+        return self._item_repo
+    
+    def _get_jtl_repo(self):
+        """Lazy-load JtlRepository (singleton für Workflow)"""
+        if self._jtl_repo is None:
+            try:
+                self._jtl_repo = JtlRepository(connection=self._get_jtl_connection())
+            except Exception:
+                self._jtl_repo = None
+        return self._jtl_repo
+    
+    def _get_temu_service(self, verbose: bool = False):
+        """Lazy-load TemuMarketplaceService"""
+        if self._temu_service is None:
+            self._temu_service = TemuMarketplaceService(
+                app_key=TEMU_APP_KEY,
+                app_secret=TEMU_APP_SECRET,
+                access_token=TEMU_ACCESS_TOKEN,
+                endpoint=TEMU_API_ENDPOINT,
+                verbose=verbose
+            )
+        return self._temu_service
+    
+    def _get_order_service(self):
+        """Lazy-load OrderService"""
+        if self._order_service is None:
+            self._order_service = OrderService(
+                order_repo=self._get_order_repo(),
+                item_repo=self._get_item_repo()
+            )
+        return self._order_service
+    
+    def _get_xml_service(self):
+        """Lazy-load XmlExportService"""
+        if self._xml_service is None:
+            self._xml_service = XmlExportService(
+                order_repo=self._get_order_repo(),
+                item_repo=self._get_item_repo(),
+                jtl_repo=self._get_jtl_repo()
+            )
+        return self._xml_service
+    
+    def _get_tracking_service(self):
+        """Lazy-load TrackingService"""
+        if self._tracking_service is None:
+            self._tracking_service = TrackingService(
+                order_repo=self._get_order_repo(),
+                jtl_repo=self._get_jtl_repo()
+            )
+        return self._tracking_service
+    
     def _step_1_api_to_json(
         self, 
         parent_order_status: int, 
@@ -123,16 +215,7 @@ class OrderWorkflowService:
     ) -> bool:
         """Step 1: Hole Orders von TEMU API und speichere als JSON"""
         try:
-            log_service.log(job_id, "api_to_json", "INFO",
-                          f"→ Hole TEMU Orders (Status: {parent_order_status}, Tage: {days_back})")
-            
-            temu_service = TemuMarketplaceService(
-                app_key=TEMU_APP_KEY,
-                app_secret=TEMU_APP_SECRET,
-                access_token=TEMU_ACCESS_TOKEN,
-                endpoint=TEMU_API_ENDPOINT,
-                verbose=verbose
-            )
+            temu_service = self._get_temu_service(verbose)
             
             result = temu_service.fetch_orders(
                 parent_order_status=parent_order_status, 
@@ -140,14 +223,7 @@ class OrderWorkflowService:
                 job_id=job_id
             )
             
-            if result:
-                log_service.log(job_id, "api_to_json", "INFO", 
-                              "✓ API Orders erfolgreich heruntergeladen und gespeichert")
-                return True
-            
-            log_service.log(job_id, "api_to_json", "WARNING", 
-                          "⚠ API Abruf fehlgeschlagen oder keine neuen Orders")
-            return False
+            return bool(result)
             
         except Exception as e:
             import traceback
@@ -158,19 +234,8 @@ class OrderWorkflowService:
     def _step_2_json_to_db(self, job_id: str) -> Dict:
         """Step 2: Importiere JSON Orders in Datenbank"""
         try:
-            log_service.log(job_id, "json_to_db", "INFO", 
-                          "→ Importiere Orders aus JSON in Datenbank")
-            
-            toci_conn = get_db_connection(database='toci', use_pool=True)
-            order_repo = OrderRepository(connection=toci_conn)
-            item_repo = OrderItemRepository(connection=toci_conn)
-            order_service = OrderService(order_repo, item_repo)
-            
+            order_service = self._get_order_service()
             result = order_service.import_from_json_files(job_id=job_id)
-            
-            log_service.log(job_id, "json_to_db", "INFO",
-                          f"✓ Import abgeschlossen: {result.get('total', 0)} Orders "
-                          f"(Neu: {result.get('imported', 0)}, Aktualisiert: {result.get('updated', 0)})")
             return result
             
         except Exception as e:
@@ -182,39 +247,14 @@ class OrderWorkflowService:
     def _step_3_db_to_xml(self, job_id: str) -> Dict:
         """Step 3: Exportiere Orders als XML für JTL"""
         try:
-            log_service.log(job_id, "db_to_xml", "INFO", 
-                          "→ Exportiere Orders als XML für JTL")
+            xml_service = self._get_xml_service()
+            jtl_repo = self._get_jtl_repo()
             
-            toci_conn = get_db_connection(database='toci', use_pool=True)
-            order_repo = OrderRepository(connection=toci_conn)
-            item_repo = OrderItemRepository(connection=toci_conn)
-            
-            jtl_repo = None
-            try:
-                jtl_conn = get_db_connection(database='eazybusiness', use_pool=True)
-                jtl_repo = JtlRepository(connection=jtl_conn)
-                log_service.log(job_id, "db_to_xml", "INFO", "  ✓ JTL Verbindung erfolgreich")
-            except Exception as e:
-                log_service.log(job_id, "db_to_xml", "WARNING", 
-                              f"  ⚠ JTL Verbindung fehlgeschlagen: {e}")
-            
-            service = XmlExportService(
-                order_repo=order_repo, 
-                item_repo=item_repo, 
-                jtl_repo=jtl_repo
-            )
-            
-            result = service.export_to_xml(
+            result = xml_service.export_to_xml(
                 save_to_disk=True, 
                 import_to_jtl=jtl_repo is not None, 
                 job_id=job_id
             )
-            
-            if result.get('success'):
-                log_service.log(job_id, "db_to_xml", "INFO", "✓ XML Export erfolgreich")
-            else:
-                log_service.log(job_id, "db_to_xml", "INFO", 
-                              f"✗ XML Export: {result.get('message', 'Keine Orders')}")
             return result
             
         except Exception as e:
@@ -226,20 +266,8 @@ class OrderWorkflowService:
     def _step_4_tracking_to_db(self, job_id: str) -> Dict:
         """Step 4: Hole Tracking-Daten aus JTL und aktualisiere DB"""
         try:
-            log_service.log(job_id, "tracking_to_db", "INFO", 
-                          "→ Hole Tracking-Daten aus JTL")
-            
-            toci_conn = get_db_connection(database='toci', use_pool=True)
-            jtl_conn = get_db_connection(database='eazybusiness', use_pool=True)
-            order_repo = OrderRepository(connection=toci_conn)
-            jtl_repo = JtlRepository(connection=jtl_conn)
-            
-            tracking_service = TrackingService(order_repo=order_repo, jtl_repo=jtl_repo)
+            tracking_service = self._get_tracking_service()
             result = tracking_service.update_tracking_from_jtl(job_id)
-            
-            log_service.log(job_id, "tracking_to_db", "INFO",
-                          f"✓ Tracking-Update abgeschlossen (Aktualisiert: {result.get('updated', 0)}, "
-                          f"Fehler: {result.get('errors', 0)})")
             return result
             
         except Exception as e:
@@ -251,50 +279,29 @@ class OrderWorkflowService:
     def _step_5_db_to_api(self, job_id: str) -> bool:
         """Step 5: Exportiere Tracking-Daten zu TEMU API"""
         try:
-            log_service.log(job_id, "tracking_to_api", "INFO", 
-                          "→ Exportiere Tracking zu TEMU API")
-            
             if not all([TEMU_APP_KEY, TEMU_APP_SECRET, TEMU_ACCESS_TOKEN]):
                 log_service.log(job_id, "tracking_to_api", "ERROR", 
                               "✗ TEMU Credentials nicht gesetzt!")
                 return False
             
-            toci_conn = get_db_connection(database='toci', use_pool=True)
-            order_repo = OrderRepository(connection=toci_conn)
-            tracking_service = TrackingService(order_repo=order_repo)
-            temu_service = TemuMarketplaceService(
-                app_key=TEMU_APP_KEY,
-                app_secret=TEMU_APP_SECRET,
-                access_token=TEMU_ACCESS_TOKEN,
-                endpoint=TEMU_API_ENDPOINT
-            )
+            order_repo = self._get_order_repo()
+            tracking_service = self._get_tracking_service()
+            temu_service = self._get_temu_service()
             
-            log_service.log(job_id, "tracking_to_api", "INFO", 
-                          "  → Hole Orders mit Tracking...")
             orders_data = order_repo.get_orders_for_tracking_export()
             
             if not orders_data:
                 log_service.log(job_id, "tracking_to_api", "INFO", 
-                              "  ✓ Keine Bestellungen zum Exportieren")
+                              "✓ Keine Bestellungen zum Exportieren")
                 return True
             
-            log_service.log(job_id, "tracking_to_api", "INFO", 
-                          f"  ✓ {len(orders_data)} Bestellungen mit Tracking")
-            
-            log_service.log(job_id, "tracking_to_api", "INFO", 
-                          "  → Konvertiere zu API Format...")
             tracking_data_for_api = tracking_service.prepare_tracking_for_api(orders_data, job_id)
             
             if not tracking_data_for_api:
                 log_service.log(job_id, "tracking_to_api", "INFO", 
-                              "  ✓ Keine Tracking-Daten zum Upload")
+                              "✓ Keine Tracking-Daten zum Upload")
                 return True
             
-            log_service.log(job_id, "tracking_to_api", "INFO", 
-                          f"  ✓ {len(tracking_data_for_api)} Positionen zum Upload")
-            
-            log_service.log(job_id, "tracking_to_api", "INFO", 
-                          "  → Lade zu TEMU API hoch...")
             success, error_code, error_msg = temu_service.upload_tracking(
                 tracking_data_for_api, 
                 job_id

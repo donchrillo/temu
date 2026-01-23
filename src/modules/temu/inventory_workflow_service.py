@@ -1,7 +1,6 @@
 """TEMU Inventory Workflow Service - 4-Schritt Orchestrierung"""
 
 from datetime import datetime
-from typing import Dict
 
 from config.settings import TEMU_APP_KEY, TEMU_APP_SECRET, TEMU_ACCESS_TOKEN, TEMU_API_ENDPOINT
 from src.services.log_service import log_service
@@ -15,14 +14,23 @@ from src.modules.temu.stock_sync_service import StockSyncService
 
 
 class InventoryWorkflowService:
-    """
-    Orchestriert den kompletten TEMU Inventory Sync Workflow (4 Steps)
-    Separiert von CLI-Wrapper für bessere Testbarkeit und Wiederverwendbarkeit
-    """
+    """TEMU Inventory Workflow mit Dependency Injection und Lazy Caches."""
     
-    def __init__(self):
-        """Initialisiere Service ohne externe Dependencies"""
-        pass
+    def __init__(
+        self,
+        temu_service: TemuMarketplaceService | None = None,
+        inventory_service: InventoryService | None = None,
+        stock_sync_service: StockSyncService | None = None,
+    ):
+        self._temu_service = temu_service
+        self._inventory_service = inventory_service
+        self._stock_sync_service = stock_sync_service
+
+        self._toci_conn = None
+        self._jtl_conn = None
+        self._product_repo = None
+        self._inventory_repo = None
+        self._jtl_repo = None
     
     def run_complete_workflow(self, mode: str = "quick", verbose: bool = False) -> bool:
         """
@@ -39,6 +47,12 @@ class InventoryWorkflowService:
         job_id = f"temu_inventory_{int(start_time.timestamp())}"
         
         log_service.start_job_capture(job_id, "inventory_workflow")
+
+        # Credential Guard – vermeidet nutzlose API-Aufrufe
+        if not all([TEMU_APP_KEY, TEMU_APP_SECRET, TEMU_ACCESS_TOKEN]):
+            log_service.log(job_id, "inventory_workflow", "ERROR", "✗ TEMU Credentials nicht gesetzt!")
+            log_service.end_job_capture(success=False, duration=0, error="missing credentials")
+            return False
         
         try:
             if mode == "full":
@@ -85,28 +99,26 @@ class InventoryWorkflowService:
     def _step_1_api_to_json(self, job_id: str, verbose: bool) -> bool:
         """Step 1: Hole SKU-Liste von TEMU API und speichere als JSON"""
         try:
-            temu_service = TemuMarketplaceService(
-                app_key=TEMU_APP_KEY,
-                app_secret=TEMU_APP_SECRET,
-                access_token=TEMU_ACCESS_TOKEN,
-                endpoint=TEMU_API_ENDPOINT,
-                verbose=verbose
-            )
-            
+            temu_service = self._get_temu_service(verbose=verbose)
+            inv_service = self._get_inventory_service()
+
             log_service.log(job_id, "api_to_json", "INFO", 
                           "→ Hole TEMU SKU-Liste (Status 2 & 3, pageSize=100)")
-            
-            result = temu_service.fetch_inventory_skus(job_id=job_id, page_size=100)
-            
-            if result:
+
+            ok = inv_service.fetch_and_store_raw_skus(
+                temu_inventory_api=temu_service.inventory_api,
+                job_id=job_id,
+            )
+
+            if ok:
                 log_service.log(job_id, "api_to_json", "INFO", 
                               "✓ SKU-Liste erfolgreich heruntergeladen")
                 return True
-            
+
             log_service.log(job_id, "api_to_json", "WARNING", 
                           "⚠ API Abruf fehlgeschlagen oder keine SKUs")
             return False
-            
+
         except Exception as e:
             import traceback
             log_service.log(job_id, "api_to_json", "ERROR", 
@@ -118,16 +130,15 @@ class InventoryWorkflowService:
         try:
             log_service.log(job_id, "json_to_db", "INFO", 
                           "→ Importiere SKU-JSON in temu_products")
-            
-            toci_conn = get_db_connection(database="toci", use_pool=True)
-            product_repo = ProductRepository(connection=toci_conn)
-            inv_service = InventoryService()
-            
+
+            product_repo = self._get_product_repo()
+            inv_service = self._get_inventory_service()
+
             stats = inv_service.import_products_from_raw(product_repo, job_id=job_id)
-            
+
             log_service.log(job_id, "json_to_db", "INFO", 
                           f"✓ Produkte importiert: {stats}")
-            
+
         except Exception as e:
             import traceback
             log_service.log(job_id, "json_to_db", "ERROR", 
@@ -139,24 +150,22 @@ class InventoryWorkflowService:
         try:
             log_service.log(job_id, "jtl_to_inventory", "INFO", 
                           "→ Lese JTL Bestände und aktualisiere temu_inventory")
-            
-            toci_conn = get_db_connection(database="toci", use_pool=True)
-            jtl_conn = get_db_connection(database="eazybusiness", use_pool=True)
-            product_repo = ProductRepository(connection=toci_conn)
-            inventory_repo = InventoryRepository(connection=toci_conn)
-            jtl_repo = JtlRepository(connection=jtl_conn)
-            inv_service = InventoryService()
-            
+
+            product_repo = self._get_product_repo()
+            inventory_repo = self._get_inventory_repo()
+            jtl_repo = self._get_jtl_repo()
+            inv_service = self._get_inventory_service()
+
             stats = inv_service.refresh_inventory_from_jtl(
                 product_repo, 
                 inventory_repo, 
                 jtl_repo, 
                 job_id=job_id
             )
-            
+
             log_service.log(job_id, "jtl_to_inventory", "INFO", 
                           f"✓ Bestand aktualisiert: {stats}")
-            
+
         except Exception as e:
             import traceback
             log_service.log(job_id, "jtl_to_inventory", "ERROR", 
@@ -168,28 +177,73 @@ class InventoryWorkflowService:
         try:
             log_service.log(job_id, "inventory_to_api", "INFO", 
                           "→ Sende Delta-Bestände an TEMU")
-            
-            toci_conn = get_db_connection(database="toci", use_pool=True)
-            inventory_repo = InventoryRepository(connection=toci_conn)
-            temu_service = TemuMarketplaceService(
-                app_key=TEMU_APP_KEY,
-                app_secret=TEMU_APP_SECRET,
-                access_token=TEMU_ACCESS_TOKEN,
-                endpoint=TEMU_API_ENDPOINT
-            )
-            
-            sync_service = StockSyncService()
+
+            inventory_repo = self._get_inventory_repo()
+            temu_service = self._get_temu_service()
+            sync_service = self._get_stock_sync_service()
+
             sync_service.sync_deltas_to_temu(
                 temu_service.inventory_api, 
                 inventory_repo, 
                 job_id=job_id
             )
-            
+
             log_service.log(job_id, "inventory_to_api", "INFO", 
                           "✓ Delta-Upload abgeschlossen")
-            
+
         except Exception as e:
             import traceback
             log_service.log(job_id, "inventory_to_api", "ERROR", 
                           f"✗ Sync Upload Fehler: {str(e)}\n{traceback.format_exc()}")
             raise
+
+    # --- Lazy Loader Helpers ---
+
+    def _get_toci_conn(self):
+        if self._toci_conn is None:
+            self._toci_conn = get_db_connection(database="toci", use_pool=True)
+        return self._toci_conn
+
+    def _get_jtl_conn(self):
+        if self._jtl_conn is None:
+            self._jtl_conn = get_db_connection(database="eazybusiness", use_pool=True)
+        return self._jtl_conn
+
+    def _get_product_repo(self):
+        if self._product_repo is None:
+            self._product_repo = ProductRepository(connection=self._get_toci_conn())
+        return self._product_repo
+
+    def _get_inventory_repo(self):
+        if self._inventory_repo is None:
+            self._inventory_repo = InventoryRepository(connection=self._get_toci_conn())
+        return self._inventory_repo
+
+    def _get_jtl_repo(self):
+        if self._jtl_repo is None:
+            try:
+                self._jtl_repo = JtlRepository(connection=self._get_jtl_conn())
+            except Exception:
+                self._jtl_repo = None
+        return self._jtl_repo
+
+    def _get_temu_service(self, verbose: bool = False):
+        if self._temu_service is None:
+            self._temu_service = TemuMarketplaceService(
+                app_key=TEMU_APP_KEY,
+                app_secret=TEMU_APP_SECRET,
+                access_token=TEMU_ACCESS_TOKEN,
+                endpoint=TEMU_API_ENDPOINT,
+                verbose=verbose,
+            )
+        return self._temu_service
+
+    def _get_inventory_service(self):
+        if self._inventory_service is None:
+            self._inventory_service = InventoryService()
+        return self._inventory_service
+
+    def _get_stock_sync_service(self):
+        if self._stock_sync_service is None:
+            self._stock_sync_service = StockSyncService()
+        return self._stock_sync_service

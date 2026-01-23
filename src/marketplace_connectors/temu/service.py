@@ -162,51 +162,9 @@ class TemuMarketplaceService(BaseMarketplaceConnector):
         """
         return self.orders_api.upload_tracking_data(tracking_data, job_id=job_id)
     
-    def fetch_inventory_skus(self, job_id: Optional[str] = None, page_size: int = 100) -> bool:
-        """
-        Hole SKU-Listen (Status 2 & 3) von TEMU API und speichere lokal als JSON.
-        Spiegelt das Vorgehen von fetch_orders (Connector-Layer macht den API-Call).
-        """
-        try:
-            log_service.log(job_id, "temu_service", "INFO", "→ Hole SKU-Listen von TEMU API (Status 2 & 3)")
-            ok = True
-
-            for status in (2, 3):
-                all_items = []
-                page_no = 1
-
-                while True:
-                    resp = self.inventory_api.get_sku_list(
-                        status=status, page_no=page_no, page_size=page_size, job_id=job_id
-                    )
-                    if not resp or not resp.get("success"):
-                        log_service.log(job_id, "temu_service", "ERROR", f"✗ SKU Fetch Fehler (Status {status})")
-                        ok = False
-                        break
-
-                    result = resp.get("result") or {}
-                    sku_list = result.get("skuList") or []
-                    total = result.get("total") or 0
-
-                    all_items.extend(sku_list)
-
-                    if not sku_list or len(all_items) >= total:
-                        break
-
-                    page_no += 1
-
-                # Speichern je Status wie bei Orders
-                status_file = API_RESPONSE_DIR / f"temu_sku_status{status}.json"
-                with open(status_file, "w", encoding="utf-8") as f:
-                    json.dump({"result": {"skuList": all_items, "total": len(all_items)}}, f, ensure_ascii=False, indent=2)
-
-                log_service.log(job_id, "temu_service", "INFO", f"  ✓ Status {status}: {len(all_items)} SKUs gespeichert")
-
-            if ok:
-                log_service.log(job_id, "temu_service", "INFO", "✓ SKU-Listen erfolgreich heruntergeladen und gespeichert")
-            return ok
-
-        except Exception as e:
-            import traceback
-            log_service.log(job_id, "temu_service", "ERROR", f"✗ Fehler beim SKU-Fetch: {str(e)}\n{traceback.format_exc()}")
-            return False
+    # def fetch_inventory_skus(self, job_id: Optional[str] = None, page_size: int = 100) -> bool:
+    #     """
+    #     (Deaktiviert) SKU-Download ist jetzt im InventoryService.fetch_and_store_raw_skus.
+    #     Diese Methode bleibt auskommentiert, um doppelten Code zu vermeiden.
+    #     """
+    #     pass

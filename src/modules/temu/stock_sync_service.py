@@ -24,11 +24,20 @@ class StockSyncService:
         
         # Gruppiere nach goodsId (jede goodsId ein API-Call)
         by_goods_id: Dict[int, List] = {}
+        skipped = 0
         for d in deltas:
             goods_id = d.get("goods_id")
+            sku_id = d.get("sku_id")
+            if not goods_id or not sku_id:
+                skipped += 1
+                continue
             if goods_id not in by_goods_id:
                 by_goods_id[goods_id] = []
             by_goods_id[goods_id].append(d)
+
+        if skipped:
+            log_service.log(job_id, "inventory_to_api", "WARNING", 
+                          f"Überspringe {skipped} Einträge ohne goods_id/sku_id")
         
         synced_ids: List[int] = []
         for goods_id, items in by_goods_id.items():
