@@ -1,9 +1,12 @@
-"""OrderItem Repository - Data Access Layer für Order Items"""
+"""OrderItem Repository - SQLAlchemy + Raw SQL (Final)"""
 
 from typing import List, Optional
-from src.db.connection import get_db_connection
+from sqlalchemy import text
+from sqlalchemy.engine import Connection
 from src.services.logger import app_logger
+from src.db.connection import get_engine
 from config.settings import TABLE_ORDER_ITEMS, DB_TOCI
+from src.db.repositories.base import BaseRepository
 
 class OrderItem:
     """Domain Model für Order Item"""
@@ -28,136 +31,141 @@ class OrderItem:
         self.gesamtpreis_brutto = gesamtpreis_brutto
         self.mwst_satz = mwst_satz
 
-class OrderItemRepository:
+class OrderItemRepository(BaseRepository):
     """Data Access Layer - ONLY DB Operations"""
-    
-    def __init__(self, connection=None):
-        """Optionale Injektierte Connection (für Pooling)"""
-        self._conn = connection
-    
-    def _get_conn(self):
-        """Hole Connection (gepooled oder neu)"""
-        if self._conn:
-            return self._conn
-        return get_db_connection(DB_TOCI)
-    
+
     def save(self, item: OrderItem) -> int:
         """INSERT oder UPDATE OrderItem"""
         try:
-            conn = self._get_conn()
-            cursor = conn.cursor()
-            
+            params = {
+                "bestellartikel_id": item.bestellartikel_id,
+                "produktname": item.produktname,
+                "sku": item.sku,
+                "sku_id": item.sku_id,
+                "variation": item.variation,
+                "menge": item.menge,
+                "netto_einzelpreis": item.netto_einzelpreis,
+                "brutto_einzelpreis": item.brutto_einzelpreis,
+                "gesamtpreis_netto": item.gesamtpreis_netto,
+                "gesamtpreis_brutto": item.gesamtpreis_brutto,
+                "mwst_satz": item.mwst_satz
+            }
+
             if item.id:
-                # UPDATE
-                cursor.execute(f"""
+                # UPDATE - nutze _execute_stmt
+                sql = f"""
                     UPDATE {TABLE_ORDER_ITEMS} SET
-                        produktname = ?,
-                        sku = ?,
-                        sku_id = ?,
-                        variation = ?,
-                        menge = ?,
-                        netto_einzelpreis = ?,
-                        brutto_einzelpreis = ?,
-                        gesamtpreis_netto = ?,
-                        gesamtpreis_brutto = ?,
-                        mwst_satz = ?
-                    WHERE id = ?
-                """, item.produktname, item.sku, item.sku_id, item.variation,
-                    item.menge, item.netto_einzelpreis, item.brutto_einzelpreis,
-                    item.gesamtpreis_netto, item.gesamtpreis_brutto,
-                    item.mwst_satz, item.id)
-                
-                # ❌ NICHT conn.commit()!
-                # ✅ AutoCommit ist aktiv
+                        bestellartikel_id = :bestellartikel_id,
+                        produktname = :produktname,
+                        sku = :sku,
+                        sku_id = :sku_id,
+                        variation = :variation,
+                        menge = :menge,
+                        netto_einzelpreis = :netto_einzelpreis,
+                        brutto_einzelpreis = :brutto_einzelpreis,
+                        gesamtpreis_netto = :gesamtpreis_netto,
+                        gesamtpreis_brutto = :gesamtpreis_brutto,
+                        mwst_satz = :mwst_satz
+                    WHERE id = :id
+                """
+                params["id"] = item.id
+                self._execute_stmt(sql, params)
                 return item.id
             else:
-                # INSERT
-                cursor.execute(f"""
+                # INSERT - Speziallogik für @@IDENTITY + Transaktions-Commit
+                params.update({
+                    "order_id": item.order_id,
+                    "bestell_id": item.bestell_id
+                })
+
+                sql = f"""
                     INSERT INTO {TABLE_ORDER_ITEMS} (
-                        order_id, bestell_id, bestellartikel_id,
-                        produktname, sku, sku_id, variation,
-                        menge, netto_einzelpreis, brutto_einzelpreis,
-                        gesamtpreis_netto, gesamtpreis_brutto, mwst_satz,
-                        created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, GETDATE())
-                """, item.order_id, item.bestell_id, item.bestellartikel_id,
-                    item.produktname, item.sku, item.sku_id, item.variation,
-                    item.menge, item.netto_einzelpreis, item.brutto_einzelpreis,
-                    item.gesamtpreis_netto, item.gesamtpreis_brutto, item.mwst_satz)
+                        order_id, bestell_id, bestellartikel_id, produktname,
+                        sku, sku_id, variation, menge,
+                        netto_einzelpreis, brutto_einzelpreis,
+                        gesamtpreis_netto, gesamtpreis_brutto, mwst_satz
+                    ) VALUES (
+                        :order_id, :bestell_id, :bestellartikel_id, :produktname,
+                        :sku, :sku_id, :variation, :menge,
+                        :netto_einzelpreis, :brutto_einzelpreis,
+                        :gesamtpreis_netto, :gesamtpreis_brutto, :mwst_satz
+                    );
+                    SELECT @@IDENTITY AS new_id;
+                """
                 
-                cursor.execute("SELECT @@IDENTITY")
-                new_id = cursor.fetchone()[0]
-                
-                # ❌ NICHT conn.commit()!
-                # ✅ AutoCommit ist aktiv
-                return int(new_id)
+                # Manuelle Logik: Fetch BEVOR Connection zugeht
+                if self._conn:
+                    result = self._conn.execute(text(sql), params)
+                    row = result.first()
+                    return int(row[0]) if row else 0
+                else:
+                    with get_engine(DB_TOCI).connect() as conn:
+                        result = conn.execute(text(sql), params)
+                        row = result.first()
+                        conn.commit()
+                        return int(row[0]) if row else 0
         
         except Exception as e:
-            app_logger.error(f"DB Fehler bei save: {e}", exc_info=True)
+            app_logger.error(f"OrderItemRepository save: {e}", exc_info=True)
             return 0
-    
+
     def find_by_order_id(self, order_id: int) -> List[OrderItem]:
         """Hole alle Items für Order"""
         try:
-            conn = self._get_conn()
-            cursor = conn.cursor()
-            cursor.execute(f"""
+            sql = f"""
                 SELECT id, order_id, bestell_id, bestellartikel_id,
                        produktname, sku, sku_id, variation, menge,
                        netto_einzelpreis, brutto_einzelpreis,
                        gesamtpreis_netto, gesamtpreis_brutto, mwst_satz
                 FROM {TABLE_ORDER_ITEMS}
-                WHERE order_id = ?
-            """, order_id)
-            rows = cursor.fetchall()
-            
-            # ❌ NICHT conn.close()!
-            
+                WHERE order_id = :order_id
+            """
+            rows = self._fetch_all(sql, {"order_id": order_id})
             return [self._map_to_item(row) for row in rows]
         except Exception as e:
-            app_logger.error(f"DB Fehler bei find_by_order_id: {e}", exc_info=True)
+            app_logger.error(f"OrderItemRepository find_by_order_id: {e}", exc_info=True)
             return []
     
     def find_by_bestellartikel_id(self, bestellartikel_id: str) -> Optional[OrderItem]:
         """Hole Item by bestellartikel_id"""
         try:
-            conn = self._get_conn()
-            cursor = conn.cursor()
-            cursor.execute(f"""
+            sql = f"""
                 SELECT id, order_id, bestell_id, bestellartikel_id,
                        produktname, sku, sku_id, variation, menge,
                        netto_einzelpreis, brutto_einzelpreis,
                        gesamtpreis_netto, gesamtpreis_brutto, mwst_satz
                 FROM {TABLE_ORDER_ITEMS}
-                WHERE bestellartikel_id = ?
-            """, bestellartikel_id)
-            row = cursor.fetchone()
-            
-            # ❌ NICHT conn.close()!
-            
+                WHERE bestellartikel_id = :bestellartikel_id
+            """
+            row = self._fetch_one(sql, {"bestellartikel_id": bestellartikel_id})
             return self._map_to_item(row) if row else None
         except Exception as e:
-            app_logger.error(f"DB Fehler bei find_by_bestellartikel_id: {e}", exc_info=True)
+            app_logger.error(f"OrderItemRepository find_by_bestellartikel_id: {e}", exc_info=True)
             return None
     
-    def _map_to_item(self, row) -> OrderItem:
-        """Konvertiere DB Row zu OrderItem Object"""
+    def _map_to_item(self, row) -> Optional[OrderItem]:
+        """Konvertiere DB Row zu OrderItem Object (Key-Based mit row._mapping)"""
         if not row:
             return None
         
-        return OrderItem(
-            id=row[0],
-            order_id=row[1],
-            bestell_id=row[2],
-            bestellartikel_id=row[3],
-            produktname=row[4],
-            sku=row[5],
-            sku_id=row[6],
-            variation=row[7],
-            menge=row[8],
-            netto_einzelpreis=row[9],
-            brutto_einzelpreis=row[10],
-            gesamtpreis_netto=row[11],
-            gesamtpreis_brutto=row[12],
-            mwst_satz=row[13]
-        )
+        try:
+            r = row._mapping
+            return OrderItem(
+                id=r['id'],
+                order_id=r['order_id'],
+                bestell_id=r['bestell_id'],
+                bestellartikel_id=r['bestellartikel_id'],
+                produktname=r['produktname'],
+                sku=r['sku'],
+                sku_id=r['sku_id'],
+                variation=r['variation'],
+                menge=r['menge'],
+                netto_einzelpreis=r['netto_einzelpreis'],
+                brutto_einzelpreis=r['brutto_einzelpreis'],
+                gesamtpreis_netto=r['gesamtpreis_netto'],
+                gesamtpreis_brutto=r['gesamtpreis_brutto'],
+                mwst_satz=r['mwst_satz']
+            )
+        except Exception as e:
+            app_logger.error(f"OrderItemRepository _map_to_item: {e}", exc_info=True)
+            return None

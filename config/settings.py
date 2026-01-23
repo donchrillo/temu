@@ -1,4 +1,8 @@
-"""Zentrale Konfigurationsverwaltung"""
+"""
+config/settings.py
+Zentrale Konfigurationsverwaltung
+
+"""
 
 import os
 from dotenv import load_dotenv

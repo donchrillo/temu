@@ -1,104 +1,88 @@
-"""Database Connection Manager - SQL Server mit Connection Pooling"""
+"""
+src/db/connection.py
+Database Connection Manager - SQL Server via SQLAlchemy Engine (echtes Pooling).
 
-import pyodbc
+"""
+
+import platform
+from contextlib import contextmanager
+from typing import Dict
+from urllib.parse import quote_plus
+
+from sqlalchemy import create_engine
+from sqlalchemy.engine import Engine, Connection
+
 from config.settings import SQL_SERVER, SQL_USERNAME, SQL_PASSWORD
 
-# ===== Connection Pool =====
-# Wiederverwendbare Connections statt für jeden Call neu zu erstellen
-_connection_pools = {}
+# Engine Cache pro Datenbank
+_engines: Dict[str, Engine] = {}
 
-def get_db_connection(database='toci', use_pool=True):
-    """
-    Hole SQL Server Connection (mit optionalem Pooling)
-    
-    Args:
-        database: 'toci' oder 'eazybusiness'
-        use_pool: True = Connection Pooling (empfohlen), False = Neue Connection
-    
-    Returns:
-        pyodbc.Connection
-    """
+
+def _parse_server():
+    """Split host/port from SQL_SERVER setting."""
+    parts = SQL_SERVER.replace(':', ',').split(',')
+    host = parts[0]
+    port = parts[1] if len(parts) > 1 else '1433'
+    return host, port
+
+
+def _build_connection_url(database: str) -> str:
+    """Build SQLAlchemy URL for pyodbc with driver differences (Linux vs Windows)."""
+    host, port = _parse_server()
+    driver = 'ODBC Driver 18 for SQL Server' if platform.system() == 'Linux' else 'SQL Server'
+
+    driver_enc = quote_plus(driver)
+    trust_param = 'TrustServerCertificate=yes'
+    base = f"mssql+pyodbc://{quote_plus(SQL_USERNAME)}:{quote_plus(SQL_PASSWORD)}@{host}:{port}/{database}"
+    return f"{base}?driver={driver_enc}&{trust_param}"
+
+
+def _create_engine(database: str) -> Engine:
+    url = _build_connection_url(database)
+    engine = create_engine(
+        url,
+        pool_size=10,
+        max_overflow=20,
+        pool_pre_ping=True,
+        future=True,
+    )
+    return engine
+
+
+def get_engine(database: str = 'toci') -> Engine:
+    """Get or create a pooled SQLAlchemy Engine for the given database."""
+    if database not in _engines:
+        _engines[database] = _create_engine(database)
+    return _engines[database]
+
+
+@contextmanager
+def db_connect(database: str = 'toci'):
+    """Context manager for worker code: yields a Connection with transaction handling."""
+    conn: Connection = get_engine(database).connect()
+    trans = conn.begin()
     try:
-        # Parse Server (handle both "192.168.178.2,50000" und "192.168.178.2:50000")
-        server_parts = SQL_SERVER.replace(':', ',').split(',')
-        server_host = server_parts[0]
-        server_port = server_parts[1] if len(server_parts) > 1 else '1433'
-        
-        import platform
-
-        # Unterscheidung: Windows vs. Linux
-        if platform.system() == 'Linux':
-            driver = '{ODBC Driver 18 for SQL Server}'
-            extra_params = 'TrustServerCertificate=yes;'
-        else:
-            driver = '{SQL Server}'
-            extra_params = ''
-
-        # Connection String zusammenbauen
-        conn_string = (
-            f'DRIVER={driver};'
-            f'SERVER={server_host},{server_port};'
-            f'DATABASE={database};'
-            f'UID={SQL_USERNAME};'
-            f'PWD={SQL_PASSWORD};'
-            f'{extra_params}'
-        )
-        
-        # ===== Connection Pooling =====
-        if use_pool:
-            pool_key = database
-            
-            # Pool existiert & Connection ist noch aktiv?
-            if pool_key in _connection_pools:
-                try:
-                    conn = _connection_pools[pool_key]
-                    # Test ob noch aktiv
-                    conn.cursor().execute("SELECT 1")
-                    # ✓ Pool Connection ist OK
-                    return conn
-                except:
-                    # ✗ Pool Connection ist tot - neu erstellen
-                    del _connection_pools[pool_key]
-            
-            # Neue Connection erstellen & in Pool speichern
-            conn = pyodbc.connect(conn_string, timeout=10)
-            conn.autocommit = True  # ✅ AutoCommit ON für Pooling!
-            
-            _connection_pools[pool_key] = conn
-            return conn
-        else:
-            # Ohne Pooling (für Tests/Debug)
-            conn = pyodbc.connect(conn_string, timeout=10)
-            conn.autocommit = False
-            return conn
-    
-    except pyodbc.Error as e:
-        error_code = e.args[0] if e.args else 'Unknown'
-        error_msg = e.args[1] if len(e.args) > 1 else str(e)
-        
-        # ✅ NEU: Optional - nur bei kritischen Fehlern ausgeben
-        # Für Debugging: Uncomment diese Zeilen
-        # print(f"✗ DB Verbindungsfehler ({database}): {error_code}")
-        # print(f"  Message: {error_msg}")
-        
+        yield conn
+        trans.commit()
+    except Exception:
+        trans.rollback()
         raise
+    finally:
+        conn.close()
 
-def close_connection(conn):
-    """Schließe Connection (nur wenn nicht gepoolt)"""
-    if conn:
-        try:
-            conn.close()
-        except:
-            pass
 
-def close_all_connections():
-    """Schließe ALLE gepoolten Connections (z.B. beim Shutdown)"""
-    global _connection_pools
-    
-    for database, conn in _connection_pools.items():
+def get_db(database: str = 'toci'):
+    """FastAPI dependency yielding a Connection with transaction handling."""
+    with db_connect(database) as conn:
+        yield conn
+
+
+def close_all_engines():
+    """Dispose all engines and close pooled connections (e.g., on shutdown)."""
+    global _engines
+    for engine in _engines.values():
         try:
-            conn.close()
-        except:
+            engine.dispose()
+        except Exception:
             pass
-    
-    _connection_pools = {}
+    _engines = {}

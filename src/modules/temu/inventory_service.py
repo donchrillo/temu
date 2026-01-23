@@ -42,7 +42,7 @@ class InventoryService:
                 sku_list = result.get("skuList", []) or []
                 all_items.extend(sku_list)
                 
-                total = result.get("total", len(all_items))
+                total = result.get("total") or len(all_items)
                 if len(all_items) >= total or not sku_list:
                     break
                 page_no += 1
@@ -92,35 +92,53 @@ class InventoryService:
     def refresh_inventory_from_jtl(self, product_repo, inventory_repo, jtl_repo, job_id: str) -> Dict[str, int]:
         """
         Liest JTL-Bestände und aktualisiert temu_inventory.
+        Optimiert: Batch-Abfrage statt N+1 Queries.
         """
         products = product_repo.fetch_all()
-        items = []
+        items_to_upsert = []
+        
+        # 1. Sammle alle JTL Artikel-IDs, die wir schon kennen
+        known_jtl_ids = [p["jtl_article_id"] for p in products if p.get("jtl_article_id")]
+        
+        # 2. Batch-Abfrage der Bestände für alle bekannten IDs (nur 1-x SQL Queries statt 5000)
+        stock_map = {}
+        if known_jtl_ids:
+            log_service.log(job_id, "jtl_to_inventory", "INFO", 
+                          f"→ Lade Bestände für {len(known_jtl_ids)} Artikel im Batch...")
+            stock_map = jtl_repo.get_stocks_by_article_ids(known_jtl_ids)
         
         for p in products:
             sku = p.get("sku")
+            jtl_article_id = p.get("jtl_article_id")
             
-            # Hole JTL Artikel-ID per SKU (falls noch nicht gemappt)
-            if not p.get("jtl_article_id") and sku:
+            # Fall A: JTL ID fehlt -> Einzeln nachladen (passiert nur selten/initial)
+            if not jtl_article_id and sku:
                 jtl_article_id = jtl_repo.get_article_id_by_sku(sku)
                 if jtl_article_id:
+                    # Update Product Table sofort, damit wir es beim nächsten Mal haben
                     product_repo.update_jtl_article_id(p["id"], jtl_article_id)
-                    p["jtl_article_id"] = jtl_article_id
+                    # Wenn wir es gerade erst gefunden haben, müssen wir den Stock einzeln holen
+                    stock = jtl_repo.get_stock_by_article_id(jtl_article_id)
+                else:
+                    stock = 0
             
-            # Hole JTL Bestand per Artikel-ID
-            jtl_stock = 0
-            if p.get("jtl_article_id"):
-                jtl_stock = jtl_repo.get_stock_by_article_id(p["jtl_article_id"])
+            # Fall B: JTL ID bekannt -> Aus der Batch-Map holen (Superschnell)
+            else:
+                stock = stock_map.get(jtl_article_id, 0) if jtl_article_id else 0
             
-            items.append({
+            # Items für den Upsert vorbereiten
+            items_to_upsert.append({
                 "product_id": p["id"],
-                "jtl_article_id": p.get("jtl_article_id"),
-                "jtl_stock": jtl_stock
+                "jtl_article_id": jtl_article_id,
+                "jtl_stock": int(stock)  # Temu nimmt nur ganze Zahlen
             })
         
-        if not items:
+        if not items_to_upsert:
             return {"inserted": 0, "updated": 0}
         
-        result = inventory_repo.upsert_inventory(items)
+        # 3. Batch-Upsert in temu_inventory
+        result = inventory_repo.upsert_inventory(items_to_upsert)
+        
         log_service.log(job_id, "jtl_to_inventory", "INFO", 
-                      f"Bestände: {result['inserted']} neu, {result['updated']} aktualisiert")
+                      f"Bestände abgeglichen: {result['inserted']} neu, {result['updated']} aktualisiert")
         return result

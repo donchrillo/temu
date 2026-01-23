@@ -65,9 +65,9 @@ class LogService:
             error_text=error
         )
     
-    def get_recent_logs(self, job_id: str, limit: int = 50) -> List[str]:
+    def get_recent_logs(self, job_id: str, limit: int = 50) -> List[Dict]:
         """Hole letzte Logs für Job (für Dashboard)"""
-        return self.repo.get_job_logs(job_id, limit)
+        return self.repo.get_recent_logs(job_id, limit)
     
     def get_logs(self, job_id: str = None, level: str = None, 
                  limit: int = 100, offset: int = 0) -> List[Dict]:

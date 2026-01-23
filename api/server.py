@@ -3,6 +3,7 @@
 import sys
 from pathlib import Path
 from fastapi import FastAPI, WebSocket
+from fastapi.encoders import jsonable_encoder
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -168,26 +169,17 @@ async def websocket_logs(websocket: WebSocket):
         while True:
             await asyncio.sleep(2)
             jobs = scheduler.get_all_jobs()
-            
-            jobs_serializable = []
-            for job in jobs:
-                job_dict = job.copy()
-                if job_dict.get("status"):
-                    status = job_dict["status"]
-                    if status.get("last_run") and isinstance(status["last_run"], datetime):
-                        status["last_run"] = status["last_run"].isoformat()
-                    if status.get("next_run") and isinstance(status["next_run"], datetime):
-                        status["next_run"] = status["next_run"].isoformat()
-                jobs_serializable.append(job_dict)
-            
+            # ✅ Nutze jsonable_encoder, um Enums/Datetimes serialisierbar zu machen
+            jobs_serializable = jsonable_encoder(jobs)
             await websocket.send_json({"type": "jobs_update", "data": jobs_serializable})
     
     except Exception as e:
         # ✅ KORRIGIERT: Nur echte Fehler loggen, nicht normale Disconnects!
         from starlette.websockets import WebSocketDisconnect
-        from uvicorn.protocols.utils import ClientDisconnected
         
-        if not isinstance(e, (WebSocketDisconnect, ClientDisconnected)):
+        # ClientDisconnected existiert in neueren Uvicorn Versionen nicht mehr
+        # Stattdessen verwenden wir WebSocketDisconnect von Starlette
+        if not isinstance(e, WebSocketDisconnect):
             # Echter Fehler - loggen!
             app_logger.error(f"WebSocket Fehler: {e}", exc_info=True)
     

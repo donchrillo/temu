@@ -30,6 +30,15 @@ class TrackingService:
         
         try:
 
+            if not self.jtl_repo:
+                log_service.log(job_id, "tracking_service", "ERROR", "✗ Kein JTL-Repo verfügbar")
+                return {
+                    'updated': 0,
+                    'errors': 1,
+                    'success': False,
+                    'tracking_data': []
+                }
+
             log_service.log(job_id, "tracking_service", "INFO", 
                               "→ Hole Orders ohne Tracking...")
             
@@ -51,7 +60,7 @@ class TrackingService:
             
             updated_count = 0
             error_count = 0
-            tracking_data_for_api = []
+            tracking_data_for_api = []  # wird aktuell nicht genutzt, behalten für Rückgabekompatibilität
             
             # Step 2 & 3: Für jede Order - suche Tracking in JTL & update TOCI
             for order in orders_without_tracking:
@@ -80,6 +89,7 @@ class TrackingService:
 
                         log_service.log(job_id, "tracking_service", "INFO", 
                                       f"✓ {order.bestell_id}: {tracking_info['tracking_number']}")
+                        updated_count += 1
                     else:
 
                         log_service.log(job_id, "tracking_service", "ERROR", 
