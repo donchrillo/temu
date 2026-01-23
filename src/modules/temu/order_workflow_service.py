@@ -7,7 +7,7 @@ from config.settings import (
     TEMU_APP_KEY, TEMU_APP_SECRET, TEMU_ACCESS_TOKEN, TEMU_API_ENDPOINT
 )
 from src.marketplace_connectors.temu.service import TemuMarketplaceService
-from src.db.connection import get_db_connection
+from src.db.connection import db_connect
 from src.db.repositories.temu.order_repository import OrderRepository
 from src.db.repositories.temu.order_item_repository import OrderItemRepository
 from src.db.repositories.jtl_common.jtl_repository import JtlRepository
@@ -15,6 +15,7 @@ from src.modules.temu.order_service import OrderService
 from src.modules.xml_export.xml_export_service import XmlExportService
 from src.modules.temu.tracking_service import TrackingService
 from src.services.log_service import log_service
+from config.settings import DB_TOCI, DB_JTL
 
 
 class OrderWorkflowService:
@@ -86,36 +87,42 @@ class OrderWorkflowService:
                 raise Exception("API Fetch fehlgeschlagen")
             log_service.log(job_id, "order_workflow", "INFO", "✓ [1/5] API → JSON erfolgreich")
             
-            # Step 2: JSON → Database
-            log_service.log(job_id, "order_workflow", "INFO", "[2/5] JSON → Datenbank")
-            result = self._step_2_json_to_db(job_id)
-            log_service.log(job_id, "order_workflow", "INFO", 
-                          f"✓ [2/5] JSON → DB: {result.get('imported', 0)} neu, {result.get('updated', 0)} aktualisiert")
-            
-            # Step 3: Database → XML Export
-            log_service.log(job_id, "order_workflow", "INFO", "[3/5] Datenbank → XML Export")
-            xml_result = self._step_3_db_to_xml(job_id)
-            if xml_result.get('success'):
-                log_service.log(job_id, "order_workflow", "INFO", 
-                              f"✓ [3/5] DB → XML: {xml_result.get('exported', 0)} exportiert")
-            else:
-                log_service.log(job_id, "order_workflow", "INFO", 
-                              f"✓ [3/5] DB → XML: {xml_result.get('message', 'Keine Orders')}")
-            
-            # Step 4: JTL → Tracking Update
-            log_service.log(job_id, "order_workflow", "INFO", "[4/5] JTL → Tracking Update")
-            tracking_result = self._step_4_tracking_to_db(job_id)
-            log_service.log(job_id, "order_workflow", "INFO", 
-                          f"✓ [4/5] JTL → Tracking: {tracking_result.get('updated', 0)} aktualisiert")
-            
-            # Step 5: Tracking → TEMU API
-            log_service.log(job_id, "order_workflow", "INFO", "[5/5] Tracking → TEMU API")
-            if not self._step_5_db_to_api(job_id):
-                log_service.log(job_id, "order_workflow", "WARNING", 
-                              "⚠ [5/5] Tracking Export fehlgeschlagen")
-            else:
-                log_service.log(job_id, "order_workflow", "INFO", 
-                              "✓ [5/5] Tracking → API erfolgreich")
+            # Transaktionale Phase: verschachtelte with-Statements für sauberes Commit/Rollback
+            with db_connect(DB_TOCI) as toci_conn:
+                self._toci_conn = toci_conn
+                with db_connect(DB_JTL) as jtl_conn:
+                    self._jtl_conn = jtl_conn
+
+                    # Step 2: JSON → Database (atomar über db_connect)
+                    log_service.log(job_id, "order_workflow", "INFO", "[2/5] JSON → Datenbank")
+                    result = self._step_2_json_to_db(job_id)
+                    log_service.log(job_id, "order_workflow", "INFO", 
+                                  f"✓ [2/5] JSON → DB: {result.get('imported', 0)} neu, {result.get('updated', 0)} aktualisiert")
+                    
+                    # Step 3: Database → XML Export
+                    log_service.log(job_id, "order_workflow", "INFO", "[3/5] Datenbank → XML Export")
+                    xml_result = self._step_3_db_to_xml(job_id)
+                    if not xml_result.get('success', False):
+                        log_service.log(job_id, "order_workflow", "WARNING", 
+                                      f"⚠ [3/5] XML Export Fehler: {xml_result.get('message')}")
+                    else:
+                        log_service.log(job_id, "order_workflow", "INFO", 
+                                      f"✓ [3/5] DB → XML: {xml_result.get('exported', 0)} exportiert")
+                    
+                    # Step 4: JTL → Tracking Update
+                    log_service.log(job_id, "order_workflow", "INFO", "[4/5] JTL → Tracking Update")
+                    tracking_result = self._step_4_tracking_to_db(job_id)
+                    log_service.log(job_id, "order_workflow", "INFO", 
+                                  f"✓ [4/5] JTL → Tracking: {tracking_result.get('updated', 0)} aktualisiert")
+                    
+                    # Step 5: Tracking → TEMU API
+                    log_service.log(job_id, "order_workflow", "INFO", "[5/5] Tracking → TEMU API")
+                    if not self._step_5_db_to_api(job_id):
+                        log_service.log(job_id, "order_workflow", "WARNING", 
+                                      "⚠ [5/5] Tracking Export fehlgeschlagen (DB Änderungen bleiben erhalten)")
+                    else:
+                        log_service.log(job_id, "order_workflow", "INFO", 
+                                      "✓ [5/5] Tracking → API erfolgreich")
             
             # Erfolg
             duration = (datetime.now() - start_time).total_seconds()
@@ -129,20 +136,28 @@ class OrderWorkflowService:
             duration = (datetime.now() - start_time).total_seconds()
             error_trace = traceback.format_exc()
             log_service.log(job_id, "order_workflow", "ERROR", 
-                          f"✗ TEMU Order Sync fehlgeschlagen: {str(e)}\n{error_trace}")
+                          f"✗ TEMU Order Sync fehlgeschlagen (Rollback ausgeführt): {str(e)}\n{error_trace}")
             log_service.end_job_capture(success=False, duration=duration, error=str(e))
             return False
+        finally:
+            # Refs freigeben (Connections schließen via Context Manager)
+            self._toci_conn = None
+            self._jtl_conn = None
+            self._order_repo = None
+            self._item_repo = None
+            self._jtl_repo = None
     
     def _get_toci_connection(self):
         """Lazy-load TOCI connection (singleton für Workflow)"""
         if self._toci_conn is None:
-            self._toci_conn = get_db_connection(database='toci', use_pool=True)
+            # Verbindung wird über db_connect Context gesetzt
+            self._toci_conn = None
         return self._toci_conn
     
     def _get_jtl_connection(self):
         """Lazy-load JTL connection (singleton für Workflow)"""
         if self._jtl_conn is None:
-            self._jtl_conn = get_db_connection(database='eazybusiness', use_pool=True)
+            self._jtl_conn = None
         return self._jtl_conn
     
     def _get_order_repo(self):
