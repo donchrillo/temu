@@ -176,12 +176,12 @@ async def websocket_logs(websocket: WebSocket):
     except Exception as e:
         # ✅ KORRIGIERT: Nur echte Fehler loggen, nicht normale Disconnects!
         from starlette.websockets import WebSocketDisconnect
-        
-        # ClientDisconnected existiert in neueren Uvicorn Versionen nicht mehr
-        # Stattdessen verwenden wir WebSocketDisconnect von Starlette
-        if not isinstance(e, WebSocketDisconnect):
-            # Echter Fehler - loggen!
-            app_logger.error(f"WebSocket Fehler: {e}", exc_info=True)
+        from websockets.exceptions import ConnectionClosedOK, ConnectionClosed
+
+        # Ignoriere normale Verbindungsabbrüche (Browser tab geschlossen etc.)
+        if isinstance(e, (WebSocketDisconnect, ConnectionClosedOK, ConnectionClosed)):
+            return
+        app_logger.error(f"WebSocket Fehler: {e}", exc_info=True)
     
     finally:
         if websocket in connected_clients:
