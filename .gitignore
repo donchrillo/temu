@@ -1,0 +1,25 @@
+# Environment
+config/.env
+*.env
+.env.local
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Daten
+data/
+data/api_responses/
+data/inventory_raw/
+logs/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+

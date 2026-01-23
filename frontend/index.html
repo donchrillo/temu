@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Toci JTL Tools</title>
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <link rel="stylesheet" href="styles.css?v=2">
+    <script src="navbar.js" defer></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(reg => {
+                        console.log('✓ Service Worker registriert:', reg);
+                        // Prüfe installability
+                        if (window.BeforeInstallPromptEvent) {
+                            console.log('✓ PWA sollte installierbar sein');
+                        }
+                    })
+                    .catch(err => {
+                        console.error('✗ Service Worker Fehler:', err);
+                    });
+            });
+        }
+        
+        // Debug PWA Installierbarkeit
+        window.addEventListener('beforeinstallprompt', (e) => {
+            console.log('✓ beforeinstallprompt Event gefeuert - PWA ist installierbar!');
+            e.preventDefault();
+            window.deferredPrompt = e;
+        });
+    </script>
+    <style>
+        .landing {
+            max-width: 980px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+        .tiles {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
+            margin-top: 20px;
+        }
+        .tile {
+            background: #111827;
+            border: 1px solid #1f2937;
+            border-radius: 8px;
+            padding: 18px;
+        }
+        .tile-link {
+            display: block;
+            text-decoration: none;
+            color: inherit;
+            cursor: pointer;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.02s ease;
+        }
+        .tile-link:hover {
+            border-color: #3b82f6;
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.1);
+        }
+        .tile-link:active { transform: translateY(1px); }
+        .tile h3 { margin: 0 0 8px 0; }
+        .tile p { margin: 0 0 12px 0; color: #9ca3af; }
+        .tile .actions { display: flex; gap: 8px; }
+        .tile a { text-decoration: none; }
+    </style>
+    
+</head>
+<body>
+    <div class="landing">
+        <header>
+            <h1>🛠️ Toci JTL Tools</h1>
+            <p style="color:#9ca3af;margin:8px 0 0 0">Werkzeuge und Dashboards für JTL-Integrationen</p>
+        </header>
+
+        <div class="tiles">
+            <a class="tile tile-link" href="/temu">
+                <h3>🚀 TEMU Worker Dashboard</h3>
+                <p>Jobs steuern, Logs ansehen und Bestandsabgleiche verwalten.</p>
+            </a>
+
+            <!-- Platzhalter für weitere Tools -->
+            <div class="tile">
+                <h3>📦 XML Export</h3>
+                <p>Geplant: Exporttools und Integrationen.</p>
+                <div class="actions">
+                    <button class="btn-secondary" disabled>In Vorbereitung</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

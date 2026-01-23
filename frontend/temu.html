@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>TEMU Worker Dashboard</title>
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <link rel="stylesheet" href="styles.css?v=2">
+    <script src="navbar.js" defer></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js').catch(console.error);
+            });
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚀 TEMU Worker Dashboard</h1>
+            <div id="debug-info" style="font-size: 11px; color: #fbbf24; margin-bottom: 10px;">Initialisiere...</div>
+            <div class="status-bar">
+                <div class="status-item">
+                    <div class="status-label">Status</div>
+                    <div class="status-value" id="status">Offline</div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">Aktive Jobs</div>
+                    <div class="status-value" id="active-jobs">0</div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">Erfolgsrate</div>
+                    <div class="status-value" id="success-rate">—</div>
+                </div>
+            </div>
+        </header>
+        
+        <!-- TABS -->
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('jobs')">📊 Jobs</button>
+            <button class="tab-btn" onclick="switchTab('logs')">📋 Logs</button>
+            <button class="tab-btn" onclick="switchTab('stats')">📈 Statistiken</button>
+        </div>
+        
+        <!-- TAB 1: JOBS -->
+        <div id="jobs-tab" class="tab-content active">
+            <div class="jobs-grid" id="jobs-grid">
+                <!-- Jobs werden hier eingefügt -->
+            </div>
+        </div>
+        
+        <!-- TAB 2: LOGS mit Filtern -->
+        <div id="logs-tab" class="tab-content">
+            <div class="logs-section">
+                <div class="logs-header">
+                    <div class="logs-title">📋 Strukturierte Log-Suche</div>
+                    <div class="log-controls">
+                        <button class="btn-secondary" onclick="exportLogs('json')">📥 JSON</button>
+                        <button class="btn-secondary" onclick="exportLogs('csv')">📥 CSV</button>
+                        <button class="btn-secondary" onclick="clearLogFilter()">🔄 Reset</button>
+                    </div>
+                </div>
+                
+                <div class="log-filter">
+                    <div class="filter-group">
+                        <label>Job</label>
+                        <select id="filter-job" onchange="applyLogFilters()">
+                            <option value="">— Alle Jobs —</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Level</label>
+                        <select id="filter-level" onchange="applyLogFilters()">
+                            <option value="">— Alle Level —</option>
+                            <option value="DEBUG">DEBUG</option>
+                            <option value="INFO">INFO</option>
+                            <option value="WARNING">WARNING</option>
+                            <option value="ERROR">ERROR</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Suche</label>
+                        <input type="text" id="filter-search" placeholder="Suchtext..." onkeyup="applyLogFilters()">
+                    </div>
+                    <div class="filter-group">
+                        <label>Limit</label>
+                        <select id="filter-limit" onchange="applyLogFilters()">
+                            <option value="50">50 Logs</option>
+                            <option value="100" selected>100 Logs</option>
+                            <option value="500">500 Logs</option>
+                            <option value="1000">1000 Logs</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="logs-container" id="logs-container">
+                    <div class="log-line">Warte auf Logs...</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- TAB 3: STATISTIKEN -->
+        <div id="stats-tab" class="tab-content">
+            <div class="logs-section">
+                <div class="logs-header">
+                    <div class="logs-title">📈 Job-Statistiken (7 Tage)</div>
+                </div>
+                
+                <div class="stats-grid" id="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Insgesamt Läufe</div>
+                        <div class="stat-value" id="stat-total">0</div>
+                    </div>
+                    <div class="stat-card success">
+                        <div class="stat-label">Erfolgreich</div>
+                        <div class="stat-value" id="stat-success">0</div>
+                    </div>
+                    <div class="stat-card error">
+                        <div class="stat-label">Fehler</div>
+                        <div class="stat-value" id="stat-failed">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Erfolgsrate</div>
+                        <div class="stat-value" id="stat-success-rate">0%</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Ø Dauer</div>
+                        <div class="stat-value" id="stat-avg-duration">0s</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Max Dauer</div>
+                        <div class="stat-value" id="stat-max-duration">0s</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- MODAL für Logs Detailansicht -->
+    <div id="log-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">Vollständige Logs</div>
+            <div class="modal-body" id="modal-body">
+                <!-- Logs werden hier angezeigt -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeModal()">Schließen</button>
+            </div>
+        </div>
+    </div>
+    
+    <div style="max-width:1600px;margin:20px auto;padding:0 20px">
+        <a href="/" class="btn-secondary" style="text-decoration:none;display:inline-block;padding:8px 12px;border-radius:4px">← Zurück zu Toci JTL Tools</a>
+    </div>
+    
+    <script src="app.js?v=2"></script>
+</body>
+</html>
