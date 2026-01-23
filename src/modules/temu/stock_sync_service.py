@@ -1,3 +1,5 @@
+"""TEMU Stock Sync Service - Logic for API Upload"""
+
 from typing import List, Dict
 from src.services.log_service import log_service
 
@@ -25,12 +27,15 @@ class StockSyncService:
         # Gruppiere nach goodsId (jede goodsId ein API-Call)
         by_goods_id: Dict[int, List] = {}
         skipped = 0
+        
         for d in deltas:
             goods_id = d.get("goods_id")
             sku_id = d.get("sku_id")
+            
             if not goods_id or not sku_id:
                 skipped += 1
                 continue
+                
             if goods_id not in by_goods_id:
                 by_goods_id[goods_id] = []
             by_goods_id[goods_id].append(d)
@@ -40,6 +45,8 @@ class StockSyncService:
                           f"Überspringe {skipped} Einträge ohne goods_id/sku_id")
         
         synced_ids: List[int] = []
+        
+        # Sende Updates gruppiert
         for goods_id, items in by_goods_id.items():
             payload_items = [
                 {
@@ -48,6 +55,7 @@ class StockSyncService:
                     "stockTarget": it["jtl_stock"]
                 } for it in items
             ]
+            
             resp = temu_inventory_api.update_stock_target(payload_items, stock_type=0, job_id=job_id)
             
             if resp and resp.get("success"):
@@ -58,8 +66,19 @@ class StockSyncService:
                 log_service.log(job_id, "inventory_to_api", "ERROR", 
                               f"✗ goodsId {goods_id}: {resp}")
         
+        # Datenbank Update: Markiere erfolgreich gesendete als synchronisiert
         if synced_ids:
-            updates = [{"id": d["id"], "temu_stock": d["jtl_stock"]} for d in deltas if d["id"] in synced_ids]
+            # Wir müssen auch den temu_stock in unserer DB aktualisieren, 
+            # damit er dem jtl_stock entspricht (sonst loop!).
+            updates = [
+                {
+                    "id": d["id"], 
+                    "temu_stock": d["jtl_stock"]
+                } 
+                for d in deltas if d["id"] in synced_ids
+            ]
+            
             inventory_repo.mark_synced(updates)
+            
             log_service.log(job_id, "inventory_to_api", "INFO", 
-                          f"✓ {len(synced_ids)} Bestände aktualisiert")
+                          f"✓ {len(synced_ids)} Bestände in DB aktualisiert")

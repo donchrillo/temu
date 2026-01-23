@@ -1,10 +1,13 @@
 """Order Service - Business Logic Layer"""
 
 import json
+import traceback
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional
-from config.settings import DATA_DIR
+
+from config.settings import DATA_DIR, DB_TOCI
+from src.db.connection import db_connect
 from src.db.repositories.temu.order_repository import OrderRepository, Order
 from src.db.repositories.temu.order_item_repository import OrderItemRepository, OrderItem
 from src.services.log_service import log_service
@@ -22,15 +25,13 @@ class OrderService:
     def import_from_json_files(self, job_id: Optional[str] = None) -> Dict:
         """
         Importiert Orders aus JSON Files mit kompletter Merge-Logik
-        MIT CONNECTION POOLING!
+        Nutzt db_connect für Transaction Management und Pooling.
         
         Returns:
             dict mit imported/updated/total counts
         """
-        
         job_id = job_id or self.job_id
         
-
         log_service.log(job_id, "order_service", "INFO", 
                           "→ Importiere Orders aus JSON in Datenbank")
         
@@ -70,23 +71,22 @@ class OrderService:
                               f"  {len(orders)} Orders gefunden")
             
             # ===== IMPORT mit vollständiger Merge-Logik =====
-            from src.db.connection import db_connect
-            from config.settings import DB_TOCI
-            
+            # Wir nutzen hier den Context Manager für eine saubere Transaktion
             with db_connect(DB_TOCI) as pooled_conn:
+                # Repositories mit der aktiven Connection initialisieren
                 order_repo_with_pool = OrderRepository(connection=pooled_conn)
                 item_repo_with_pool = OrderItemRepository(connection=pooled_conn)
                 
                 result = self.import_from_api_response(
-                orders,
-                shipping_responses,
-                amount_responses,
-                order_repo_with_pool,
-                item_repo_with_pool,
-                job_id=job_id
-            )
+                    orders,
+                    shipping_responses,
+                    amount_responses,
+                    order_repo=order_repo_with_pool,
+                    item_repo=item_repo_with_pool,
+                    job_id=job_id
+                )
             
-
+            # Wenn wir hier sind, war der Block erfolgreich (Auto-Commit via db_connect)
             log_service.log(job_id, "order_service", "INFO", 
                               f"✓ Import abgeschlossen: {result.get('total', 0)} Orders")
             log_service.log(job_id, "order_service", "INFO", 
@@ -95,13 +95,9 @@ class OrderService:
             return result
         
         except Exception as e:
-            import traceback
             error_trace = traceback.format_exc()
-            
             log_service.log(job_id, "order_service", "ERROR", f"✗ Import Fehler: {str(e)}")
             log_service.log(job_id, "order_service", "ERROR", error_trace)
-
-            
             return {'imported': 0, 'updated': 0, 'total': 0}
     
     def import_from_api_response(self, orders: list, shipping_responses: dict, 
@@ -110,16 +106,7 @@ class OrderService:
                                  job_id: Optional[str] = None) -> Dict:
         """
         Business Logic: Merge + Import Orders
-        MIT optionalen Repositories (für gepoolte Connections)
-        
-        Args:
-            orders: List von Orders aus API
-            shipping_responses: Dict mit Versandinformationen
-            amount_responses: Dict mit Preisinformationen
-            job_id: Optional - für strukturiertes Logging
-        
-        Returns:
-            dict mit import statistics
+        Verwendet die übergebenen Repositories (wichtig für Transaktionen).
         """
         
         if order_repo is None:
@@ -136,10 +123,9 @@ class OrderService:
                 parent_order_sn = parent_order_map.get('parentOrderSn')
                 
                 if not parent_order_sn:
-
                     log_service.log(job_id, "order_service", "WARNING", 
                                       "⚠ Keine parentOrderSn gefunden")
-
+                    continue
                 
                 # ===== MERGE STEP 1: Kundendaten aus shipping_info =====
                 shipping_data = shipping_responses.get(parent_order_sn, {})
@@ -191,6 +177,7 @@ class OrderService:
                         vorname_empfaenger=vorname_empfaenger,
                         nachname_empfaenger=nachname_empfaenger,
                         strasse=strasse,
+                        adresszusatz=existing_order.adresszusatz, # Behalte existierende
                         plz=plz,
                         ort=ort,
                         bundesland=bundesland,
@@ -199,12 +186,13 @@ class OrderService:
                         email=email,
                         telefon_empfaenger=telefon,
                         versandkosten=versandkosten_netto,
-                        status='importiert'
+                        status=existing_order.status, # Status nicht überschreiben!
+                        xml_erstellt=existing_order.xml_erstellt,
+                        trackingnummer=existing_order.trackingnummer,
+                        versanddienstleister=existing_order.versanddienstleister
                     )
                     order_repo.save(order)
                     updated_count += 1
-                    
-
                     log_service.log(job_id, "order_service", "INFO", 
                                       f"  ↻ {parent_order_sn}: aktualisiert")
                 else:
@@ -261,49 +249,27 @@ class OrderService:
                     
                     existing_item = item_repo.find_by_bestellartikel_id(bestellartikel_id)
                     
-                    if existing_item:
-                        item = OrderItem(
-                            id=existing_item.id,
-                            order_id=order_db_id,
-                            bestell_id=parent_order_sn,
-                            bestellartikel_id=bestellartikel_id,
-                            produktname=produktname,
-                            sku=sku,
-                            sku_id=sku_id,
-                            variation=variation,
-                            menge=menge,
-                            netto_einzelpreis=netto_einzelpreis,
-                            brutto_einzelpreis=brutto_einzelpreis,
-                            gesamtpreis_netto=netto_einzelpreis * menge,
-                            gesamtpreis_brutto=brutto_einzelpreis * menge,
-                            mwst_satz=mwst_satz
-                        )
-                        item_repo.save(item)
-                    else:
-                        item = OrderItem(
-                            id=None,
-                            order_id=order_db_id,
-                            bestell_id=parent_order_sn,
-                            bestellartikel_id=bestellartikel_id,
-                            produktname=produktname,
-                            sku=sku,
-                            sku_id=sku_id,
-                            variation=variation,
-                            menge=menge,
-                            netto_einzelpreis=netto_einzelpreis,
-                            brutto_einzelpreis=brutto_einzelpreis,
-                            gesamtpreis_netto=netto_einzelpreis * menge,
-                            gesamtpreis_brutto=brutto_einzelpreis * menge,
-                            mwst_satz=mwst_satz
-                        )
-                        item_repo.save(item)
+                    item = OrderItem(
+                        id=existing_item.id if existing_item else None,
+                        order_id=order_db_id,
+                        bestell_id=parent_order_sn,
+                        bestellartikel_id=bestellartikel_id,
+                        produktname=produktname,
+                        sku=sku,
+                        sku_id=sku_id,
+                        variation=variation,
+                        menge=menge,
+                        netto_einzelpreis=netto_einzelpreis,
+                        brutto_einzelpreis=brutto_einzelpreis,
+                        gesamtpreis_netto=netto_einzelpreis * menge,
+                        gesamtpreis_brutto=brutto_einzelpreis * menge,
+                        mwst_satz=mwst_satz
+                    )
+                    item_repo.save(item)
             
             except Exception as e:
-                import traceback
                 error_trace = traceback.format_exc()
                 parent_order_sn = order_item.get('parentOrderMap', {}).get('parentOrderSn', 'unknown')
-                
-
                 log_service.log(job_id, "order_service", "ERROR", 
                                   f"✗ Fehler bei Order {parent_order_sn}: {str(e)}")
                 log_service.log(job_id, "order_service", "ERROR", error_trace)
@@ -328,25 +294,10 @@ class OrderService:
     def _map_land_to_iso(self, land: str) -> str:
         """Mappt Land-Namen zu ISO-2 Code"""
         land_iso_map = {
-            'Germany': 'DE',
-            'Austria': 'AT',
-            'France': 'FR',
-            'Netherlands': 'NL',
-            'Poland': 'PL',
-            'Italy': 'IT',
-            'Spain': 'ES',
-            'Belgium': 'BE',
-            'Sweden': 'SE',
-            'Denmark': 'DK',
-            'United Kingdom': 'GB',
-            'Switzerland': 'CH',
-            'Czech Republic': 'CZ',
-            'Switzerland': 'CH',
-            'Czech Republic': 'CZ',
-            'Hungary': 'HU',
-            'Romania': 'RO',
-            'Bulgaria': 'BG',
-            'Greece': 'GR',
-            'Portugal': 'PT'
+            'Germany': 'DE', 'Austria': 'AT', 'France': 'FR', 'Netherlands': 'NL',
+            'Poland': 'PL', 'Italy': 'IT', 'Spain': 'ES', 'Belgium': 'BE',
+            'Sweden': 'SE', 'Denmark': 'DK', 'United Kingdom': 'GB',
+            'Switzerland': 'CH', 'Czech Republic': 'CZ', 'Hungary': 'HU',
+            'Romania': 'RO', 'Bulgaria': 'BG', 'Greece': 'GR', 'Portugal': 'PT'
         }
         return land_iso_map.get(land, 'DE')

@@ -22,7 +22,7 @@ class InventoryRepository(BaseRepository):
             ON t.product_id = s.product_id
             WHEN MATCHED THEN UPDATE SET 
                 jtl_article_id = s.jtl_article_id, jtl_stock = s.jtl_stock,
-                needs_sync = CASE WHEN s.jtl_stock <> t.temu_stock THEN 1 ELSE 0 END, 
+                needs_sync = CASE WHEN s.jtl_stock > 0 THEN 1 ELSE 0 END, 
                 updated_at = GETDATE()
             WHEN NOT MATCHED THEN INSERT (product_id, jtl_article_id, jtl_stock, temu_stock, needs_sync)
                 VALUES (s.product_id, s.jtl_article_id, s.jtl_stock, s.jtl_stock, 0);
@@ -80,29 +80,34 @@ class InventoryRepository(BaseRepository):
             app_logger.error(f"InventoryRepository get_needs_sync: {e}", exc_info=True)
             return []
 
-    def mark_synced(self, inventory_ids: List[int]) -> int:
-        """Mark inventory items as synced"""
-        if not inventory_ids:
+    def mark_synced(self, items: List[Dict[str, Any]]) -> int:
+        """
+        Mark inventory items as synced and UPDATE temu_stock.
+        Nutzt Batch-Update (executemany) für maximale Performance.
+        
+        Args:
+            items: Liste von Dicts [{'id': 1, 'temu_stock': 5}, ...]
+        """
+        if not items:
             return 0
         
         try:
-            # WICHTIG: 'expanding=True' erlaubt es, Listen an IN-Clauses zu übergeben
-            # Extrahiere nur die IDs aus den Dict-Objekten (die kommen vom upsert_inventory)
-            if isinstance(inventory_ids, list) and len(inventory_ids) > 0:
-                if isinstance(inventory_ids[0], dict):
-                    inventory_ids_only = [item.get('id') for item in inventory_ids]
-                else:
-                    inventory_ids_only = list(inventory_ids)
-            else:
-                inventory_ids_only = list(inventory_ids)
+            # WICHTIG: Wir setzen temu_stock = :temu_stock (der neue Wert aus JTL),
+            # damit needs_sync beim nächsten Check 0 bleibt.
+            sql = """
+                UPDATE temu_inventory 
+                SET needs_sync = 0, 
+                    temu_stock = :temu_stock,
+                    last_synced_to_temu = GETDATE(),
+                    updated_at = GETDATE()
+                WHERE id = :id
+            """
             
-            sql = text("""
-                UPDATE temu_inventory SET needs_sync = 0, updated_at = GETDATE()
-                WHERE id IN :ids
-            """).bindparams(bindparam('ids', expanding=True))
+            # _execute_stmt erkennt, dass items eine Liste von Dicts ist 
+            # und führt automatisch ein executemany aus.
+            self._execute_stmt(sql, items)
             
-            result = self._execute_stmt(sql, {"ids": inventory_ids_only})
-            return result.rowcount
+            return len(items)
             
         except Exception as e:
             app_logger.error(f"InventoryRepository mark_synced: {e}", exc_info=True)
