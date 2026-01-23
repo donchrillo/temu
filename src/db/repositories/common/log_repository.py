@@ -16,33 +16,56 @@ class LogRepository:
         """Hole Connection"""
         if self._conn:
             return self._conn
-        from src.db.connection import get_db_connection
+        from src.db.connection import get_engine
         return get_db_connection(DB_TOCI)
     
     def ensure_table_exists(self) -> bool:
         """Erstelle Logs-Tabelle wenn nicht vorhanden"""
         try:
-            conn = self._get_conn()
-            conn.execute(text("""
-                IF OBJECT_ID('dbo.scheduler_logs', 'U') IS NULL
-                BEGIN
-                    CREATE TABLE [dbo].[scheduler_logs] (
-                        [log_id] INT PRIMARY KEY IDENTITY(1,1),
-                        [job_id] VARCHAR(255) NOT NULL,
-                        [job_type] VARCHAR(100) NOT NULL,
-                        [level] VARCHAR(20) NOT NULL,
-                        [message] NVARCHAR(MAX) NOT NULL,
-                        [timestamp] DATETIME2 NOT NULL DEFAULT GETDATE(),
-                        [duration_seconds] FLOAT NULL,
-                        [status] VARCHAR(20) NULL,
-                        [error_text] NVARCHAR(MAX) NULL,
-                        
-                        INDEX idx_job_id (job_id),
-                        INDEX idx_timestamp (timestamp),
-                        INDEX idx_level (level)
-                    );
-                END
-            """))
+            if self._conn:
+                self._conn.execute(text("""
+                    IF OBJECT_ID('dbo.scheduler_logs', 'U') IS NULL
+                    BEGIN
+                        CREATE TABLE [dbo].[scheduler_logs] (
+                            [log_id] INT PRIMARY KEY IDENTITY(1,1),
+                            [job_id] VARCHAR(255) NOT NULL,
+                            [job_type] VARCHAR(100) NOT NULL,
+                            [level] VARCHAR(20) NOT NULL,
+                            [message] NVARCHAR(MAX) NOT NULL,
+                            [timestamp] DATETIME2 NOT NULL DEFAULT GETDATE(),
+                            [duration_seconds] FLOAT NULL,
+                            [status] VARCHAR(20) NULL,
+                            [error_text] NVARCHAR(MAX) NULL,
+                            
+                            INDEX idx_job_id (job_id),
+                            INDEX idx_timestamp (timestamp),
+                            INDEX idx_level (level)
+                        );
+                    END
+                """))
+            else:
+                with get_engine(DB_TOCI).connect() as conn:
+                    conn.execute(text("""
+                        IF OBJECT_ID('dbo.scheduler_logs', 'U') IS NULL
+                        BEGIN
+                            CREATE TABLE [dbo].[scheduler_logs] (
+                                [log_id] INT PRIMARY KEY IDENTITY(1,1),
+                                [job_id] VARCHAR(255) NOT NULL,
+                                [job_type] VARCHAR(100) NOT NULL,
+                                [level] VARCHAR(20) NOT NULL,
+                                [message] NVARCHAR(MAX) NOT NULL,
+                                [timestamp] DATETIME2 NOT NULL DEFAULT GETDATE(),
+                                [duration_seconds] FLOAT NULL,
+                                [status] VARCHAR(20) NULL,
+                                [error_text] NVARCHAR(MAX) NULL,
+                                
+                                INDEX idx_job_id (job_id),
+                                INDEX idx_timestamp (timestamp),
+                                INDEX idx_level (level)
+                            );
+                        END
+                    """))
+                    conn.commit()
             return True
         except Exception as e:
             app_logger.error(f"LogRepository ensure_table_exists: {e}", exc_info=True)
@@ -53,20 +76,36 @@ class LogRepository:
                    error_text: str = None) -> bool:
         """Speichere Log-Entry"""
         try:
-            conn = self._get_conn()
-            conn.execute(text("""
-                INSERT INTO [dbo].[scheduler_logs]
-                (job_id, job_type, level, message, status, duration_seconds, error_text, timestamp)
-                VALUES (:job_id, :job_type, :level, :message, :status, :duration_seconds, :error_text, GETDATE())
-            """), {
-                "job_id": job_id,
-                "job_type": job_type,
-                "level": level,
-                "message": message,
-                "status": status,
-                "duration_seconds": duration_seconds,
-                "error_text": error_text
-            })
+            if self._conn:
+                self._conn.execute(text("""
+                    INSERT INTO [dbo].[scheduler_logs]
+                    (job_id, job_type, level, message, status, duration_seconds, error_text, timestamp)
+                    VALUES (:job_id, :job_type, :level, :message, :status, :duration_seconds, :error_text, GETDATE())
+                """), {
+                    "job_id": job_id,
+                    "job_type": job_type,
+                    "level": level,
+                    "message": message,
+                    "status": status,
+                    "duration_seconds": duration_seconds,
+                    "error_text": error_text
+                })
+            else:
+                with get_engine(DB_TOCI).connect() as conn:
+                    conn.execute(text("""
+                        INSERT INTO [dbo].[scheduler_logs]
+                        (job_id, job_type, level, message, status, duration_seconds, error_text, timestamp)
+                        VALUES (:job_id, :job_type, :level, :message, :status, :duration_seconds, :error_text, GETDATE())
+                    """), {
+                        "job_id": job_id,
+                        "job_type": job_type,
+                        "level": level,
+                        "message": message,
+                        "status": status,
+                        "duration_seconds": duration_seconds,
+                        "error_text": error_text
+                    })
+                    conn.commit()
             return True
         except Exception as e:
             app_logger.error(f"LogRepository insert_log: {e}", exc_info=True)
@@ -152,11 +191,18 @@ class LogRepository:
     def clean_old_logs(self, days: int = 30) -> int:
         """Lösche alte Logs"""
         try:
-            conn = self._get_conn()
-            result = conn.execute(text("""
-                DELETE FROM [dbo].[scheduler_logs]
-                WHERE timestamp < DATEADD(day, -:days, GETDATE())
-            """), {"days": days})
+            if self._conn:
+                result = self._conn.execute(text("""
+                    DELETE FROM [dbo].[scheduler_logs]
+                    WHERE timestamp < DATEADD(day, -:days, GETDATE())
+                """), {"days": days})
+            else:
+                with get_engine(DB_TOCI).connect() as conn:
+                    result = conn.execute(text("""
+                        DELETE FROM [dbo].[scheduler_logs]
+                        WHERE timestamp < DATEADD(day, -:days, GETDATE())
+                    """), {"days": days})
+                    conn.commit()
             return result.rowcount
         except Exception as e:
             app_logger.error(f"LogRepository clean_old_logs: {e}", exc_info=True)

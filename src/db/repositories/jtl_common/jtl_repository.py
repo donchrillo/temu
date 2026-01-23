@@ -16,17 +16,24 @@ class JtlRepository:
         """Hole Connection"""
         if self._conn:
             return self._conn
-        from src.db.connection import get_db_connection
+        from src.db.connection import get_engine
         return get_db_connection(DB_JTL)
     
     def insert_xml_import(self, xml_string: str) -> bool:
         """Importiere XML in JTL tXMLBestellImport Tabelle"""
         try:
-            conn = self._get_conn()
-            conn.execute(text("""
-                INSERT INTO [dbo].[tXMLBestellImport] (cText, nPlattform, nRechnung)
-                VALUES (:xml_string, 5, 0)
-            """), {"xml_string": xml_string})
+            if self._conn:
+                self._conn.execute(text("""
+                    INSERT INTO [dbo].[tXMLBestellImport] (cText, nPlattform, nRechnung)
+                    VALUES (:xml_string, 5, 0)
+                """), {"xml_string": xml_string})
+            else:
+                with get_engine(DB_JTL).connect() as conn:
+                    conn.execute(text("""
+                        INSERT INTO [dbo].[tXMLBestellImport] (cText, nPlattform, nRechnung)
+                        VALUES (:xml_string, 5, 0)
+                    """), {"xml_string": xml_string})
+                    conn.commit()
             return True
         except Exception as e:
             app_logger.error(f"JTL insert_xml_import: {e}", exc_info=True)

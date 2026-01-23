@@ -39,18 +39,17 @@ class OrderItemRepository:
         """Hole Connection"""
         if self._conn:
             return self._conn
-        from src.db.connection import get_db_connection
+        from src.db.connection import get_engine
         return get_db_connection(DB_TOCI)
     
     def save(self, item: OrderItem) -> int:
         """INSERT oder UPDATE OrderItem"""
         try:
-            conn = self._get_conn()
-            
             if item.id:
                 # UPDATE
-                conn.execute(text(f"""
+                sql = f"""
                     UPDATE {TABLE_ORDER_ITEMS} SET
+                        bestellartikel_id = :bestellartikel_id,
                         produktname = :produktname,
                         sku = :sku,
                         sku_id = :sku_id,
@@ -62,7 +61,9 @@ class OrderItemRepository:
                         gesamtpreis_brutto = :gesamtpreis_brutto,
                         mwst_satz = :mwst_satz
                     WHERE id = :id
-                """), {
+                """
+                params = {
+                    "bestellartikel_id": item.bestellartikel_id,
                     "produktname": item.produktname,
                     "sku": item.sku,
                     "sku_id": item.sku_id,
@@ -74,26 +75,33 @@ class OrderItemRepository:
                     "gesamtpreis_brutto": item.gesamtpreis_brutto,
                     "mwst_satz": item.mwst_satz,
                     "id": item.id
-                })
+                }
+                
+                if self._conn:
+                    self._conn.execute(text(sql), params)
+                else:
+                    with get_engine(DB_TOCI).connect() as conn:
+                        conn.execute(text(sql), params)
+                        conn.commit()
+                
                 return item.id
             else:
                 # INSERT
-                result = conn.execute(text(f"""
+                sql = f"""
                     INSERT INTO {TABLE_ORDER_ITEMS} (
-                        order_id, bestell_id, bestellartikel_id,
-                        produktname, sku, sku_id, variation,
-                        menge, netto_einzelpreis, brutto_einzelpreis,
-                        gesamtpreis_netto, gesamtpreis_brutto, mwst_satz,
-                        created_at
+                        order_id, bestell_id, bestellartikel_id, produktname,
+                        sku, sku_id, variation, menge,
+                        netto_einzelpreis, brutto_einzelpreis,
+                        gesamtpreis_netto, gesamtpreis_brutto, mwst_satz
                     ) VALUES (
-                        :order_id, :bestell_id, :bestellartikel_id,
-                        :produktname, :sku, :sku_id, :variation,
-                        :menge, :netto_einzelpreis, :brutto_einzelpreis,
-                        :gesamtpreis_netto, :gesamtpreis_brutto, :mwst_satz,
-                        GETDATE()
+                        :order_id, :bestell_id, :bestellartikel_id, :produktname,
+                        :sku, :sku_id, :variation, :menge,
+                        :netto_einzelpreis, :brutto_einzelpreis,
+                        :gesamtpreis_netto, :gesamtpreis_brutto, :mwst_satz
                     );
                     SELECT @@IDENTITY AS new_id;
-                """), {
+                """
+                params = {
                     "order_id": item.order_id,
                     "bestell_id": item.bestell_id,
                     "bestellartikel_id": item.bestellartikel_id,
@@ -107,13 +115,23 @@ class OrderItemRepository:
                     "gesamtpreis_netto": item.gesamtpreis_netto,
                     "gesamtpreis_brutto": item.gesamtpreis_brutto,
                     "mwst_satz": item.mwst_satz
-                })
-                new_id_row = result.first()
-                return int(new_id_row[0]) if new_id_row else 0
+                }
+                
+                if self._conn:
+                    result = self._conn.execute(text(sql), params)
+                    row = result.first()
+                    return int(row[0]) if row else 0
+                else:
+                    with get_engine(DB_TOCI).connect() as conn:
+                        result = conn.execute(text(sql), params)
+                        row = result.first()
+                        conn.commit()
+                        return int(row[0]) if row else 0
+        
         except Exception as e:
             app_logger.error(f"OrderItemRepository save: {e}", exc_info=True)
             return 0
-    
+
     def find_by_order_id(self, order_id: int) -> List[OrderItem]:
         """Hole alle Items für Order"""
         try:
