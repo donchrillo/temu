@@ -1,4 +1,8 @@
-"""Database Connection Manager - SQL Server via SQLAlchemy Engine (echtes Pooling)."""
+"""
+src/db/connection.py
+Database Connection Manager - SQL Server via SQLAlchemy Engine (echtes Pooling).
+
+"""
 
 import platform
 from contextlib import contextmanager
