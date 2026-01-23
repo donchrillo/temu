@@ -29,6 +29,7 @@ class XmlExportService:
         self.order_repo = order_repo or OrderRepository()
         self.item_repo = item_repo or OrderItemRepository()
         self.jtl_repo = jtl_repo or JtlRepository()
+        self._customer_nr_cache = {}  # Cache Kundennummern pro Email
     
     def export_to_xml(self, save_to_disk=True, import_to_jtl=True, job_id: Optional[str] = None) -> Dict:
         """
@@ -187,6 +188,8 @@ class XmlExportService:
         ET.SubElement(bestellung, 'cZahlungsartName').text = 'TEMU'
         ET.SubElement(bestellung, 'dBezahltDatum')
         
+        kunden_nr = self._get_jtl_customer_number(order.email)
+
         # ===== Artikel-Positionen =====
         for item in items:
             self._add_item_to_xml(bestellung, item)
@@ -195,7 +198,7 @@ class XmlExportService:
         self._add_shipping_costs_to_xml(bestellung, order)
         
         # ===== Kunde =====
-        self._add_customer_to_xml(bestellung, order)
+        self._add_customer_to_xml(bestellung, order, kunden_nr)
         
         # ===== Lieferadresse =====
         self._add_delivery_address_to_xml(bestellung, order)
@@ -240,11 +243,11 @@ class XmlExportService:
         ET.SubElement(versand_pos, 'cPosTyp').text = 'versandkosten'
         ET.SubElement(versand_pos, 'fRabatt').text = '0.00'
     
-    def _add_customer_to_xml(self, bestellung_elem, order):
+    def _add_customer_to_xml(self, bestellung_elem, order, kunden_nr: str = ''):
         """Füge Kundendaten hinzu"""
         kunde = ET.SubElement(bestellung_elem, 'tkunde')
         
-        ET.SubElement(kunde, 'cKundenNr')
+        ET.SubElement(kunde, 'cKundenNr').text = kunden_nr or ''
         ET.SubElement(kunde, 'cAnrede')
         ET.SubElement(kunde, 'cTitel')
         ET.SubElement(kunde, 'cVorname').text = order.vorname_empfaenger or ''
@@ -266,6 +269,28 @@ class XmlExportService:
         ET.SubElement(kunde, 'dErstellt').text = (
             order.kaufdatum.strftime('%d.%m.%Y') if order.kaufdatum else ''
         )
+
+    def _get_jtl_customer_number(self, email: str) -> str:
+        """Hole JTL Kundennummer per E-Mail (mit einfachem Cache)."""
+        if not email:
+            return ''
+        key = email.strip().lower()
+        if not key:
+            return ''
+
+        if key in self._customer_nr_cache:
+            return self._customer_nr_cache[key]
+
+        if not self.jtl_repo:
+            return ''
+
+        try:
+            kunden_nr = self.jtl_repo.get_customer_number_by_email(key) or ''
+            self._customer_nr_cache[key] = kunden_nr
+            return kunden_nr
+        except Exception:
+            # Kein hartes Fail: bei Fehlern leeres Feld -> JTL legt neuen Kunden an
+            return ''
     
     def _add_delivery_address_to_xml(self, bestellung_elem, order):
         """Füge Lieferadresse hinzu"""

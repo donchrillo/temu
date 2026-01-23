@@ -199,3 +199,24 @@ class JtlRepository(BaseRepository):
         except Exception as e:
             app_logger.error(f"JTL get_tracking_from_lieferschein: {e}", exc_info=True)
             return None
+
+    def get_customer_number_by_email(self, email: str) -> Optional[str]:
+        """Hole JTL Kundennummer (cKundenNr) per E-Mail-Adresse."""
+        if not email:
+            return None
+        try:
+            # Hinweis: E-Mail steht in View eazybusiness.Kunde.lvKunde als cEMail
+            sql = """
+                SELECT TOP 1 [cKundenNr]
+                FROM [eazybusiness].[Kunde].[lvKunde]
+                WHERE LOWER([cEMail]) = LOWER(:email)
+                ORDER BY [kKunde] DESC
+            """
+            row = self._fetch_one(sql, {"email": email})
+            if not row:
+                return None
+            kunden_nr = row[0]
+            return kunden_nr if kunden_nr else None
+        except Exception as e:
+            app_logger.error(f"JTL get_customer_number_by_email: {e}", exc_info=True)
+            return None
