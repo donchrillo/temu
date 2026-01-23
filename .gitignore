@@ -1,3 +1,8 @@
+# Virtual Environment
+.venv/
+venv/
+env/
+
 # Environment
 config/.env
 *.env
