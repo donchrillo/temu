@@ -70,13 +70,14 @@ class OrderService:
                               f"  {len(orders)} Orders gefunden")
             
             # ===== IMPORT mit vollständiger Merge-Logik =====
-            from src.db.connection import get_db_connection
-            pooled_conn = get_db_connection(database='toci', use_pool=True)
+            from src.db.connection import db_connect
+            from config.settings import DB_TOCI
             
-            order_repo_with_pool = OrderRepository(connection=pooled_conn)
-            item_repo_with_pool = OrderItemRepository(connection=pooled_conn)
-            
-            result = self.import_from_api_response(
+            with db_connect(DB_TOCI) as pooled_conn:
+                order_repo_with_pool = OrderRepository(connection=pooled_conn)
+                item_repo_with_pool = OrderItemRepository(connection=pooled_conn)
+                
+                result = self.import_from_api_response(
                 orders,
                 shipping_responses,
                 amount_responses,

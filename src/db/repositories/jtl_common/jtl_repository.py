@@ -137,8 +137,8 @@ class JtlRepository:
         try:
             sql = """
                 SELECT TOP 1 [kArtikel]
-                FROM [dbo].[tArtikel]
-                WHERE [cArtikelnummer] = :sku
+                FROM [eazybusiness].[dbo].[tArtikel]
+                WHERE [cArtNr] = :sku
             """
             if self._conn:
                 result = self._conn.execute(text(sql), {"sku": sku})
@@ -156,48 +156,122 @@ class JtlRepository:
     def get_stock_by_article_id(self, article_id: int) -> int:
         """Hole Bestand aus JTL pro Artikel-ID"""
         try:
+            # Verfügbarer Bestand = fBestand - nPuffer für Lager 2, mindestens 0
             sql = """
-                SELECT TOP 1 [fLagerbestand]
-                FROM [dbo].[tArtikelLagerbestand]
-                WHERE [kArtikel] = :article_id
+                SELECT TOP 1 v.[fBestand], t.[nPuffer]
+                FROM [eazybusiness].[dbo].[tArtikel] t
+                JOIN [eazybusiness].[dbo].[vLagerbestandProLager] v
+                  ON t.[kArtikel] = v.[kArtikel]
+                WHERE t.[kArtikel] = :article_id
+                  AND v.[kWarenlager] = 2
             """
+            params = {"article_id": article_id}
             if self._conn:
-                result = self._conn.execute(text(sql), {"article_id": article_id})
+                result = self._conn.execute(text(sql), params)
                 row = result.first()
             else:
                 with get_engine(DB_JTL).connect() as conn:
-                    result = conn.execute(text(sql), {"article_id": article_id})
+                    result = conn.execute(text(sql), params)
                     row = result.first()
-            
-            return int(row[0]) if row else 0
+
+            if not row:
+                return 0
+            f_bestand, n_puffer = float(row[0]), int(row[1])
+            available = max(0, int(f_bestand) - n_puffer)
+            return available
         except Exception as e:
             app_logger.error(f"JTL get_stock_by_article_id: {e}", exc_info=True)
             return 0
     
+    def get_stocks_by_article_ids(self, article_ids: List[int]) -> Dict[int, float]:
+        """
+        Hole Bestände für viele Artikel gleichzeitig (Batch).
+        Verhindert das N+1 Problem.
+        Chunking bei 1.000 IDs wegen SQL Server 2100 Parameter Limit.
+        """
+        if not article_ids:
+            return {}
+        
+        from sqlalchemy import bindparam
+        
+        # Deduplizieren
+        ids = list(set(article_ids))
+        result_map = {}
+        chunk_size = 1000
+        
+        try:
+            # Wir müssen die Liste stückeln, da MS SQL max 2100 Parameter erlaubt
+            for i in range(0, len(ids), chunk_size):
+                chunk = ids[i:i + chunk_size]
+                
+                # Hole Bestände und Puffer für Lager 2 pro Artikel
+                # Verfügbarer Bestand = fBestand - nPuffer, min 0 (in Python berechnet)
+                sql = text("""
+                    SELECT t.[kArtikel], v.[fBestand], t.[nPuffer]
+                    FROM [eazybusiness].[dbo].[tArtikel] t
+                    JOIN [eazybusiness].[dbo].[vLagerbestandProLager] v
+                      ON t.[kArtikel] = v.[kArtikel]
+                    WHERE t.[kArtikel] IN :ids
+                      AND v.[kWarenlager] = 2
+                """).bindparams(bindparam('ids', expanding=True))
+                
+                if self._conn:
+                    res = self._conn.execute(sql, {"ids": chunk})
+                    for row in res.all():
+                        k_artikel = int(row[0])
+                        f_bestand = float(row[1])
+                        n_puffer = int(row[2])
+                        available = max(0, int(f_bestand) - n_puffer)
+                        result_map[k_artikel] = float(available)
+                else:
+                    # Fallback falls standalone
+                    engine = get_engine(DB_JTL)
+                    with engine.connect() as conn:
+                        res = conn.execute(sql, {"ids": chunk})
+                        for row in res.all():
+                            k_artikel = int(row[0])
+                            f_bestand = float(row[1])
+                            n_puffer = int(row[2])
+                            available = max(0, int(f_bestand) - n_puffer)
+                            result_map[k_artikel] = float(available)
+                            
+            return result_map
+            
+        except Exception as e:
+            app_logger.error(f"JTL get_stocks_by_article_ids: {e}", exc_info=True)
+            return {}
+    
     def get_tracking_from_lieferschein(self, bestell_id: str) -> Optional[Dict]:
         """Hole Tracking aus JTL Lieferscheindaten"""
         try:
+            # Nutzung der Versand-Views analog zum Legacy-Code
             sql = """
-                SELECT TOP 1 [cTracking], [cVersandart]
-                FROM [dbo].[tVersand]
-                WHERE [cBestellungInetBestellNr] = :bestell_id
-                AND [cTracking] IS NOT NULL
-                AND [cTracking] != ''
+                SELECT TOP 1
+                    ls.[cBestellungInetBestellNr],
+                    lp.[cVersandartName],
+                    CAST(lp.[cTrackingId] AS VARCHAR(100)) AS cTrackingId
+                FROM [Versand].[lvLieferschein] ls
+                LEFT JOIN [Versand].[lvLieferscheinpaket] lp
+                  ON lp.[kLieferschein] = ls.[kLieferschein]
+                WHERE ls.[cBestellungInetBestellNr] = :bestell_id
             """
+            params = {"bestell_id": bestell_id}
             if self._conn:
-                result = self._conn.execute(text(sql), {"bestell_id": bestell_id})
+                result = self._conn.execute(text(sql), params)
                 row = result.first()
             else:
                 with get_engine(DB_JTL).connect() as conn:
-                    result = conn.execute(text(sql), {"bestell_id": bestell_id})
+                    result = conn.execute(text(sql), params)
                     row = result.first()
             
             if not row:
                 return None
             
+            bestellnr, carrier_name, tracking_id = row[0], row[1], row[2]
             return {
-                "tracking_number": row[0],
-                "carrier": row[1]
+                "bestell_id": bestellnr,
+                "carrier": carrier_name or "",
+                "tracking_number": tracking_id or ""
             }
         except Exception as e:
             app_logger.error(f"JTL get_tracking_from_lieferschein: {e}", exc_info=True)

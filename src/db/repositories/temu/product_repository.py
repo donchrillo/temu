@@ -120,11 +120,11 @@ class ProductRepository:
             app_logger.error(f"ProductRepository fetch_all: {e}", exc_info=True)
             return []
 
-    def update_jtl_article_id(self, sku: str, jtl_article_id: int) -> bool:
+    def update_jtl_article_id(self, product_id: int, jtl_article_id: int) -> bool:
         """Update JTL article ID for a product"""
         try:
-            sql = text("UPDATE temu_products SET jtl_article_id = :jtl_id, updated_at = GETDATE() WHERE sku = :sku")
-            self._execute_sql(sql, {"jtl_id": jtl_article_id, "sku": sku})
+            sql = text("UPDATE temu_products SET jtl_article_id = :jtl_id, updated_at = GETDATE() WHERE id = :product_id")
+            self._execute_sql(sql, {"jtl_id": jtl_article_id, "product_id": product_id})
             return True
         except Exception as e:
             app_logger.error(f"ProductRepository update_jtl_article_id: {e}", exc_info=True)

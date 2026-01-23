@@ -132,14 +132,15 @@ class LogRepository:
     def get_recent_logs(self, job_id: str, limit: int = 50) -> List[Dict]:
         """Hole aktuelle Logs für einen Job"""
         try:
-            sql = """
-                SELECT TOP :limit log_id, job_id, job_type, level, message, timestamp, 
+            # MS SQL: TOP muss hardcodiert sein, kann nicht parametrisiert werden!
+            sql = f"""
+                SELECT TOP {limit} log_id, job_id, job_type, level, message, timestamp, 
                        duration_seconds, status, error_text
                 FROM [dbo].[scheduler_logs]
                 WHERE job_id = :job_id
                 ORDER BY timestamp DESC
             """
-            params = {"job_id": job_id, "limit": limit}
+            params = {"job_id": job_id}
 
             if self._conn:
                 result = self._conn.execute(text(sql), params)

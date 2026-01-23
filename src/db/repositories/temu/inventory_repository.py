@@ -112,13 +112,22 @@ class InventoryRepository:
         
         try:
             # WICHTIG: 'expanding=True' erlaubt es, Listen an IN-Clauses zu übergeben
+            # Extrahiere nur die IDs aus den Dict-Objekten (die kommen vom upsert_inventory)
+            if isinstance(inventory_ids, list) and len(inventory_ids) > 0:
+                if isinstance(inventory_ids[0], dict):
+                    inventory_ids_only = [item.get('id') for item in inventory_ids]
+                else:
+                    inventory_ids_only = list(inventory_ids)
+            else:
+                inventory_ids_only = list(inventory_ids)
+            
             sql = text("""
                 UPDATE temu_inventory SET needs_sync = 0, updated_at = GETDATE()
                 WHERE id IN :ids
             """).bindparams(bindparam('ids', expanding=True))
             
             # Hier reicht unser einfacher _execute_sql Helper
-            result = self._execute_sql(sql, {"ids": list(inventory_ids)})
+            result = self._execute_sql(sql, {"ids": inventory_ids_only})
             return result.rowcount
             
         except Exception as e:
