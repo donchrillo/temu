@@ -11,7 +11,7 @@ from src.db.repositories.jtl_common.jtl_repository import JtlRepository
 from src.services.log_service import log_service
 from config.settings import (
     JTL_WAEHRUNG, JTL_SPRACHE, JTL_K_BENUTZER, JTL_K_FIRMA,
-    XML_OUTPUT_PATH
+    XML_OUTPUT_PATH, DATA_DIR
 )
 
 class XmlExportService:
@@ -31,13 +31,14 @@ class XmlExportService:
         self.jtl_repo = jtl_repo or JtlRepository()
         self._customer_nr_cache = {}  # Cache Kundennummern pro Email
     
-    def export_to_xml(self, save_to_disk=True, import_to_jtl=True, job_id: Optional[str] = None) -> Dict:
+    def export_to_xml(self, save_to_disk=True, import_to_jtl=True, save_to_db=True, job_id: Optional[str] = None) -> Dict:
         """
         Generiert XML aus Orders und exportiert zu JTL
         
         Args:
             save_to_disk: Speichere XML auf Festplatte
             import_to_jtl: Importiere XML in JTL DB
+            save_to_db: Speichere XML in TOCI DB (temu_xml_export)
             job_id: Optional - für strukturiertes Logging
         
         Returns:
@@ -63,7 +64,7 @@ class XmlExportService:
                 log_service.log(job_id, "xml_export", "INFO", 
                               f"  {len(orders)} Orders zum Exportieren gefunden")
             
-            # ===== Generate XML Root =====
+            # ===== Generate XML Root (für gesamt-export) =====
             root = ET.Element('tBestellungen')
             exported_count = 0
             jtl_import_count = 0
@@ -78,11 +79,21 @@ class XmlExportService:
                     bestellung_elem = self._generate_order_xml(order, items, root)
                     
                     if bestellung_elem is not None:
+                        # ===== Step 0: Speichere Einzelne XML in TOCI DB =====
+                        if save_to_db:
+                            self._save_xml_to_db(order.bestell_id, bestellung_elem, job_id)
+                        
+                        # ===== Step 0b: Archiviere Einzel-XML in docs/exports =====
+                        if save_to_disk:
+                            self._archive_order_to_docs(order.bestell_id, bestellung_elem, job_id)
+
                         # ===== Step 1: In JTL DB importieren =====
                         if import_to_jtl and self.jtl_repo:
                             jtl_success = self._import_to_jtl(order, bestellung_elem, job_id)
                             if jtl_success:
                                 jtl_import_count += 1
+                                # Markiere Archiv-Eintrag als verarbeitet
+                                self.order_repo.mark_xml_export_processed(order.bestell_id)
                         
                         # ===== Step 2: Update Status in TOCI =====
                         status_success = self._update_order_status(order.id, job_id)
@@ -188,14 +199,16 @@ class XmlExportService:
         ET.SubElement(bestellung, 'cZahlungsartName').text = 'TEMU'
         ET.SubElement(bestellung, 'dBezahltDatum')
         
-        kunden_nr = self._get_jtl_customer_number(order.email)
-
+        # ===== KORREKTE REIHENFOLGE: Artikel ZUERST, dann Kunde =====
         # ===== Artikel-Positionen =====
         for item in items:
             self._add_item_to_xml(bestellung, item)
         
         # ===== Versandkosten =====
         self._add_shipping_costs_to_xml(bestellung, order)
+        
+        # ===== Hole Kundennummer aus JTL (falls Email existiert) =====
+        kunden_nr = self._get_jtl_customer_number(order.email)
         
         # ===== Kunde =====
         self._add_customer_to_xml(bestellung, order, kunden_nr)
@@ -383,22 +396,71 @@ class XmlExportService:
             return False
     
     def _save_xml_to_disk(self, root: ET.Element, job_id: Optional[str] = None):
-        """Speichere XML auf Festplatte"""
+        """Speichere komplette XML auf Festplatte mit Zeitstempel"""
         try:
             xml_string = self._prettify_xml(root)
             
-            with open(str(XML_OUTPUT_PATH), 'w', encoding='ISO-8859-1') as f:
+            # Generiere Dateinamen mit Zeitstempel: jtl_temu_bestellungen_YYYYMMDD_HHMMSS.xml
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f"jtl_temu_bestellungen_{timestamp}.xml"
+            # XML_OUTPUT_PATH ist bereits ein Path Objekt, daher direkt .parent verwenden
+            filepath = XML_OUTPUT_PATH.parent / filename
+            
+            # Stelle sicher, dass das Verzeichnis existiert
+            filepath.parent.mkdir(parents=True, exist_ok=True)
+            
+            with open(str(filepath), 'w', encoding='ISO-8859-1') as f:
                 f.write(xml_string)
             
 
             log_service.log(job_id, "xml_export", "INFO", 
-                              f"  ✓ XML gespeichert: {XML_OUTPUT_PATH}")
+                              f"  ✓ XML gespeichert: {filepath}")
 
         
         except Exception as e:
 
             log_service.log(job_id, "xml_export", "ERROR", 
                               f"✗ XML Speicher-Fehler: {str(e)}")
+    
+    def _archive_order_to_docs(self, bestell_id: str, bestellung_elem: ET.Element, job_id: Optional[str] = None) -> None:
+        """Speichere Einzel-XML pro Bestellung in data/export mit Zeitstempel und Bestell-ID."""
+        try:
+            root = ET.Element('tBestellungen')
+            root.append(bestellung_elem)
+            xml_string = self._prettify_xml(root)
+
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            archive_dir = DATA_DIR / 'export'
+            archive_dir.mkdir(parents=True, exist_ok=True)
+            archive_file = archive_dir / f"temu_order_{bestell_id}_{timestamp}.xml"
+
+            with open(str(archive_file), 'w', encoding='ISO-8859-1') as f:
+                f.write(xml_string)
+
+            log_service.log(job_id, "xml_export", "INFO", 
+                              f"  ↳ Einzel-XML archiviert (data/export): {archive_file}")
+        
+        except Exception as e:
+            log_service.log(job_id, "xml_export", "WARNING", 
+                              f"  ⚠ Einzel-XML Archiv-Fehler für {bestell_id}: {str(e)}")
+
+    def _save_xml_to_db(self, bestell_id: str, bestellung_elem: ET.Element, job_id: Optional[str] = None) -> bool:
+        """Speichere einzelne XML in TOCI DB (temu_xml_export Tabelle)"""
+        try:
+            # Wrap Element in Root für valides XML
+            root = ET.Element('tBestellungen')
+            # Kopiere das Element
+            root.append(bestellung_elem)
+            
+            xml_string = self._prettify_xml(root)
+            
+            # Speichere in TOCI Datenbank
+            return self.order_repo.insert_xml_export(bestell_id, xml_string)
+        
+        except Exception as e:
+            log_service.log(job_id, "xml_export", "WARNING", 
+                              f"  ⚠ XML DB Speicher-Fehler für {bestell_id}: {str(e)}")
+            return False
 
     
     def _prettify_xml(self, elem: ET.Element) -> str:

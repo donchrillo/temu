@@ -277,6 +277,39 @@ class OrderRepository(BaseRepository):
         except Exception as e:
             app_logger.error(f"OrderRepository update_xml_export_status: {e}", exc_info=True)
             return False
+    
+    def insert_xml_export(self, bestell_id: str, xml_content: str) -> bool:
+        """Speichere XML in temu_xml_export Tabelle"""
+        try:
+            sql = """
+                INSERT INTO temu_xml_export (bestell_id, xml_content, status, verarbeitet, created_at)
+                VALUES (:bestell_id, :xml_content, 'pending', 0, GETDATE())
+            """
+            self._execute_stmt(sql, {
+                "bestell_id": bestell_id,
+                "xml_content": xml_content
+            })
+            return True
+        except Exception as e:
+            app_logger.error(f"OrderRepository insert_xml_export: {e}", exc_info=True)
+            return False
+
+    def mark_xml_export_processed(self, bestell_id: str) -> bool:
+        """Setze status='processed', verarbeitet=1, processed_at=GETDATE() für eine Bestellung."""
+        try:
+            sql = """
+                UPDATE temu_xml_export
+                   SET status = 'processed',
+                       verarbeitet = 1,
+                       processed_at = GETDATE()
+                 WHERE bestell_id = :bestell_id
+                   AND status = 'pending'
+            """
+            self._execute_stmt(sql, {"bestell_id": bestell_id})
+            return True
+        except Exception as e:
+            app_logger.error(f"OrderRepository mark_xml_export_processed: {e}", exc_info=True)
+            return False
 
     def find_orders_for_tracking(self) -> List[Order]:
         """Hole Orders für Tracking-Abgleich"""
