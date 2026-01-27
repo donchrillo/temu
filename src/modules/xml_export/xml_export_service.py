@@ -11,7 +11,7 @@ from src.db.repositories.jtl_common.jtl_repository import JtlRepository
 from src.services.log_service import log_service
 from config.settings import (
     JTL_WAEHRUNG, JTL_SPRACHE, JTL_K_BENUTZER, JTL_K_FIRMA,
-    XML_OUTPUT_PATH, DATA_DIR
+    XML_OUTPUT_PATH, DATA_DIR, TEMU_EXPORT_DIR
 )
 
 class XmlExportService:
@@ -434,22 +434,21 @@ class XmlExportService:
                               f"✗ XML Speicher-Fehler: {str(e)}")
     
     def _archive_order_to_docs(self, bestell_id: str, bestellung_elem: ET.Element, job_id: Optional[str] = None) -> None:
-        """Speichere Einzel-XML pro Bestellung in data/export mit Zeitstempel und Bestell-ID."""
+        """Speichere Einzel-XML pro Bestellung in data/temu/export mit Zeitstempel und Bestell-ID."""
         try:
             root = ET.Element('tBestellungen')
             root.append(bestellung_elem)
             xml_string = self._prettify_xml(root)
 
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            archive_dir = DATA_DIR / 'export'
-            archive_dir.mkdir(parents=True, exist_ok=True)
-            archive_file = archive_dir / f"temu_order_{bestell_id}_{timestamp}.xml"
+            TEMU_EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+            archive_file = TEMU_EXPORT_DIR / f"temu_order_{bestell_id}_{timestamp}.xml"
 
             with open(str(archive_file), 'w', encoding='ISO-8859-1') as f:
                 f.write(xml_string)
 
             log_service.log(job_id, "xml_export", "INFO", 
-                              f"  ↳ Einzel-XML archiviert (data/export): {archive_file}")
+                              f"  ↳ Einzel-XML archiviert (data/temu/export): {archive_file}")
         
         except Exception as e:
             log_service.log(job_id, "xml_export", "WARNING", 
