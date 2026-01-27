@@ -9,10 +9,8 @@ from src.db.repositories.temu.order_repository import OrderRepository
 from src.db.repositories.temu.order_item_repository import OrderItemRepository
 from src.db.repositories.jtl_common.jtl_repository import JtlRepository
 from src.services.log_service import log_service
-from config.settings import (
-    JTL_WAEHRUNG, JTL_SPRACHE, JTL_K_BENUTZER, JTL_K_FIRMA,
-    XML_OUTPUT_PATH, DATA_DIR, TEMU_EXPORT_DIR
-)
+from config.settings import JTL_WAEHRUNG, JTL_SPRACHE, JTL_K_BENUTZER, JTL_K_FIRMA
+from src.modules.temu.config import XML_OUTPUT_PATH, TEMU_EXPORT_DIR
 
 class XmlExportService:
     """Business Logic - XML Generierung für JTL"""

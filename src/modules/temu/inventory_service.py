@@ -1,7 +1,7 @@
 import json
 from typing import Dict, Any, List
 from pathlib import Path
-from config.settings import TEMU_API_RESPONSES_DIR
+from src.modules.temu.config import TEMU_API_RESPONSES_DIR
 from src.services.log_service import log_service
 
 

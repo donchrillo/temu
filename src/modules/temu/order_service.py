@@ -6,7 +6,8 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from config.settings import TEMU_API_RESPONSES_DIR, DB_TOCI
+from config.settings import DB_TOCI
+from src.modules.temu.config import TEMU_API_RESPONSES_DIR
 from src.db.connection import db_connect
 from src.db.repositories.temu.order_repository import OrderRepository, Order
 from src.db.repositories.temu.order_item_repository import OrderItemRepository, OrderItem

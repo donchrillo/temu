@@ -8,8 +8,9 @@ from typing import Dict, Optional, List
 
 from config.settings import (
     TEMU_APP_KEY, TEMU_APP_SECRET, TEMU_ACCESS_TOKEN, TEMU_API_ENDPOINT,
-    TEMU_API_RESPONSES_DIR, DB_TOCI, DB_JTL
+    DB_TOCI, DB_JTL
 )
+from src.modules.temu.config import TEMU_API_RESPONSES_DIR
 from src.db.connection import db_connect
 from src.db.repositories.temu.order_repository import OrderRepository
 from src.db.repositories.temu.order_item_repository import OrderItemRepository

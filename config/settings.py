@@ -33,24 +33,3 @@ TEMU_APP_KEY = os.getenv('TEMU_APP_KEY', '')
 TEMU_APP_SECRET = os.getenv('TEMU_APP_SECRET', '')
 TEMU_ACCESS_TOKEN = os.getenv('TEMU_ACCESS_TOKEN', '')
 TEMU_API_ENDPOINT = os.getenv('TEMU_API_ENDPOINT', 'https://openapi-b-eu.temu.com/openapi/router')
-
-# --- Dateipfade (data/ Verzeichnis) ---
-DATA_DIR = Path(__file__).parent.parent / 'data'
-DATA_DIR.mkdir(exist_ok=True)
-
-# TEMU-Daten in Unterordner
-TEMU_DATA_DIR = DATA_DIR / 'temu'
-TEMU_DATA_DIR.mkdir(exist_ok=True)
-
-TEMU_XML_DIR = TEMU_DATA_DIR / 'xml'
-TEMU_XML_DIR.mkdir(exist_ok=True)
-
-TEMU_EXPORT_DIR = TEMU_DATA_DIR / 'export'
-TEMU_EXPORT_DIR.mkdir(exist_ok=True)
-
-TEMU_API_RESPONSES_DIR = TEMU_DATA_DIR / 'api_responses'
-TEMU_API_RESPONSES_DIR.mkdir(exist_ok=True)
-
-CSV_INPUT_PATH = DATA_DIR / os.getenv('CSV_INPUT_PATH', 'order_export.csv')
-XML_OUTPUT_PATH = TEMU_XML_DIR / os.getenv('XML_OUTPUT_PATH', 'jtl_temu_bestellungen.xml')
-TRACKING_EXPORT_PATH = DATA_DIR / os.getenv('TRACKING_EXPORT_PATH', 'temu_tracking_export.xlsx')
