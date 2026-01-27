@@ -6,7 +6,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from config.settings import DATA_DIR, DB_TOCI
+from config.settings import TEMU_API_RESPONSES_DIR, DB_TOCI
 from src.db.connection import db_connect
 from src.db.repositories.temu.order_repository import OrderRepository, Order
 from src.db.repositories.temu.order_item_repository import OrderItemRepository, OrderItem
@@ -19,7 +19,7 @@ class OrderService:
     def __init__(self, order_repo: OrderRepository = None, item_repo: OrderItemRepository = None, job_id: Optional[str] = None):
         self.order_repo = order_repo or OrderRepository()
         self.item_repo = item_repo or OrderItemRepository()
-        self.api_response_dir = DATA_DIR / 'api_responses'
+        self.api_response_dir = TEMU_API_RESPONSES_DIR
         self.job_id = job_id  # Optional für Logging
     
     def import_from_json_files(self, job_id: Optional[str] = None) -> Dict:

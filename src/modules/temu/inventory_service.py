@@ -1,7 +1,7 @@
 import json
 from typing import Dict, Any, List
 from pathlib import Path
-from config.settings import DATA_DIR
+from config.settings import TEMU_API_RESPONSES_DIR
 from src.services.log_service import log_service
 
 
@@ -9,7 +9,7 @@ class InventoryService:
     """Business Logic - Verarbeitet Inventory-Daten"""
     
     def __init__(self):
-        self.api_response_dir = DATA_DIR / 'api_responses'
+        self.api_response_dir = TEMU_API_RESPONSES_DIR
     
     def fetch_and_store_raw_skus(self, temu_inventory_api, job_id: str) -> bool:
         """

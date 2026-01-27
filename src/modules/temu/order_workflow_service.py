@@ -8,7 +8,7 @@ from typing import Dict, Optional, List
 
 from config.settings import (
     TEMU_APP_KEY, TEMU_APP_SECRET, TEMU_ACCESS_TOKEN, TEMU_API_ENDPOINT,
-    DATA_DIR, DB_TOCI, DB_JTL
+    TEMU_API_RESPONSES_DIR, DB_TOCI, DB_JTL
 )
 from src.db.connection import db_connect
 from src.db.repositories.temu.order_repository import OrderRepository
@@ -198,10 +198,10 @@ class OrderWorkflowService:
         """Lädt JSONs und importiert sie in die DB (innerhalb der Transaktion)"""
         try:
             # Pfade
-            api_response_dir = DATA_DIR / 'api_responses'
-            orders_file = api_response_dir / 'api_response_orders.json'
-            shipping_file = api_response_dir / 'api_response_shipping_all.json'
-            amount_file = api_response_dir / 'api_response_amount_all.json'
+                api_response_dir = TEMU_API_RESPONSES_DIR
+                orders_file = api_response_dir / 'api_response_orders.json'
+                shipping_file = api_response_dir / 'api_response_shipping_all.json'
+                amount_file = api_response_dir / 'api_response_amount_all.json'
             
             if not all(f.exists() for f in [orders_file, shipping_file, amount_file]):
                 log_service.log(job_id, "json_to_db", "ERROR", "Dateien fehlen")
