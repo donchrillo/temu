@@ -1,5 +1,10 @@
-"""Zentraler Logger - nur Konsole und File"""
+"""
+Zentraler Logger - nur Konsole und File
+funtkioniert auch ohne DB-Verbindung.
 
+Es werden nur ERROR und CRITICAL Logs erfasst.
+"""
+<
 import logging
 import sys
 from pathlib import Path

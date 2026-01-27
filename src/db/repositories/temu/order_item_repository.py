@@ -106,7 +106,9 @@ class OrderItemRepository(BaseRepository):
                         return int(row[0]) if row else 0
         
         except Exception as e:
-            app_logger.error(f"OrderItemRepository save: {e}", exc_info=True)
+            # ✅ CRITICAL: Detailliertes Logging für Debugging
+            bestellartikel_id = item.bestellartikel_id if item else "unknown"
+            app_logger.error(f"OrderItemRepository save FAILED for item {bestellartikel_id}: {e}", exc_info=True)
             return 0
 
     def find_by_order_id(self, order_id: int) -> List[OrderItem]:

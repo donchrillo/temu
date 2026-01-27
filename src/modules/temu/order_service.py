@@ -215,6 +215,11 @@ class OrderService:
                         status='importiert'
                     )
                     order_db_id = order_repo.save(order)
+                    
+                    # ✅ VALIDATION: Prüfe ob Order korrekt gespeichert wurde
+                    if not order_db_id or order_db_id <= 0:
+                        raise ValueError(f"Order {parent_order_sn} konnte nicht gespeichert werden (order_db_id={order_db_id})")
+                    
                     imported_count += 1
             
                 # ===== BUSINESS LOGIC: Import Order Items =====
