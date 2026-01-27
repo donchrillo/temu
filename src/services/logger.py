@@ -37,9 +37,9 @@ def setup_logger(name: str = __name__, level: int = logging.ERROR) -> logging.Lo
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
 
-    # 2. File Handler (error.log)
-    log_dir = Path(__file__).parent.parent.parent / "logs"
-    log_dir.mkdir(exist_ok=True)
+    # 2. File Handler (logs/temu/error.log)
+    log_dir = Path(__file__).parent.parent.parent / "logs" / "temu"
+    log_dir.mkdir(parents=True, exist_ok=True)
     file_handler = logging.FileHandler(log_dir / "error.log", encoding='utf-8')
     file_handler.setLevel(logging.ERROR)
     file_handler.setFormatter(formatter)
