@@ -1,0 +1,19 @@
+services:
+  pdfreader:
+    image: ghcr.io/donchrillo/pdfreader:latest
+    ports:
+      - "8502:8502"
+    volumes:
+      - ./daten:/app/daten
+    environment:
+      - TZ=Europe/Berlin
+      - PYTHONUNBUFFERED=1
+      - OPENBLAS_CORETYPE=ARMV8
+      - STREAMLIT_SERVER_FILEWATCHERTYPE=none
+      - STREAMLIT_SERVER_RUNONSAVE=false
+    command: >
+      streamlit run app.py
+      --server.port=8502
+      --server.address=0.0.0.0
+      --server.fileWatcherType=poll
+    restart: unless-stopped

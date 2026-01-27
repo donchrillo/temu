@@ -1,0 +1,25 @@
+# 🗑️ Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 🗑️ Virtuelle Umgebungen
+.venv/
+.env
+.envrc
+
+# 🗑️ Temporäre Dateien und Artefakte
+*.db
+*.sqlite3
+*.log
+*.zip
+*.xlsx
+*.csv
+
+# 📁 Datenverzeichnisse (werden nur lokal verwendet)
+daten/
+
+# 🗂️ Sonstiges
+.git/
+.vscode/

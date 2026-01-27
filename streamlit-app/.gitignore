@@ -1,0 +1,28 @@
+# 📦 Virtuelle Umgebung
+.venv/
+.env
+.envrc
+
+# 🧠 Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 🧪 IDE Konfigurationen
+.vscode/
+
+# 📁 Datenverzeichnisse (nicht ins Repo)
+daten/
+!daten/.gitkeep  # Falls du das Verzeichnis trotzdem im Repo haben willst, aber leer
+
+# 📂 Typische Ausgabedateien
+*.db
+*.sqlite3
+*.log
+*.zip
+*.xlsx
+*.csv
+
+# 🚫 Sonstige temporäre Dateien
+.DS_Store
+Thumbs.db
