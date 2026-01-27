@@ -104,6 +104,7 @@ class OrderRepository(BaseRepository):
                 return order.id
             else:
                 # INSERT - Speziallogik für @@IDENTITY + Transaktions-Commit
+                # Nutze OUTPUT inserted.id, um Mehrfach-Resultsets zu vermeiden (pyodbc + SELECT @@IDENTITY kann Result schließen)
                 sql = f"""
                     INSERT INTO {TABLE_ORDERS} (
                         bestell_id, bestellstatus, kaufdatum,
@@ -111,14 +112,15 @@ class OrderRepository(BaseRepository):
                         strasse, plz, ort, bundesland, land, land_iso,
                         email, telefon_empfaenger, versandkosten, status,
                         created_at, updated_at
-                    ) VALUES (
+                    )
+                    OUTPUT inserted.id AS new_id
+                    VALUES (
                         :bestell_id, :bestellstatus, :kaufdatum,
                         :vorname_empfaenger, :nachname_empfaenger,
                         :strasse, :plz, :ort, :bundesland, :land, :land_iso,
                         :email, :telefon_empfaenger, :versandkosten, :status,
                         GETDATE(), GETDATE()
                     );
-                    SELECT @@IDENTITY AS new_id;
                 """
                 params = {
                     "bestell_id": order.bestell_id,

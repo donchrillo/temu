@@ -78,19 +78,21 @@ class OrderItemRepository(BaseRepository):
                     "bestell_id": item.bestell_id
                 })
 
+                # OUTPUT inserted.id vermeidet Mehrfach-Resultsets und ResourceClosed bei pyodbc
                 sql = f"""
                     INSERT INTO {TABLE_ORDER_ITEMS} (
                         order_id, bestell_id, bestellartikel_id, produktname,
                         sku, sku_id, variation, menge,
                         netto_einzelpreis, brutto_einzelpreis,
                         gesamtpreis_netto, gesamtpreis_brutto, mwst_satz
-                    ) VALUES (
+                    )
+                    OUTPUT inserted.id AS new_id
+                    VALUES (
                         :order_id, :bestell_id, :bestellartikel_id, :produktname,
                         :sku, :sku_id, :variation, :menge,
                         :netto_einzelpreis, :brutto_einzelpreis,
                         :gesamtpreis_netto, :gesamtpreis_brutto, :mwst_satz
                     );
-                    SELECT @@IDENTITY AS new_id;
                 """
                 
                 # Manuelle Logik: Fetch BEVOR Connection zugeht
