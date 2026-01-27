@@ -14,6 +14,11 @@
 
 ## ✅ Completed (Letzte Sessions)
 
+### 27. Januar – XML Export Connection Fix
+- ✅ **Problem:** XML-Export Step 3 verwendete Repos/Services aus Step 2; deren DB-Verbindung war nach Commit geschlossen → `ResourceClosedError: This Connection is closed` in `find_by_status`
+- ✅ **Fix:** Caches nach Step 2 leeren und vor Step 3 frische Repos/Services erzeugen. Siehe [src/modules/temu/order_workflow_service.py#L90-L104](../src/modules/temu/order_workflow_service.py#L90-L104) und Reset-Helper [src/modules/temu/order_workflow_service.py#L162-L179](../src/modules/temu/order_workflow_service.py#L162-L179)
+- ✅ **Ergebnis:** Bestellung `PO-076-03049808781431692` erfolgreich exportiert, Einträge in `temu_xml_export` und `tXMLBestellImport`, `xml_erstellt=1`
+
 ### 26. Januar – Transaction Isolation Bug Fix
 - ✅ **Root Cause Identified:** SQLAlchemy Transaction Isolation verhinderte Read von uncommitted Items
 - ✅ **Solution:** Separate Transaktionen für Step 2 (JSON→DB) und Step 3 (DB→XML)
@@ -135,5 +140,5 @@ Ziel: Streamlit-Funktionen als Services unter `src/modules/pdf_reader` bereitste
 
 ---
 
-**Last Updated:** 27. Januar 2026, 18:30  
+**Last Updated:** 27. Januar 2026, 19:05  
 **Next Review:** Nach nächster Development-Session

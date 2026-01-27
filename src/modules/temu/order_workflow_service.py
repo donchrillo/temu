@@ -87,6 +87,9 @@ class OrderWorkflowService:
             
             # COMMIT nach Step 2 - Daten sind jetzt in DB sichtbar!
             log_service.log(job_id, "order_workflow", "INFO", "✓ Step 2 committed - Daten persistent")
+
+            # Repositories/Services verwerfen, damit Step 3 frische Connections nutzt
+            self._reset_repos_and_services()
             
             # Neue Transaktion für XML Export (Step 3)
             with db_connect(DB_TOCI) as toci_conn:
@@ -170,6 +173,16 @@ class OrderWorkflowService:
         self._order_repo = None
         self._item_repo = None
         self._jtl_repo = None
+        self._reset_repos_and_services()
+
+    def _reset_repos_and_services(self):
+        """Setzt Repo- und Service-Caches zurück, um geschlossene Verbindungen zu vermeiden."""
+        self._order_repo = None
+        self._item_repo = None
+        self._jtl_repo = None
+        self._xml_service = None
+        self._order_service = None
+        self._tracking_service = None
 
     # --- STEPS (Identisch zum vorherigen Code) ---
     
