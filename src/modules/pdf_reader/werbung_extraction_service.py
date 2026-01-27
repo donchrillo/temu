@@ -1,5 +1,4 @@
 """Hilfsmodul zum Extrahieren der ersten Seite von Werbe-PDFs."""
-import logging
 import re
 from datetime import datetime
 from pathlib import Path
@@ -9,15 +8,11 @@ import pdfplumber
 
 from .document_identifier import determine_country_and_document_type
 from .patterns import pattern
-from .config import ORDNER_EINGANG_WERBUNG, TMP_ORDNER, ORDNER_LOG
+from .config import ORDNER_EINGANG_WERBUNG, TMP_ORDNER
+from .pdf_logger import get_pdf_logger
 
-# Logging-Konfiguration
-logger = logging.getLogger("pdf_reader.werbung_extraction")
-logger.setLevel(logging.INFO)
-log_path = ORDNER_LOG / "werbung_extraction.log"
-fh = logging.FileHandler(log_path, mode="w", encoding="utf-8")
-fh.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
-logger.addHandler(fh)
+# Logging-Konfiguration (rotierend, forward zu app_logger für ERROR)
+logger = get_pdf_logger("pdf_reader.werbung_extraction", "werbung_extraction.log")
 
 
 def _to_iso_date(s: str) -> str:

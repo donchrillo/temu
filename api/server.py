@@ -1,8 +1,10 @@
 """FastAPI Server - TEMU Worker Dashboard"""
 
 import sys
+import time
 from pathlib import Path
-from fastapi import FastAPI, WebSocket
+from typing import List
+from fastapi import FastAPI, WebSocket, UploadFile, File
 from fastapi.encoders import jsonable_encoder
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -16,6 +18,19 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from workers.worker_service import SchedulerService
 from src.services.log_service import log_service
 from src.services.logger import app_logger
+from src.modules.pdf_reader.config import (
+    ORDNER_EINGANG_RECHNUNGEN,
+    ORDNER_EINGANG_WERBUNG,
+    ORDNER_AUSGANG,
+    ORDNER_LOG,
+    ensure_directories,
+)
+from src.modules.pdf_reader.werbung_extraction_service import extract_and_save_first_page
+from src.modules.pdf_reader.werbung_service import process_ad_pdfs
+from src.modules.pdf_reader.rechnungen_service import process_rechnungen
+from src.modules.pdf_reader.config import ORDNER_EINGANG_RECHNUNGEN as _DIR_INV
+from src.modules.pdf_reader.config import ORDNER_EINGANG_WERBUNG as _DIR_ADS
+from src.modules.pdf_reader.config import TMP_ORDNER as _DIR_TMP
 
 # Globaler Scheduler
 scheduler = SchedulerService()
@@ -143,6 +158,209 @@ async def export_logs(job_id: str = None, format: str = "json", days: int = 7):
     except Exception as e:
         app_logger.error(f"Export Logs Fehler: {e}", exc_info=True)
         return {"status": "error", "message": str(e)}
+
+# ===== PDF READER ENDPOINTS =====
+
+async def _save_uploads(files: List[UploadFile], target_dir: Path) -> list[str]:
+    """Speichere Uploads in das Zielverzeichnis."""
+    ensure_directories()
+    saved = []
+    target_dir.mkdir(parents=True, exist_ok=True)
+    for f in files:
+        dest = target_dir / f.filename
+        content = await f.read()
+        with open(dest, "wb") as out:
+            out.write(content)
+        saved.append(str(dest))
+    return saved
+
+
+@app.post("/api/pdf/werbung/upload")
+async def upload_werbung(files: List[UploadFile] = File(default=[]), process: bool = False):
+    job_id = f"pdf_werbung_{int(time.time())}"
+    try:
+        saved_paths = await _save_uploads(files, ORDNER_EINGANG_WERBUNG)
+        log_service.log(job_id, "pdf_upload", "INFO", f"{len(saved_paths)} Werbung-PDFs gespeichert")
+
+        result = None
+        extracted = []
+        if process:
+            extracted = extract_and_save_first_page()
+            result = process_ad_pdfs()
+            log_service.log(job_id, "pdf_upload", "INFO", f"Werbung verarbeitet: {len(result) if hasattr(result, '__len__') else 0} Einträge")
+
+        return {
+            "status": "ok",
+            "saved": saved_paths,
+            "extracted": [str(p) for p in extracted],
+            "processed": bool(result is not None)
+        }
+    except Exception as e:
+        app_logger.error(f"Werbung Upload Fehler: {e}", exc_info=True)
+        log_service.log(job_id, "pdf_upload", "ERROR", f"Werbung Upload Fehler: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@app.post("/api/pdf/rechnungen/upload")
+async def upload_rechnungen(files: List[UploadFile] = File(default=[]), process: bool = False):
+    job_id = f"pdf_rechnungen_{int(time.time())}"
+    try:
+        saved_paths = await _save_uploads(files, ORDNER_EINGANG_RECHNUNGEN)
+        log_service.log(job_id, "pdf_upload", "INFO", f"{len(saved_paths)} Rechnungs-PDFs gespeichert")
+
+        result = None
+        if process:
+            result = process_rechnungen()
+            log_service.log(job_id, "pdf_upload", "INFO", f"Rechnungen verarbeitet: {len(result) if hasattr(result, '__len__') else 0} Einträge")
+
+        return {
+            "status": "ok",
+            "saved": saved_paths,
+            "processed": bool(result is not None)
+        }
+    except Exception as e:
+        app_logger.error(f"Rechnungen Upload Fehler: {e}", exc_info=True)
+        log_service.log(job_id, "pdf_upload", "ERROR", f"Rechnungen Upload Fehler: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@app.post("/api/pdf/werbung/extract")
+async def extract_werbung():
+    """Extrahiere erste Seiten von bereits hochgeladenen Werbungs-PDFs."""
+    job_id = f"pdf_extract_{int(time.time())}"
+    try:
+        extracted = extract_and_save_first_page()
+        log_service.log(job_id, "pdf_upload", "INFO", f"Extrahiert: {len(extracted)} Dateien")
+        return {
+            "status": "ok",
+            "extracted": [str(p) for p in extracted]
+        }
+    except Exception as e:
+        app_logger.error(f"Werbung Extract Fehler: {e}", exc_info=True)
+        log_service.log(job_id, "pdf_upload", "ERROR", f"Extract Fehler: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@app.post("/api/pdf/werbung/process")
+async def process_werbung():
+    """Verarbeite extrahierte Werbungs-PDFs zu Excel."""
+    job_id = f"pdf_process_{int(time.time())}"
+    try:
+        result = process_ad_pdfs()
+        log_service.log(job_id, "pdf_upload", "INFO", f"Verarbeitet: {len(result) if hasattr(result, '__len__') else 0} Einträge")
+        return {
+            "status": "ok",
+            "processed": True,
+            "count": len(result) if hasattr(result, '__len__') else 0
+        }
+    except Exception as e:
+        app_logger.error(f"Werbung Process Fehler: {e}", exc_info=True)
+        log_service.log(job_id, "pdf_upload", "ERROR", f"Process Fehler: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@app.post("/api/pdf/rechnungen/process")
+async def process_rechnungen_endpoint():
+    """Verarbeite Rechnungs-PDFs zu Excel."""
+    job_id = f"pdf_process_{int(time.time())}"
+    try:
+        result = process_rechnungen()
+        log_service.log(job_id, "pdf_upload", "INFO", f"Verarbeitet: {len(result) if hasattr(result, '__len__') else 0} Einträge")
+        return {
+            "status": "ok",
+            "processed": True,
+            "count": len(result) if hasattr(result, '__len__') else 0
+        }
+    except Exception as e:
+        app_logger.error(f"Rechnungen Process Fehler: {e}", exc_info=True)
+        log_service.log(job_id, "pdf_upload", "ERROR", f"Process Fehler: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@app.get("/api/pdf/logs/{logfile}")
+async def get_pdf_log(logfile: str):
+    """Serviere PDF-Reader Logfiles (werbung_read.log, werbung_extraction.log, rechnung_read.log)."""
+    ensure_directories()
+    allowed_files = {"werbung_read.log", "werbung_extraction.log", "rechnung_read.log"}
+    if logfile not in allowed_files:
+        return {"status": "error", "message": "Invalid logfile"}
+    
+    log_path = ORDNER_LOG / logfile
+    if not log_path.exists():
+        return {"status": "empty", "content": ""}
+    
+    try:
+        content = log_path.read_text(encoding="utf-8")
+        return {"status": "ok", "content": content}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@app.get("/api/pdf/werbung/result")
+async def get_werbung_result():
+    excel_path = ORDNER_AUSGANG / "werbung.xlsx"
+    if excel_path.exists():
+        return FileResponse(str(excel_path), filename="werbung.xlsx")
+    return {"status": "not_found"}
+
+
+@app.get("/api/pdf/rechnungen/result")
+async def get_rechnungen_result():
+    excel_path = ORDNER_AUSGANG / "rechnungen.xlsx"
+    if excel_path.exists():
+        return FileResponse(str(excel_path), filename="rechnungen.xlsx")
+    return {"status": "not_found"}
+
+
+def _dir_status(dir_path: Path) -> dict:
+    files = [p for p in dir_path.glob("*") if p.is_file()]
+    return {"path": str(dir_path), "count": len(files), "files": [p.name for p in files[:5]]}
+
+
+@app.get("/api/pdf/status")
+async def pdf_status():
+    """Status der Upload-/TMP-Verzeichnisse (Anzahl Dateien)."""
+    ensure_directories()
+    return {
+        "werbung": _dir_status(_DIR_ADS),
+        "rechnungen": _dir_status(_DIR_INV),
+        "tmp": _dir_status(_DIR_TMP),
+    }
+
+
+@app.post("/api/pdf/cleanup")
+async def pdf_cleanup():
+    """Leert Upload- und TMP-Verzeichnisse sowie Logfiles für pdf_reader."""
+    ensure_directories()
+    cleared = {}
+    for d in [_DIR_ADS, _DIR_INV, _DIR_TMP]:
+        removed = 0
+        for p in d.glob("*"):
+            try:
+                if p.is_file():
+                    p.unlink()
+                    removed += 1
+                elif p.is_dir():
+                    # Sicherheits-halber nur leere Unterordner entfernen
+                    if not any(p.iterdir()):
+                        p.rmdir()
+            except Exception as e:
+                app_logger.error(f"Cleanup Fehler in {p}: {e}")
+        cleared[str(d)] = removed
+    
+    # Delete log files
+    logs_removed = 0
+    if ORDNER_LOG.exists():
+        for logfile in ["werbung_read.log", "werbung_extraction.log", "rechnung_read.log"]:
+            log_path = ORDNER_LOG / logfile
+            if log_path.exists():
+                try:
+                    log_path.unlink()
+                    logs_removed += 1
+                except Exception as e:
+                    app_logger.error(f"Logfile Cleanup Fehler: {e}")
+    
+    return {"status": "ok", "cleared": cleared, "logs_removed": logs_removed}
 
 # ===== MAINTENANCE =====
 

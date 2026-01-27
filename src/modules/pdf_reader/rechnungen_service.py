@@ -1,5 +1,4 @@
 """Modul zum Auslesen von Rechnungs-PDFs und Export als Excel."""
-import logging
 import re
 from pathlib import Path
 from typing import Optional
@@ -9,15 +8,11 @@ import pdfplumber
 
 from .patterns import pattern as pat
 from .document_identifier import determine_country_and_document_type
-from .config import ORDNER_EINGANG_RECHNUNGEN, ORDNER_AUSGANG, ORDNER_LOG
+from .config import ORDNER_EINGANG_RECHNUNGEN, ORDNER_AUSGANG
+from .pdf_logger import get_pdf_logger
 
-# Logger-Konfiguration
-logger = logging.getLogger("pdf_reader.rechnungen")
-logger.setLevel(logging.INFO)
-log_path = ORDNER_LOG / "rechnung_read.log"
-fh = logging.FileHandler(log_path, mode="w", encoding="utf-8")
-fh.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
-logger.addHandler(fh)
+# Logger-Konfiguration (rotierend, forward zu app_logger für ERROR)
+logger = get_pdf_logger("pdf_reader.rechnungen", "rechnung_read.log")
 
 
 def extract_data_from_pdf(pdf_path: Path) -> Optional[dict]:

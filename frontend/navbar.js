@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const nav = document.createElement('nav');
     nav.className = 'topnav';
 
-    const isActive = (path) => location.pathname === path;
+    const isActive = (path) => location.pathname === path || location.pathname === `${path}.html`;
 
     nav.innerHTML = `
       <div class="topnav-inner">
@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="nav-links">
           <a href="/" class="nav-link ${isActive('/') ? 'active' : ''}">Start</a>
           <a href="/temu" class="nav-link ${isActive('/temu') || isActive('/temu.html') ? 'active' : ''}">TEMU Dashboard</a>
+          <a href="/pdf-reader.html" class="nav-link ${isActive('/pdf-reader') ? 'active' : ''}">PDF Reader</a>
         </div>
       </div>
     `;

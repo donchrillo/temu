@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF Reader</title>
+  <link rel="stylesheet" href="styles.css?v=3">
+  <script src="navbar.js" defer></script>
+  <script src="pdf-reader.js" defer></script>
+</head>
+<body>
+  <div class="container" style="max-width: 1200px;">
+    <header>
+      <h1>📁 PDF Reader</h1>
+      <p style="color:#9ca3af;margin:8px 0 0 0">Upload und Verarbeitung für Werbung & Rechnungen</p>
+    </header>
+
+    <div id="status-warnings" class="panel" style="display:none;margin-bottom:16px;"></div>
+
+    <div class="grid-2" style="gap:16px;">
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h2>📢 Werbung</h2>
+            <p class="muted">1️⃣ PDFs wählen → 2️⃣ extrahieren → 3️⃣ verarbeiten → 4️⃣ laden</p>
+          </div>
+        </div>
+        <div class="panel-body">
+          <label class="file-label">PDFs auswählen
+            <input id="ads-input" type="file" accept="application/pdf" multiple>
+          </label>
+          <div class="actions-row">
+            <button id="ads-extract" class="btn-secondary" disabled>Erste Seite extrahieren</button>
+            <button id="ads-process" class="btn-secondary" disabled>Verarbeiten</button>
+            <button id="ads-download" class="btn-tertiary">Excel runterladen</button>
+          </div>
+          <pre id="ads-log" class="log-box"></pre>
+          <button id="ads-read-log" class="btn-tertiary">Log verarbeiten</button>
+          <button id="ads-extract-log" class="btn-tertiary">Log Extraktion</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h2>📄 Rechnungen</h2>
+            <p class="muted">1️⃣ PDFs wählen → 2️⃣ verarbeiten → 3️⃣ laden</p>
+          </div>
+        </div>
+        <div class="panel-body">
+          <label class="file-label">PDFs auswählen
+            <input id="inv-input" type="file" accept="application/pdf" multiple>
+          </label>
+          <div class="actions-row">
+            <button id="inv-process" class="btn-secondary" disabled>Verarbeiten</button>
+            <button id="inv-download" class="btn-tertiary">Excel runterladen</button>
+          </div>
+          <pre id="inv-log" class="log-box"></pre>
+          <button id="inv-read-log" class="btn-tertiary">Log verarbeiten</button>
+        </div>
+      </section>
+    </div>
+
+    <section class="panel" style="margin-top:18px;">
+      <div class="panel-header">
+        <div>
+          <h2>🧹 Verzeichnisse leeren</h2>
+          <p class="muted">Leert alle Upload-Verzeichnisse</p>
+        </div>
+      </div>
+      <div class="panel-body">
+        <button id="clear-dirs" class="btn-primary">Alle Upload-Verzeichnisse leeren</button>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

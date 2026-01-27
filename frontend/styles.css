@@ -214,6 +214,94 @@ h1 {
     color: #e2e8f0;
 }
 
+/* ===== PDF READER PANELS ===== */
+.grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 20px;
+}
+
+.panel {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 10px;
+    padding: 18px;
+}
+
+.panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.panel-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.pill {
+    padding: 6px 10px;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 999px;
+    font-size: 12px;
+    color: #94a3b8;
+}
+
+.file-label {
+    display: inline-block;
+    padding: 10px 12px;
+    border: 1px dashed #3b82f6;
+    border-radius: 8px;
+    cursor: pointer;
+    color: #cbd5e1;
+}
+
+.file-label input {
+    display: none;
+}
+
+.actions-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.btn-primary, .btn-secondary, .btn-tertiary {
+    border: none;
+    border-radius: 6px;
+    padding: 10px 14px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.btn-primary { background: #3b82f6; color: #fff; }
+.btn-primary:hover { background: #2563eb; }
+
+.btn-secondary { background: #0ea5e9; color: #0b182b; }
+.btn-secondary:hover { background: #0284c7; }
+
+.btn-tertiary { background: #1f2937; color: #cbd5e1; border: 1px solid #334155; }
+.btn-tertiary:hover { background: #111827; }
+
+.log-box {
+    min-height: 120px;
+    max-height: 220px;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 10px;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 13px;
+    white-space: pre-wrap;
+    overflow-y: auto;
+}
+
+.muted { color: #94a3b8; font-size: 14px; }
+
 .job-controls {
     display: flex;
     gap: 10px;
