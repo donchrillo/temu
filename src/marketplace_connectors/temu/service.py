@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, Optional
-from config.settings import DATA_DIR
+from src.modules.temu.config import TEMU_API_RESPONSES_DIR
 from src.marketplace_connectors.temu.api_client import TemuApiClient
 from src.marketplace_connectors.temu.orders_api import TemuOrdersApi
 from src.marketplace_connectors.temu.inventory_api import TemuInventoryApi
@@ -12,7 +12,7 @@ from src.marketplace_connectors.base_connector import BaseMarketplaceConnector
 from src.services.log_service import log_service
 
 
-API_RESPONSE_DIR = DATA_DIR / 'api_responses'
+API_RESPONSE_DIR = TEMU_API_RESPONSES_DIR
 API_RESPONSE_DIR.mkdir(exist_ok=True)
 
 class TemuMarketplaceService(BaseMarketplaceConnector):
