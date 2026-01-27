@@ -72,8 +72,19 @@ class XmlExportService:
             # ===== Für jede Order: XML generieren =====
             for order in orders:
                 try:
-                    # Hole Items für diese Order
+                    # Hole Items für diese Order - versuche zuerst order_id, dann bestell_id
                     items = self.item_repo.find_by_order_id(order.id)
+                    
+                    # Fallback: Wenn keine Items gefunden, versuche über bestell_id
+                    if not items:
+                        items = self.item_repo.find_by_bestell_id(order.bestell_id)
+                        if items:
+                            log_service.log(job_id, "xml_export", "WARNING", 
+                                              f"  ⚠ {order.bestell_id}: Items via bestell_id gefunden (nicht over order_id)")
+                    
+                    # DEBUG: Logge Items
+                    log_service.log(job_id, "xml_export", "DEBUG", 
+                                      f"  Order {order.bestell_id} (ID={order.id}): {len(items)} Items gefunden")
                     
                     # Generiere XML Element
                     bestellung_elem = self._generate_order_xml(order, items, root)

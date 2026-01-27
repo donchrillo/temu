@@ -126,6 +126,23 @@ class OrderItemRepository(BaseRepository):
             app_logger.error(f"OrderItemRepository find_by_order_id: {e}", exc_info=True)
             return []
     
+    def find_by_bestell_id(self, bestell_id: str) -> List[OrderItem]:
+        """Hole alle Items für eine Bestellung (via bestell_id)"""
+        try:
+            sql = f"""
+                SELECT id, order_id, bestell_id, bestellartikel_id,
+                       produktname, sku, sku_id, variation, menge,
+                       netto_einzelpreis, brutto_einzelpreis,
+                       gesamtpreis_netto, gesamtpreis_brutto, mwst_satz
+                FROM {TABLE_ORDER_ITEMS}
+                WHERE bestell_id = :bestell_id
+            """
+            rows = self._fetch_all(sql, {"bestell_id": bestell_id})
+            return [self._map_to_item(row) for row in rows]
+        except Exception as e:
+            app_logger.error(f"OrderItemRepository find_by_bestell_id: {e}", exc_info=True)
+            return []
+    
     def find_by_bestellartikel_id(self, bestellartikel_id: str) -> Optional[OrderItem]:
         """Hole Item by bestellartikel_id"""
         try:

@@ -72,7 +72,7 @@ class OrderWorkflowService:
             if not self._step_1_api_to_json(parent_order_status, days_back, verbose, job_id):
                 raise Exception("API Fetch fehlgeschlagen")
             
-            # DB Transaktion für Import
+            # DB Transaktion für Import (Step 2: JSON → DB)
             with db_connect(DB_TOCI) as toci_conn:
                 self._toci_conn = toci_conn
                 
@@ -84,6 +84,16 @@ class OrderWorkflowService:
                     result = self._step_2_json_to_db(job_id)
                     log_service.log(job_id, "order_workflow", "INFO", 
                                   f"✓ [2/5] Import: {result.get('imported', 0)} neu, {result.get('updated', 0)} update")
+            
+            # COMMIT nach Step 2 - Daten sind jetzt in DB sichtbar!
+            log_service.log(job_id, "order_workflow", "INFO", "✓ Step 2 committed - Daten persistent")
+            
+            # Neue Transaktion für XML Export (Step 3)
+            with db_connect(DB_TOCI) as toci_conn:
+                self._toci_conn = toci_conn
+                
+                with db_connect(DB_JTL) as jtl_conn:
+                    self._jtl_conn = jtl_conn
                     
                     # Step 3: Database → XML Export
                     log_service.log(job_id, "order_workflow", "INFO", "[3/5] Datenbank → XML Export")
