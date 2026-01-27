@@ -198,10 +198,10 @@ class OrderWorkflowService:
         """Lädt JSONs und importiert sie in die DB (innerhalb der Transaktion)"""
         try:
             # Pfade
-                api_response_dir = TEMU_API_RESPONSES_DIR
-                orders_file = api_response_dir / 'api_response_orders.json'
-                shipping_file = api_response_dir / 'api_response_shipping_all.json'
-                amount_file = api_response_dir / 'api_response_amount_all.json'
+            api_response_dir = TEMU_API_RESPONSES_DIR
+            orders_file = api_response_dir / 'api_response_orders.json'
+            shipping_file = api_response_dir / 'api_response_shipping_all.json'
+            amount_file = api_response_dir / 'api_response_amount_all.json'
             
             if not all(f.exists() for f in [orders_file, shipping_file, amount_file]):
                 log_service.log(job_id, "json_to_db", "ERROR", "Dateien fehlen")
