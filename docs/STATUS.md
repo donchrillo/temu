@@ -3,16 +3,23 @@
 ## 🔄 Current State
 
 ### Git Status
-- **Active Branch:** `dev` (synced with `origin/dev`)
-- **Latest Commit:** `27b3bdd` – "Update fehlende Oder Postionten"
+- **Active Branch:** `feature/streamlit-integration` (tracking `origin/feature/streamlit-integration`)
+- **Latest Commit:** `bebfe56` – "refactor: separate logging by module"
 - **Main Production:** `main` at `4577c1e` (stable, last merge 26.01.)
 
 ### Untracked Files
-- `docs/FIXES/` directory (documentation folder)
+- Keine
 
 ---
 
 ## ✅ Completed (Letzte Sessions)
+
+### 27. Januar – Logging-Trennung & PWA/PDF Reader Abschluss
+- ✅ **Neue Logger-Architektur:** Modul-spezifische Logger (`temu_logger`, `pdf_reader_logger`) über gemeinsame Factory ([src/services/logger.py](../src/services/logger.py)); `app_logger` bleibt für API/Worker.
+- ✅ **Log-Pfade:** `logs/temu/temu.log`, `logs/pdf_reader/pdf_reader.log`, `logs/app/app.log`, PM2: `logs/pm2-out.log`, `logs/pm2-error.log`.
+- ✅ **PDF Reader PWA:** Upload/Extract/Process/Download integriert, Service Worker Cache-Fix, HTTPS-Cache-Header über Caddy konfiguriert.
+- ✅ **Datenstruktur:** `data/temu/{api_responses,xml,export}` und `data/pdf_reader/{eingang,ausgang,tmp}` fixiert; alle Importe angepasst.
+- ✅ **Marktplatz-Connector:** nutzt `TEMU_API_RESPONSES_DIR` statt globalem `DATA_DIR`.
 
 ### 27. Januar – XML Export Connection Fix
 - ✅ **Problem:** XML-Export Step 3 verwendete Repos/Services aus Step 2; deren DB-Verbindung war nach Commit geschlossen → `ResourceClosedError: This Connection is closed` in `find_by_status`
@@ -44,54 +51,40 @@
 
 ## 🚀 In Progress / Recent Work
 
-### Transaction Isolation Fix – Code Changes
-Recent commits show fixes für:
-1. **`77c9389`** – XML Format Korrektur
-2. **`9ee598a`** – Kunde-Validierung hinzugefügt
-3. **`11c854e`** – WebSocket Disconnect Logs
+### Branch Status
+- `feature/streamlit-integration` enthält: PDF Reader PWA, Datenpfad-Refactor, Logger-Trennung, TEMU Import-Fixes. Noch nicht nach `main` gemerged.
 
-**Status:** Die Commits sind auf `dev` gepusht, noch nicht zum `main` merged.
-
-### PDF Reader Integration (27. Januar – STARTED)
-Ziel: Streamlit-Funktionen als Services unter `src/modules/pdf_reader` bereitstellen.
-
-- ✅ Neues Modul: `src/modules/pdf_reader/` (config, patterns, identifier, services)
-- ✅ Eigene Pfade: `data/pdf_reader/{eingang,ausgang,tmp}` und `logs/pdf_reader`
-- ✅ Services portiert: `rechnungen_service`, `werbung_service`, `werbung_extraction_service`
-- ✅ Dependencies ergänzt: `pdfplumber`, `PyPDF2`, `xlsxwriter`
-- 🔜 API-Endpunkte hinzufügen (Upload/Process/Download)
-- 🔜 Frontend-Button/Link integrieren (PWA → PDF Reader)
-
-### Foreign Key Constraint Bug (27. Januar - IN PROGRESS)
-**Problem:** INSERT in `temu_order_items` schlägt fehl mit FK-Violation
-- Fehler: Order ID = 0 wird verwendet (existiert nicht in `temu_orders`)
-- Ursache: `order_repo.save()` gibt 0 zurück bei Fehler, Code setzt Items trotzdem ein
-
-**Fixes implementiert:**
+### Foreign Key Constraint Bug (laufend)
+**Problem:** INSERT in `temu_order_items` schlägt sporadisch fehl mit FK-Violation (Order ID = 0)
 - ✅ Validation in `order_service.py`: Prüfe `order_db_id > 0` vor Item-Insert
-- ✅ Better Logging in `order_repository.py`: Zeige `bestell_id` bei Fehler
-- ✅ Better Logging in `order_item_repository.py`: Zeige `bestellartikel_id` bei Fehler
-- 🔍 Nächster Schritt: Root cause warum `order_repo.save()` fehlschlägt identifizieren
+- ✅ Logging erweitert: `order_repository.py` und `order_item_repository.py` zeigen IDs bei Fehlern
+- 🔍 Nächster Schritt: Ursache für `order_repo.save()` → 0 weiter untersuchen (DB Constraints, Input-Data prüfen)
+
+### Tests
+- 🔜 End-to-end Test der TEMU Workflows nach Logger-/Pfad-Refactor
+- 🔜 PDF Reader End-to-end Test (Upload → Extract → Process → Download) nach Deploy
 
 ---
 
 ## 📋 Next TODO / Known Issues
 
 ### Planned Development
-- [ ] Review der letzten Commits (PC ↔ Laptop Sync)
-- [ ] Integration Tests für Order-Workflow
+- [ ] Merge `feature/streamlit-integration` → `main` nach E2E-Tests
+- [ ] Integration Tests für Order- und Inventory-Workflow
+- [ ] PDF Reader PWA Regression-Test nach Deploy
 - [ ] Performance Monitoring für Stock Sync
-- [ ] Further optimizations based on production logs
 
 ### Known Issues
-- ⚠️ Keine kritischen Issues bekannt
-- ℹ️ Debug-Scripts aus `FIXES/` sollten nicht committed werden
+- ⚠️ Offene Analyse: `order_repo.save()` → 0 (FK-Violation Risiko)
+- ℹ️ Debug-Scripts aus `FIXES/` nicht committen
 
 ### Quality Checklist
 - [x] BaseRepository Pattern unified (7+ repos)
 - [x] Transaction Isolation fixed
 - [x] WebSocket Disconnects silent
 - [x] Stock Sync für alle Artikel aktiv
+- [x] Logger nach Modulen getrennt
+- [x] Datenpfade in `data/temu` und `data/pdf_reader`
 - [ ] Integration Tests vollständig dokumentiert
 - [ ] Performance Baselines gemessen
 
@@ -140,5 +133,5 @@ Ziel: Streamlit-Funktionen als Services unter `src/modules/pdf_reader` bereitste
 
 ---
 
-**Last Updated:** 27. Januar 2026, 19:05  
-**Next Review:** Nach nächster Development-Session
+**Last Updated:** 27. Januar 2026, 18:10  
+**Next Review:** Nach E2E-Tests & Merge-Plan

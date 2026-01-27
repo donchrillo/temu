@@ -240,13 +240,13 @@ def update_jtl_article_id(self, product_id: int, jtl_article_id: int) -> bool:
 
 ### Logging & Debugging
 ```python
-from src.services.logger import app_logger
+from src.modules.temu.logger import temu_logger  # Modul-spezifischer Logger
 
 try:
     result = repository.execute_query()
 except Exception as e:
     # Detailliertes Error-Logging
-    app_logger.error(f"Repository xyz failed: {e}", exc_info=True)
+    temu_logger.error(f"Repository xyz failed: {e}", exc_info=True)
     # exc_info=True → Vollständiger Traceback ins Log
 ```
 
@@ -300,13 +300,13 @@ max_overflow=30
 ### Messung & Benchmarking
 ```python
 import time
-from src.services.logger import app_logger
+from src.modules.temu.logger import temu_logger
 
 start = time.time()
 result = repository.get_stocks_by_article_ids(article_ids)
 duration = time.time() - start
 
-app_logger.info(f"Batch query took {duration:.3f}s for {len(article_ids)} items")
+temu_logger.info(f"Batch query took {duration:.3f}s for {len(article_ids)} items")
 # Output: "Batch query took 0.081s for 2100 items"
 ```
 

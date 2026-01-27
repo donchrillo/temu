@@ -152,5 +152,5 @@ Benchmarks, Optimization Guides, Monitoring
 
 ---
 
-**Zuletzt aktualisiert:** 23. Januar 2026  
+**Zuletzt aktualisiert:** 27. Januar 2026  
 **Wartbar:** Ja ✅
