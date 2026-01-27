@@ -1,6 +1,9 @@
 """Shared logger setup for pdf_reader module.
 
-Provides rotating file logging plus forwarding of ERROR+ to the central app_logger.
+DEPRECATED: Use src.modules.pdf_reader.logger instead.
+This file kept for backward compatibility.
+
+Provides rotating file logging plus forwarding of ERROR+ to the PDF Reader logger.
 """
 import logging
 from logging.handlers import RotatingFileHandler
@@ -8,16 +11,16 @@ from pathlib import Path
 from typing import Optional
 
 from .config import ORDNER_LOG, ensure_directories
-from src.services.logger import app_logger
+from src.modules.pdf_reader.logger import pdf_reader_logger
 
 
-class _ForwardToAppLogger(logging.Handler):
-    """Forward ERROR+ records to the central app_logger."""
+class _ForwardToPdfReaderLogger(logging.Handler):
+    """Forward ERROR+ records to the PDF Reader logger."""
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
             msg = self.format(record)
-            app_logger.log(record.levelno, msg)
+            pdf_reader_logger.log(record.levelno, msg)
         except Exception:
             pass
 
@@ -46,7 +49,7 @@ def get_pdf_logger(name: str, logfile: str, level: int = logging.INFO,
     rotating.setLevel(level)
     logger.addHandler(rotating)
 
-    forward = _ForwardToAppLogger()
+    forward = _ForwardToPdfReaderLogger()
     forward.setFormatter(formatter)
     forward.setLevel(logging.ERROR)
     logger.addHandler(forward)

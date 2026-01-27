@@ -3,7 +3,7 @@
 from typing import Optional, List, Dict
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
-from src.services.logger import app_logger
+from src.modules.temu.logger import temu_logger
 from src.db.connection import get_engine
 from config.settings import TABLE_ORDERS, TABLE_ORDER_ITEMS, DB_TOCI
 from src.db.repositories.base import BaseRepository
@@ -56,7 +56,7 @@ class OrderRepository(BaseRepository):
             row = self._fetch_one(sql, {"bestell_id": bestell_id})
             return self._map_to_order(row) if row else None
         except Exception as e:
-            app_logger.error(f"OrderRepository find_by_bestell_id: {e}", exc_info=True)
+            temu_logger.error(f"OrderRepository find_by_bestell_id: {e}", exc_info=True)
             return None
     
     def save(self, order: Order) -> int:
@@ -155,7 +155,7 @@ class OrderRepository(BaseRepository):
         except Exception as e:
             # ✅ CRITICAL: Detailliertes Logging für Debugging
             bestell_id = order.bestell_id if order else "unknown"
-            app_logger.error(f"OrderRepository save FAILED for order {bestell_id}: {e}", exc_info=True)
+            temu_logger.error(f"OrderRepository save FAILED for order {bestell_id}: {e}", exc_info=True)
             return 0
     
     def find_by_status(self, status: str) -> List[Order]:
@@ -174,7 +174,7 @@ class OrderRepository(BaseRepository):
             rows = self._fetch_all(sql, {"status": status})
             return [self._map_to_order(row) for row in rows]
         except Exception as e:
-            app_logger.error(f"OrderRepository find_by_status: {e}", exc_info=True)
+            temu_logger.error(f"OrderRepository find_by_status: {e}", exc_info=True)
             return []
     
     def update_order_tracking(self, order_id: int, tracking_number: str, 
@@ -199,7 +199,7 @@ class OrderRepository(BaseRepository):
             self._execute_stmt(sql, params)
             return True
         except Exception as e:
-            app_logger.error(f"OrderRepository update_order_tracking: {e}", exc_info=True)
+            temu_logger.error(f"OrderRepository update_order_tracking: {e}", exc_info=True)
             return False
     
     def get_orders_for_tracking_export(self) -> List[Dict]:
@@ -248,7 +248,7 @@ class OrderRepository(BaseRepository):
             return result_list
         
         except Exception as e:
-            app_logger.error(f"OrderRepository get_orders_for_tracking_export: {e}", exc_info=True)
+            temu_logger.error(f"OrderRepository get_orders_for_tracking_export: {e}", exc_info=True)
             return []
     
     def update_temu_tracking_status(self, order_id: int) -> bool:
@@ -263,7 +263,7 @@ class OrderRepository(BaseRepository):
             self._execute_stmt(sql, {"order_id": order_id})
             return True
         except Exception as e:
-            app_logger.error(f"OrderRepository update_temu_tracking_status: {e}", exc_info=True)
+            temu_logger.error(f"OrderRepository update_temu_tracking_status: {e}", exc_info=True)
             return False
 
     def update_xml_export_status(self, order_id: int) -> bool:
@@ -279,7 +279,7 @@ class OrderRepository(BaseRepository):
             self._execute_stmt(sql, {"order_id": order_id})
             return True
         except Exception as e:
-            app_logger.error(f"OrderRepository update_xml_export_status: {e}", exc_info=True)
+            temu_logger.error(f"OrderRepository update_xml_export_status: {e}", exc_info=True)
             return False
     
     def insert_xml_export(self, bestell_id: str, xml_content: str) -> bool:
@@ -295,7 +295,7 @@ class OrderRepository(BaseRepository):
             })
             return True
         except Exception as e:
-            app_logger.error(f"OrderRepository insert_xml_export: {e}", exc_info=True)
+            temu_logger.error(f"OrderRepository insert_xml_export: {e}", exc_info=True)
             return False
 
     def mark_xml_export_processed(self, bestell_id: str) -> bool:
@@ -312,7 +312,7 @@ class OrderRepository(BaseRepository):
             self._execute_stmt(sql, {"bestell_id": bestell_id})
             return True
         except Exception as e:
-            app_logger.error(f"OrderRepository mark_xml_export_processed: {e}", exc_info=True)
+            temu_logger.error(f"OrderRepository mark_xml_export_processed: {e}", exc_info=True)
             return False
 
     def find_orders_for_tracking(self) -> List[Order]:
@@ -332,7 +332,7 @@ class OrderRepository(BaseRepository):
             rows = self._fetch_all(sql)
             return [self._map_to_order(row) for row in rows]
         except Exception as e:
-            app_logger.error(f"OrderRepository find_orders_for_tracking: {e}", exc_info=True)
+            temu_logger.error(f"OrderRepository find_orders_for_tracking: {e}", exc_info=True)
             return []
 
     def _map_to_order(self, row) -> Optional[Order]:
@@ -366,5 +366,5 @@ class OrderRepository(BaseRepository):
                 versanddatum=r.get('versanddatum')
             )
         except Exception as e:
-            app_logger.error(f"OrderRepository _map_to_order: {e}", exc_info=True)
+            temu_logger.error(f"OrderRepository _map_to_order: {e}", exc_info=True)
             return None

@@ -3,7 +3,7 @@
 from typing import List, Optional
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
-from src.services.logger import app_logger
+from src.modules.temu.logger import temu_logger
 from src.db.connection import get_engine
 from config.settings import TABLE_ORDER_ITEMS, DB_TOCI
 from src.db.repositories.base import BaseRepository
@@ -110,7 +110,7 @@ class OrderItemRepository(BaseRepository):
         except Exception as e:
             # ✅ CRITICAL: Detailliertes Logging für Debugging
             bestellartikel_id = item.bestellartikel_id if item else "unknown"
-            app_logger.error(f"OrderItemRepository save FAILED for item {bestellartikel_id}: {e}", exc_info=True)
+            temu_logger.error(f"OrderItemRepository save FAILED for item {bestellartikel_id}: {e}", exc_info=True)
             return 0
 
     def find_by_order_id(self, order_id: int) -> List[OrderItem]:
@@ -127,7 +127,7 @@ class OrderItemRepository(BaseRepository):
             rows = self._fetch_all(sql, {"order_id": order_id})
             return [self._map_to_item(row) for row in rows]
         except Exception as e:
-            app_logger.error(f"OrderItemRepository find_by_order_id: {e}", exc_info=True)
+            temu_logger.error(f"OrderItemRepository find_by_order_id: {e}", exc_info=True)
             return []
     
     def find_by_bestell_id(self, bestell_id: str) -> List[OrderItem]:
@@ -144,7 +144,7 @@ class OrderItemRepository(BaseRepository):
             rows = self._fetch_all(sql, {"bestell_id": bestell_id})
             return [self._map_to_item(row) for row in rows]
         except Exception as e:
-            app_logger.error(f"OrderItemRepository find_by_bestell_id: {e}", exc_info=True)
+            temu_logger.error(f"OrderItemRepository find_by_bestell_id: {e}", exc_info=True)
             return []
     
     def find_by_bestellartikel_id(self, bestellartikel_id: str) -> Optional[OrderItem]:
@@ -161,7 +161,7 @@ class OrderItemRepository(BaseRepository):
             row = self._fetch_one(sql, {"bestellartikel_id": bestellartikel_id})
             return self._map_to_item(row) if row else None
         except Exception as e:
-            app_logger.error(f"OrderItemRepository find_by_bestellartikel_id: {e}", exc_info=True)
+            temu_logger.error(f"OrderItemRepository find_by_bestellartikel_id: {e}", exc_info=True)
             return None
     
     def _map_to_item(self, row) -> Optional[OrderItem]:
@@ -188,5 +188,5 @@ class OrderItemRepository(BaseRepository):
                 mwst_satz=r['mwst_satz']
             )
         except Exception as e:
-            app_logger.error(f"OrderItemRepository _map_to_item: {e}", exc_info=True)
+            temu_logger.error(f"OrderItemRepository _map_to_item: {e}", exc_info=True)
             return None

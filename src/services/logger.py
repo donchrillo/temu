@@ -1,26 +1,36 @@
 """
-Zentraler Logger - nur Konsole und File
-funtkioniert auch ohne DB-Verbindung.
-
-Es werden nur ERROR und CRITICAL Logs erfasst.
+Base Logger Factory - Generische Logger-Erstellung
+Wird von Modul-spezifischen Loggern verwendet (temu, pdf_reader, etc.)
+Funktioniert auch ohne DB-Verbindung.
 """
 import logging
 import sys
 from pathlib import Path
+from typing import Optional
 
-def setup_logger(name: str = __name__, level: int = logging.ERROR) -> logging.Logger:
+
+def create_module_logger(
+    module_name: str,
+    log_subdir: str,
+    console_level: int = logging.ERROR,
+    file_level: int = logging.INFO,
+    file_name: str = None
+) -> logging.Logger:
     """
-    Zentraler Logger Setup (ohne DB-Handler)
+    Generische Logger Factory für Module
     
     Args:
-        name: Logger Name (meist __name__)
-        level: Log Level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+        module_name: Name des Loggers (z.B. 'TEMU', 'PDF_READER')
+        log_subdir: Unterverzeichnis in logs/ (z.B. 'temu', 'pdf_reader')
+        console_level: Log Level für Console (default: ERROR)
+        file_level: Log Level für File (default: INFO)
+        file_name: Optional - Name der Log-Datei (default: {log_subdir}.log)
     
     Returns:
-        Konfigurierter Logger
+        Konfigurierter Logger mit Console + File Handler
     """
-    logger = logging.getLogger(name)
-    logger.setLevel(level)
+    logger = logging.getLogger(module_name)
+    logger.setLevel(logging.DEBUG)  # Niedrigster Level, Handler filtern dann
 
     # Verhindere doppelte Handler
     if logger.hasHandlers():
@@ -31,21 +41,25 @@ def setup_logger(name: str = __name__, level: int = logging.ERROR) -> logging.Lo
         datefmt='%d.%m.%Y %H:%M:%S'
     )
 
-    # 1. Console Handler (nur FEHLER!)
+    # 1. Console Handler (stderr, default nur ERROR+)
     console_handler = logging.StreamHandler(sys.stderr)
-    console_handler.setLevel(logging.ERROR)
+    console_handler.setLevel(console_level)
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
 
-    # 2. File Handler (logs/temu/error.log)
-    log_dir = Path(__file__).parent.parent.parent / "logs" / "temu"
+    # 2. File Handler (logs/{log_subdir}/{file_name})
+    log_dir = Path(__file__).parent.parent.parent / "logs" / log_subdir
     log_dir.mkdir(parents=True, exist_ok=True)
-    file_handler = logging.FileHandler(log_dir / "error.log", encoding='utf-8')
-    file_handler.setLevel(logging.ERROR)
+    
+    log_file = file_name or f"{log_subdir}.log"
+    file_handler = logging.FileHandler(log_dir / log_file, encoding='utf-8')
+    file_handler.setLevel(file_level)
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
 
     return logger
 
-# Globaler Logger
-app_logger = setup_logger('TEMU_APP')
+
+# Globaler Logger für allgemeine App-Logs (Backward Compatibility)
+# DEPRECATED: Bitte modul-spezifische Logger verwenden (temu_logger, pdf_reader_logger)
+app_logger = create_module_logger('APP', 'app', console_level=logging.ERROR, file_level=logging.ERROR)

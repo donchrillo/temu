@@ -12,7 +12,7 @@ from src.db.connection import db_connect
 from src.db.repositories.temu.order_repository import OrderRepository, Order
 from src.db.repositories.temu.order_item_repository import OrderItemRepository, OrderItem
 from src.services.log_service import log_service
-from src.services.logger import app_logger
+from src.modules.temu.logger import temu_logger
 
 class OrderService:
     """Business Logic - Importiert API Responses mit Merge-Logik"""

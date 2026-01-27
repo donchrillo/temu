@@ -3,7 +3,7 @@
 from typing import List, Dict, Any
 from sqlalchemy import text, bindparam
 from sqlalchemy.engine import Connection
-from src.services.logger import app_logger
+from src.modules.temu.logger import temu_logger
 from src.db.connection import get_engine
 from config.settings import DB_TOCI
 from src.db.repositories.base import BaseRepository
@@ -62,7 +62,7 @@ class ProductRepository(BaseRepository):
             return {"inserted": inserted, "updated": updated}
 
         except Exception as e:
-            app_logger.error(f"ProductRepository upsert_products: {e}", exc_info=True)
+            temu_logger.error(f"ProductRepository upsert_products: {e}", exc_info=True)
             return {"inserted": 0, "updated": 0}
 
     def deactivate_missing(self, active_skus: List[str]) -> int:
@@ -81,7 +81,7 @@ class ProductRepository(BaseRepository):
             return result.rowcount
             
         except Exception as e:
-            app_logger.error(f"ProductRepository deactivate_missing: {e}", exc_info=True)
+            temu_logger.error(f"ProductRepository deactivate_missing: {e}", exc_info=True)
             return 0
 
     def fetch_all(self) -> List[Dict]:
@@ -91,7 +91,7 @@ class ProductRepository(BaseRepository):
             rows = self._fetch_all(sql)
             return [dict(row._mapping) for row in rows]
         except Exception as e:
-            app_logger.error(f"ProductRepository fetch_all: {e}", exc_info=True)
+            temu_logger.error(f"ProductRepository fetch_all: {e}", exc_info=True)
             return []
 
     def update_jtl_article_id(self, product_id: int, jtl_article_id: int) -> bool:
@@ -101,5 +101,5 @@ class ProductRepository(BaseRepository):
             self._execute_stmt(sql, {"jtl_id": jtl_article_id, "product_id": product_id})
             return True
         except Exception as e:
-            app_logger.error(f"ProductRepository update_jtl_article_id: {e}", exc_info=True)
+            temu_logger.error(f"ProductRepository update_jtl_article_id: {e}", exc_info=True)
             return False
