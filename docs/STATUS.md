@@ -47,6 +47,16 @@ Recent commits show fixes für:
 
 **Status:** Die Commits sind auf `dev` gepusht, noch nicht zum `main` merged.
 
+### PDF Reader Integration (27. Januar – STARTED)
+Ziel: Streamlit-Funktionen als Services unter `src/modules/pdf_reader` bereitstellen.
+
+- ✅ Neues Modul: `src/modules/pdf_reader/` (config, patterns, identifier, services)
+- ✅ Eigene Pfade: `data/pdf_reader/{eingang,ausgang,tmp}` und `logs/pdf_reader`
+- ✅ Services portiert: `rechnungen_service`, `werbung_service`, `werbung_extraction_service`
+- ✅ Dependencies ergänzt: `pdfplumber`, `PyPDF2`, `xlsxwriter`
+- 🔜 API-Endpunkte hinzufügen (Upload/Process/Download)
+- 🔜 Frontend-Button/Link integrieren (PWA → PDF Reader)
+
 ### Foreign Key Constraint Bug (27. Januar - IN PROGRESS)
 **Problem:** INSERT in `temu_order_items` schlägt fehl mit FK-Violation
 - Fehler: Order ID = 0 wird verwendet (existiert nicht in `temu_orders`)
