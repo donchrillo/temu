@@ -9,10 +9,10 @@ import pdfplumber
 from .document_identifier import determine_country_and_document_type
 from .patterns import pattern
 from .config import ORDNER_EINGANG_WERBUNG, TMP_ORDNER
-from .pdf_logger import get_pdf_logger
+from .logger import werbung_extraction_logger
 
-# Logging-Konfiguration (rotierend, forward zu app_logger für ERROR)
-logger = get_pdf_logger("pdf_reader.werbung_extraction", "werbung_extraction.log")
+# Logger direkt nutzen
+logger = werbung_extraction_logger
 
 
 def _to_iso_date(s: str) -> str:

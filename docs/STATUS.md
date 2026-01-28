@@ -1,10 +1,10 @@
-# 📊 Project Status – 27. Januar 2026
+# 📊 Project Status – 28. Januar 2026
 
 ## 🔄 Current State
 
 ### Git Status
 - **Active Branch:** `feature/streamlit-integration` (tracking `origin/feature/streamlit-integration`)
-- **Latest Commit:** `bebfe56` – "refactor: separate logging by module"
+- **Latest Commit:** (pending) – logging improvements + error handling
 - **Main Production:** `main` at `4577c1e` (stable, last merge 26.01.)
 
 ### Untracked Files
@@ -12,9 +12,21 @@
 
 ---
 
-## ✅ Completed (Letzte Sessions)
+## ✅ Completed (28. Januar – Logger Handler & Error Detection)
 
-### 27. Januar – Logging-Trennung & PWA/PDF Reader Abschluss
+### 28. Januar – Logger Handler Fix & Error Logging
+- ✅ **Problem:** Nach PDF Cleanup wurden Logfiles erstellt, aber nicht gefüllt (Logger-Handler zeigten auf alte, gelöschte Datei-Handles)
+- ✅ **Solution 1:** Cleanup mit `file.write()` statt `logger.info()` - Dateien neu erstellt ✅
+- ✅ **Solution 2:** Neue `reinitialize_loggers()` Funktion in [src/modules/pdf_reader/logger.py](../src/modules/pdf_reader/logger.py) - schließt alte Handler und erstellt neue ✅
+- ✅ **Result:** Nach Cleanup sind Logfiles leer aber funktional (neue Logs werden geschrieben)
+
+### 28. Januar – Error Detection für falsche Dokumenttypen
+- ✅ **Problem:** Wenn Werbe-Rechnung als normale Rechnung hochgeladen wird → kein spezifischer Fehler in Logs
+- ✅ **Solution:** 
+  - [src/modules/pdf_reader/rechnungen_service.py](../src/modules/pdf_reader/rechnungen_service.py) - ERROR wenn `document_type == "werbung"` erkannt
+  - [src/modules/pdf_reader/werbung_service.py](../src/modules/pdf_reader/werbung_service.py) - ERROR wenn `document_type in ["rechnung", "gutschrift"]` erkannt
+- ✅ **Result:** Klarere Fehlermeldungen mit Hinweis auf richtige Sektion
+  - Logs: `logs/pdf_reader/rechnung_read.log` und `logs/pdf_reader/werbung_read.log`
 - ✅ **Neue Logger-Architektur:** Modul-spezifische Logger (`temu_logger`, `pdf_reader_logger`) über gemeinsame Factory ([src/services/logger.py](../src/services/logger.py)); `app_logger` bleibt für API/Worker.
 - ✅ **Log-Pfade:** `logs/temu/temu.log`, `logs/pdf_reader/pdf_reader.log`, `logs/app/app.log`, PM2: `logs/pm2-out.log`, `logs/pm2-error.log`.
 - ✅ **PDF Reader PWA:** Upload/Extract/Process/Download integriert, Service Worker Cache-Fix, HTTPS-Cache-Header über Caddy konfiguriert.
@@ -52,7 +64,7 @@
 ## 🚀 In Progress / Recent Work
 
 ### Branch Status
-- `feature/streamlit-integration` enthält: PDF Reader PWA, Datenpfad-Refactor, Logger-Trennung, TEMU Import-Fixes. Noch nicht nach `main` gemerged.
+- `feature/streamlit-integration` enthält: PDF Reader PWA, Datenpfad-Refactor, Logger-Trennung mit Handler-Fix, TEMU Import-Fixes. Noch nicht nach `main` gemerged.
 
 ### Foreign Key Constraint Bug (laufend)
 **Problem:** INSERT in `temu_order_items` schlägt sporadisch fehl mit FK-Violation (Order ID = 0)
@@ -133,5 +145,5 @@
 
 ---
 
-**Last Updated:** 27. Januar 2026, 18:10  
+**Last Updated:** 28. Januar 2026, 13:30  
 **Next Review:** Nach E2E-Tests & Merge-Plan

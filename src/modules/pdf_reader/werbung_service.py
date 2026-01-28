@@ -9,10 +9,10 @@ import pdfplumber
 from .patterns import pattern as pat
 from .document_identifier import determine_country_and_document_type
 from .config import TMP_ORDNER, ORDNER_AUSGANG
-from .pdf_logger import get_pdf_logger
+from .logger import werbung_logger
 
-# Logger-Konfiguration (rotierend, forward zu app_logger für ERROR)
-logger = get_pdf_logger("pdf_reader.werbung", "werbung_read.log")
+# Logger direkt nutzen
+logger = werbung_logger
 
 
 def extract_data_from_pdf(pdf_path: Path) -> Optional[dict]:
@@ -32,6 +32,12 @@ def extract_data_from_pdf(pdf_path: Path) -> Optional[dict]:
         country_code, document_type = determine_country_and_document_type(text)
         if not country_code or not document_type:
             logger.warning(f"Kein gültiges Dokument erkannt: {pdf_path}")
+            return None
+
+        # Spezifischer Fehler wenn normale Rechnung statt Werbung hochgeladen wird
+        if document_type in ["rechnung", "gutschrift"]:
+            logger.error(f"❌ FALSCHER DOKUMENTTYP: '{pdf_path}' ist eine {document_type}, keine Werbe-Rechnung! "
+                        f"Bitte in die Rechnungen-Sektion hochladen.")
             return None
 
         lang_patterns = pat.get(country_code, {}).get(document_type, {})
@@ -100,6 +106,8 @@ def process_ad_pdfs(directory: Path = TMP_ORDNER, output_excel: Path = ORDNER_AU
     Returns:
         pd.DataFrame: Extrahierte Daten als DataFrame.
     """
+    logger.info(f"🧪 process_ad_pdfs START: directory={directory}")
+    
     pdf_files = list(directory.rglob("*.pdf"))
     if not pdf_files:
         logger.warning(f"Keine PDF-Dateien im Verzeichnis '{directory}' gefunden.")

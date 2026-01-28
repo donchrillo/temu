@@ -9,6 +9,17 @@ from typing import Optional, List, Dict
 from src.db.repositories.common.log_repository import LogRepository
 from src.services.logger import app_logger
 
+# Modul-spezifische Logger importieren
+try:
+    from src.modules.temu.logger import temu_logger
+except ImportError:
+    temu_logger = None
+
+try:
+    from src.modules.pdf_reader.logger import pdf_reader_logger
+except ImportError:
+    pdf_reader_logger = None
+
 class LogService:
     """Verwaltet strukturiertes Logging"""
     
@@ -29,7 +40,7 @@ class LogService:
     
     def log(self, job_id: str, job_type: str, level: str, message: str,
             status: str = None, duration: float = None, error_text: str = None):
-        """Speichere Log-Eintrag in DB und optional in app_logger"""
+        """Speichere Log-Eintrag in DB und optional im Modul-spezifischen Logger"""
         
         # In Memory Buffer
         self.log_buffer.append(message)
@@ -44,9 +55,27 @@ class LogService:
             duration_seconds=duration,
             error_text=error_text
         )
-        # ERROR zusätzlich in app_logger
+        
+        # ERROR zusätzlich im richtigen Logger basierend auf job_type
         if level == "ERROR":
-            app_logger.error(message)
+            # TEMU-Jobs: order/inventory/stock_sync/tracking
+            if job_type and ("order" in job_type.lower() or "inventory" in job_type.lower() or 
+                            "stock" in job_type.lower() or "tracking" in job_type.lower() or
+                            "temu" in job_type.lower()):
+                if temu_logger:
+                    temu_logger.error(message)
+                else:
+                    app_logger.error(message)
+            # PDF Reader Jobs: werbung/rechnung
+            elif job_type and ("werbung" in job_type.lower() or "rechnung" in job_type.lower() or
+                              "pdf" in job_type.lower()):
+                if pdf_reader_logger:
+                    pdf_reader_logger.error(message)
+                else:
+                    app_logger.error(message)
+            # Fallback: app_logger
+            else:
+                app_logger.error(message)
     
     def end_job_capture(self, success: bool = True, duration: float = 0, error: str = None):
         """Beende Job Capturing"""

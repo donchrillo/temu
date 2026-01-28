@@ -9,10 +9,10 @@ import pdfplumber
 from .patterns import pattern as pat
 from .document_identifier import determine_country_and_document_type
 from .config import ORDNER_EINGANG_RECHNUNGEN, ORDNER_AUSGANG
-from .pdf_logger import get_pdf_logger
+from .logger import rechnung_logger
 
-# Logger-Konfiguration (rotierend, forward zu app_logger für ERROR)
-logger = get_pdf_logger("pdf_reader.rechnungen", "rechnung_read.log")
+# Logger direkt nutzen
+logger = rechnung_logger
 
 
 def extract_data_from_pdf(pdf_path: Path) -> Optional[dict]:
@@ -31,6 +31,12 @@ def extract_data_from_pdf(pdf_path: Path) -> Optional[dict]:
         country_code, document_type = determine_country_and_document_type(text)
         if not country_code or not document_type:
             logger.warning(f"Land oder Dokumenttyp konnte nicht für die Datei {pdf_path} bestimmt werden.")
+            return None
+
+        # Spezifischer Fehler wenn Werbung statt Rechnung hochgeladen wird
+        if document_type == "werbung":
+            logger.error(f"❌ FALSCHER DOKUMENTTYP: '{pdf_path}' ist eine Werbe-Rechnung, nicht eine normale Rechnung! "
+                        f"Bitte in die Werbung-Sektion hochladen.")
             return None
 
         lang_patterns = pat.get(country_code, {}).get(document_type, {})

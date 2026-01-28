@@ -360,6 +360,25 @@ async def pdf_cleanup():
                 except Exception as e:
                     app_logger.error(f"Logfile Cleanup Fehler: {e}")
     
+    # Re-create empty log files
+    from pathlib import Path
+    from datetime import datetime
+    log_header = f"[Logs cleared at {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}]\n"
+    for logfile in ["werbung_read.log", "werbung_extraction.log", "rechnung_read.log"]:
+        log_path = ORDNER_LOG / logfile
+        try:
+            with open(log_path, 'w', encoding='utf-8') as f:
+                f.write(log_header)
+        except Exception as e:
+            app_logger.error(f"Fehler beim Neu-Erstellen der Log-Datei {logfile}: {e}")
+    
+    # Reinitialize logger handlers to point to new files
+    try:
+        from src.modules.pdf_reader.logger import reinitialize_loggers
+        reinitialize_loggers()
+    except Exception as e:
+        app_logger.error(f"Fehler beim Reinitialize der Logger-Handler: {e}")
+    
     return {"status": "ok", "cleared": cleared, "logs_removed": logs_removed}
 
 # ===== MAINTENANCE =====

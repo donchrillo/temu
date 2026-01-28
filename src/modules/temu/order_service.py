@@ -32,7 +32,6 @@ class OrderService:
             dict mit imported/updated/total counts
         """
         job_id = job_id or self.job_id
-        
         log_service.log(job_id, "order_service", "INFO", 
                           "→ Importiere Orders aus JSON in Datenbank")
         
