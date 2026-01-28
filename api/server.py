@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from workers.worker_service import SchedulerService
 from src.services.log_service import log_service
-from src.services.logger import app_logger
+from src.services import app_logger
 from src.modules.pdf_reader.config import (
     ORDNER_EINGANG_RECHNUNGEN,
     ORDNER_EINGANG_WERBUNG,
@@ -123,11 +123,6 @@ async def toggle_job(job_id: str, enabled: bool):
 async def get_logs(job_id: str = None, level: str = None, limit: int = 100, offset: int = 0):
     """Hole Logs mit Filtern"""
     return log_service.get_logs(job_id, level, limit, offset)
-
-@app.get("/api/logs/stats")
-async def get_log_stats(job_id: str = None, days: int = 7):
-    """Hole Log-Statistiken"""
-    return log_service.get_statistics(job_id, days)
 
 @app.get("/api/logs/export")
 async def export_logs(job_id: str = None, format: str = "json", days: int = 7):

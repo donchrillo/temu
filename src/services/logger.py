@@ -6,7 +6,7 @@ Funktioniert auch ohne DB-Verbindung.
 import logging
 import sys
 from pathlib import Path
-from typing import Optional
+
 
 
 def create_module_logger(
@@ -58,8 +58,3 @@ def create_module_logger(
     logger.addHandler(file_handler)
 
     return logger
-
-
-# Globaler Logger für allgemeine App-Logs (Backward Compatibility)
-# DEPRECATED: Bitte modul-spezifische Logger verwenden (temu_logger, pdf_reader_logger)
-app_logger = create_module_logger('APP', 'app', console_level=logging.ERROR, file_level=logging.ERROR)

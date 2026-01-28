@@ -1,24 +1,8 @@
 """Log Service - Zentrale Log-Verwaltung mit Console Capture"""
 
-import io
-import sys
-import logging
-from contextlib import redirect_stdout, redirect_stderr
-from datetime import datetime
 from typing import Optional, List, Dict
 from src.db.repositories.common.log_repository import LogRepository
-from src.services.logger import app_logger
-
-# Modul-spezifische Logger importieren
-try:
-    from src.modules.temu.logger import temu_logger
-except ImportError:
-    temu_logger = None
-
-try:
-    from src.modules.pdf_reader.logger import pdf_reader_logger
-except ImportError:
-    pdf_reader_logger = None
+from src.services import app_logger
 
 class LogService:
     """Verwaltet strukturiertes Logging"""
@@ -40,42 +24,30 @@ class LogService:
     
     def log(self, job_id: str, job_type: str, level: str, message: str,
             status: str = None, duration: float = None, error_text: str = None):
-        """Speichere Log-Eintrag in DB und optional im Modul-spezifischen Logger"""
+        """Speichere Log-Eintrag in DB und Fehler-Datei"""
         
         # In Memory Buffer
         self.log_buffer.append(message)
         
         # In SQL Server
-        self.repo.insert_log(
-            job_id=job_id,
-            job_type=job_type,
-            level=level,
-            message=message,
-            status=status,
-            duration_seconds=duration,
-            error_text=error_text
-        )
+        # TEMU-Jobs + SYSTEM_ERROR → DB-Logging
+        is_temu_job = job_type and any(t in job_type.lower() for t in ["order", "inventory", "stock", "tracking", "temu"])
+        is_system_error = job_id == "SYSTEM_ERROR"
         
-        # ERROR zusätzlich im richtigen Logger basierend auf job_type
+        if is_temu_job or is_system_error:
+            self.repo.insert_log(
+                job_id=job_id,
+                job_type=job_type,
+                level=level,
+                message=message,
+                status=status,
+                duration_seconds=duration,
+                error_text=error_text
+            )
+        
+        # ERROR-Level immer in zentrale app.log schreiben
         if level == "ERROR":
-            # TEMU-Jobs: order/inventory/stock_sync/tracking
-            if job_type and ("order" in job_type.lower() or "inventory" in job_type.lower() or 
-                            "stock" in job_type.lower() or "tracking" in job_type.lower() or
-                            "temu" in job_type.lower()):
-                if temu_logger:
-                    temu_logger.error(message)
-                else:
-                    app_logger.error(message)
-            # PDF Reader Jobs: werbung/rechnung
-            elif job_type and ("werbung" in job_type.lower() or "rechnung" in job_type.lower() or
-                              "pdf" in job_type.lower()):
-                if pdf_reader_logger:
-                    pdf_reader_logger.error(message)
-                else:
-                    app_logger.error(message)
-            # Fallback: app_logger
-            else:
-                app_logger.error(message)
+            app_logger.error(message)
     
     def end_job_capture(self, success: bool = True, duration: float = 0, error: str = None):
         """Beende Job Capturing"""
@@ -103,13 +75,9 @@ class LogService:
         """Hole Logs mit Filtern"""
         return self.repo.get_logs(job_id, level, limit, offset)
     
-    def get_statistics(self, job_id: str = None, days: int = 7) -> Dict:
-        """Hole Job-Statistiken"""
-        return self.repo.get_statistics(job_id, days)
-    
     def cleanup_old_logs(self, days: int = 30) -> int:
         """Lösche alte Logs"""
-        return self.repo.cleanup_old_logs(days)
+        return self.repo.clean_old_logs(days)
 
 # Globale LogService Instanz
 log_service = LogService()

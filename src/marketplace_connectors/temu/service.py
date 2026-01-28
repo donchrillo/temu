@@ -1,7 +1,6 @@
 """TEMU Marketplace Service - API Integration Layer"""
 
 import json
-from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, Optional
 from src.modules.temu.config import TEMU_API_RESPONSES_DIR

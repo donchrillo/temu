@@ -348,4 +348,69 @@ A: ~2-5 MB pro Connection. Bei 30 Connections max. ~150 MB extra.
 
 ---
 
+## 5. Strukturiertes Logging – scheduler_logs Tabelle (28. Januar 2026)
+
+### Übersicht
+Die `scheduler_logs` Tabelle speichert strukturierte Logs aller TEMU-Jobs (Inventar-Sync, Auftrags-Sync, etc.) mit Meta-Informationen.
+
+**Datei:** `src/db/repositories/common/log_repository.py`
+
+### Tabellen-Schema
+```sql
+CREATE TABLE [dbo].[scheduler_logs] (
+    [log_id] INT PRIMARY KEY IDENTITY(1,1),
+    [job_id] VARCHAR(255) NOT NULL,
+    [job_type] VARCHAR(100) NOT NULL,
+    [level] VARCHAR(20) NOT NULL,
+    [message] NVARCHAR(MAX) NOT NULL,
+    [timestamp] DATETIME2 NOT NULL DEFAULT GETDATE(),
+    [duration_seconds] FLOAT NULL,
+    [status] VARCHAR(20) NULL,
+    [error_text] NVARCHAR(MAX) NULL,
+    
+    INDEX idx_job_id (job_id),
+    INDEX idx_timestamp (timestamp),
+    INDEX idx_level (level)
+);
+```
+
+### Master-Jobs & Sub-Jobs
+
+**Master-Jobs** haben eindeutige job_ids mit Timestamp:
+- `temu_orders_1769614356`
+- `temu_inventory_1769613860`
+- `sync_orders_1769612871`
+
+**Sub-Jobs** teilen die gleiche job_id:
+```
+temu_orders_1769614356
+├── order_service
+├── order_workflow
+├── tracking_service
+└── temu_service
+```
+
+### LIKE-Filter Pattern Matching
+
+**Backend:** `job_id LIKE 'temu_orders%'` zeigt alle Sub-Jobs mit dieser job_id
+
+### Verwendung im Code
+
+```python
+# Log schreiben
+log_repository.insert_log(
+    job_id="temu_orders_1769614356",
+    job_type="order_workflow",
+    level="INFO",
+    message="Bestellung verarbeitet",
+    status="success",
+    duration_seconds=2.5
+)
+
+# Logs mit Filter laden
+logs = log_repository.get_logs(job_id="temu_orders%", level="ERROR")
+```
+
+---
+
 > **Nächste Schritte:** Spezifische Repository-Dokumentation, Workflow-Patterns, Deployment-Konfiguration.

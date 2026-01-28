@@ -4,7 +4,10 @@ Data Access Layer - Strukturiertes Logging in SQL Server
 """
 
 from typing import Dict, List
-from src.services.logger import app_logger
+# Lazy import to avoid circular dependency
+def _get_log_service():
+    from src.services.log_service import log_service
+    return log_service
 from src.db.repositories.base import BaseRepository
 
 class LogRepository(BaseRepository):
@@ -75,8 +78,14 @@ class LogRepository(BaseRepository):
             params = {}
             
             if job_id:
-                where_clauses.append("job_id = :job_id")
-                params["job_id"] = job_id
+                # job_id kommt vom Frontend bereits als LIKE-Pattern z.B. "temu_orders%"
+                # Wenn es kein % enthält, fügen wir % hinzu für Präfix-Matching
+                if '%' in job_id:
+                    where_clauses.append("job_id LIKE :job_id_pattern")
+                    params["job_id_pattern"] = job_id
+                else:
+                    where_clauses.append("job_id LIKE :job_id_pattern")
+                    params["job_id_pattern"] = f"{job_id}%"
             
             if level:
                 where_clauses.append("level = :level")
@@ -100,7 +109,7 @@ class LogRepository(BaseRepository):
             return [dict(row._mapping) for row in rows]
 
         except Exception as e:
-            app_logger.error(f"LogRepository get_logs: {e}", exc_info=True)
+            _get_log_service().log("SYSTEM_ERROR", "log_repository", "ERROR", f"LogRepository get_logs: {e}")
             return []
 
     def get_recent_logs(self, job_id: str, limit: int = 100) -> List[Dict]:
@@ -117,7 +126,7 @@ class LogRepository(BaseRepository):
             return [dict(row._mapping) for row in rows]
 
         except Exception as e:
-            app_logger.error(f"LogRepository get_recent_logs: {e}", exc_info=True)
+            _get_log_service().log("SYSTEM_ERROR", "log_repository", "ERROR", f"LogRepository get_recent_logs: {e}")
             return []
 
     def get_job_stats(self, job_id: str) -> Dict:
@@ -139,7 +148,7 @@ class LogRepository(BaseRepository):
             return dict(row._mapping) if row else {}
             
         except Exception as e:
-            app_logger.error(f"LogRepository get_job_stats: {e}", exc_info=True)
+            _get_log_service().log("SYSTEM_ERROR", "log_repository", "ERROR", f"LogRepository get_job_stats: {e}")
             return {}
 
     def clean_old_logs(self, days: int = 30) -> int:
@@ -152,5 +161,5 @@ class LogRepository(BaseRepository):
             result = self._execute_stmt(sql, {"days": days})
             return result.rowcount
         except Exception as e:
-            app_logger.error(f"LogRepository clean_old_logs: {e}", exc_info=True)
+            _get_log_service().log("SYSTEM_ERROR", "log_repository", "ERROR", f"LogRepository clean_old_logs: {e}")
             return 0

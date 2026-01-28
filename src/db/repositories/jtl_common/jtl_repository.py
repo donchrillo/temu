@@ -3,7 +3,10 @@
 from typing import Optional, Dict, List
 from sqlalchemy import text, bindparam
 from sqlalchemy.engine import Connection
-from src.services.logger import app_logger
+# Lazy import to avoid circular dependency
+def _get_log_service():
+    from src.services.log_service import log_service
+    return log_service
 from config.settings import DB_JTL
 from src.db.repositories.base import BaseRepository
 
@@ -23,7 +26,7 @@ class JtlRepository(BaseRepository):
             """, {"xml_string": xml_string})
             return True
         except Exception as e:
-            app_logger.error(f"JTL insert_xml_import: {e}", exc_info=True)
+            _get_log_service().log("SYSTEM_ERROR", "jtl_repository", "ERROR", f"JTL insert_xml_import: {e}")
             return False
     
     def get_imported_orders(self) -> Dict[str, bool]:
@@ -38,7 +41,7 @@ class JtlRepository(BaseRepository):
             rows = self._fetch_all(sql)
             return {row[0]: True for row in rows}
         except Exception as e:
-            app_logger.error(f"JTL get_imported_orders: {e}", exc_info=True)
+            _get_log_service().log("SYSTEM_ERROR", "jtl_repository", "ERROR", f"JTL get_imported_orders: {e}")
             return {}
     
     def get_xml_import_status(self, bestell_id: str) -> Optional[str]:
@@ -59,7 +62,7 @@ class JtlRepository(BaseRepository):
             return 'imported' if row[1] else 'processing'
 
         except Exception as e:
-            app_logger.error(f"JTL get_xml_import_status: {e}", exc_info=True)
+            _get_log_service().log("SYSTEM_ERROR", "jtl_repository", "ERROR", f"JTL get_xml_import_status: {e}")
             return None
     
     def get_import_errors(self, bestell_id: str = None) -> Dict[str, str]:
@@ -88,7 +91,7 @@ class JtlRepository(BaseRepository):
             return {row[0]: row[1] for row in rows}
                     
         except Exception as e:
-            app_logger.error(f"JTL get_import_errors: {e}", exc_info=True)
+            _get_log_service().log("SYSTEM_ERROR", "jtl_repository", "ERROR", f"JTL get_import_errors: {e}")
             return {}
     
     def get_article_id_by_sku(self, sku: str) -> Optional[int]:
@@ -102,7 +105,7 @@ class JtlRepository(BaseRepository):
             row = self._fetch_one(sql, {"sku": sku})
             return int(row[0]) if row else None
         except Exception as e:
-            app_logger.error(f"JTL get_article_id_by_sku: {e}", exc_info=True)
+            _get_log_service().log("SYSTEM_ERROR", "jtl_repository", "ERROR", f"JTL get_article_id_by_sku: {e}")
             return None
     
     def get_stock_by_article_id(self, article_id: int) -> int:
@@ -125,7 +128,7 @@ class JtlRepository(BaseRepository):
             available = max(0, int(f_bestand) - n_puffer)
             return available
         except Exception as e:
-            app_logger.error(f"JTL get_stock_by_article_id: {e}", exc_info=True)
+            _get_log_service().log("SYSTEM_ERROR", "jtl_repository", "ERROR", f"JTL get_stock_by_article_id: {e}")
             return 0
     
     def get_stocks_by_article_ids(self, article_ids: List[int]) -> Dict[int, float]:
@@ -168,7 +171,7 @@ class JtlRepository(BaseRepository):
             return result_map
             
         except Exception as e:
-            app_logger.error(f"JTL get_stocks_by_article_ids: {e}", exc_info=True)
+            _get_log_service().log("SYSTEM_ERROR", "jtl_repository", "ERROR", f"JTL get_stocks_by_article_ids: {e}")
             return {}
     
     def get_tracking_from_lieferschein(self, bestell_id: str) -> Optional[Dict[str, str]]:
@@ -197,7 +200,7 @@ class JtlRepository(BaseRepository):
                 "tracking_number": tracking_id or ""
             }
         except Exception as e:
-            app_logger.error(f"JTL get_tracking_from_lieferschein: {e}", exc_info=True)
+            _get_log_service().log("SYSTEM_ERROR", "jtl_repository", "ERROR", f"JTL get_tracking_from_lieferschein: {e}")
             return None
 
     def get_customer_number_by_email(self, email: str) -> Optional[str]:
@@ -218,5 +221,5 @@ class JtlRepository(BaseRepository):
             kunden_nr = row[0]
             return kunden_nr if kunden_nr else None
         except Exception as e:
-            app_logger.error(f"JTL get_customer_number_by_email: {e}", exc_info=True)
+            _get_log_service().log("SYSTEM_ERROR", "jtl_repository", "ERROR", f"JTL get_customer_number_by_email: {e}")
             return None

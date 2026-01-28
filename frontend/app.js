@@ -40,8 +40,6 @@ function switchTab(tabName) {
     // Load data für Tab
     if (tabName === 'logs') {
         loadAllLogs();
-    } else if (tabName === 'stats') {
-        loadStatistics();
     }
 }
 
@@ -118,12 +116,13 @@ function connectWebSocket() {
 // ===== LOGS LADEN =====
 async function loadAllLogs() {
     try {
-        const jobId = document.getElementById('filter-job').value || '';
+        // job_id Filter ist bereits ein LIKE-Pattern z.B. "temu_orders%"
+        const jobIdPattern = document.getElementById('filter-job').value || '';
         const level = document.getElementById('filter-level').value || '';
         const limit = document.getElementById('filter-limit').value || 100;
         
         let url = `${API_URL}/logs?limit=${limit}`;
-        if (jobId) url += `&job_id=${jobId}`;
+        if (jobIdPattern) url += `&job_id=${jobIdPattern}`;
         if (level) url += `&level=${level}`;
         
         console.log("📥 Lade Logs mit URL:", url);
@@ -171,16 +170,21 @@ function updateJobFilter() {
     const select = document.getElementById('filter-job');
     const currentValue = select.value;
     
-    // Sammle alle Job-IDs
-    const jobIds = [...new Set(jobs.map(j => j.job_id))];
+    // Feste Filter-Optionen mit LIKE-Patterns
+    const filterOptions = [
+        { value: '', label: '— Alle Jobs —' },
+        { value: 'temu_orders%', label: 'TEMU Bestellungen (Auftragsverarbeitung)' },
+        { value: 'temu_inventory%', label: 'TEMU Lagerbestand (Inventar)' },
+        { value: 'sync_orders%', label: 'Synchronisiere neue Temu Aufträge' },
+        { value: 'sync_inventory%', label: 'Synchronisiere Temu Lagerbestand' }
+    ];
     
-    // Behalte "Alle Jobs" Option
-    select.innerHTML = '<option value="">— Alle Jobs —</option>';
-    jobIds.forEach(id => {
-        const opt = document.createElement('option');
-        opt.value = id;
-        opt.textContent = jobs.find(j => j.job_id === id)?.config.description || id;
-        select.appendChild(opt);
+    select.innerHTML = '';
+    filterOptions.forEach(opt => {
+        const option = document.createElement('option');
+        option.value = opt.value;
+        option.textContent = opt.label;
+        select.appendChild(option);
     });
     
     select.value = currentValue;
@@ -247,12 +251,13 @@ function renderLogs(logs) {
                 className = 'log-line log-info';
             }
             
-            const timestamp = log.timestamp ? new Date(log.timestamp).toLocaleTimeString('de-DE') : '';
+            const timestamp = log.timestamp ? new Date(log.timestamp).toLocaleString('de-DE') : '';
             
             return `
                 <div class="${className}">
                     <strong>[${timestamp}]</strong> 
                     <span style="color: #94a3b8;">[${log.level}]</span>
+                    <span style="color: #64748b;">[${log.job_type || 'N/A'}]</span>
                     ${escapeHtml(log.message || '')}
                 </div>
             `;
@@ -260,36 +265,6 @@ function renderLogs(logs) {
         .join('');
     
     container.scrollTop = 0;
-}
-
-
-// ===== STATISTIKEN =====
-async function loadStatistics() {
-    try {
-        const jobId = document.getElementById('filter-job').value || '';
-        let url = `${API_URL}/logs/stats`;
-        if (jobId) url += `?job_id=${jobId}`;
-        
-        const response = await fetch(url);
-        if (response.ok) {
-            const stats = await response.json();
-            renderStatistics(stats);
-        }
-    } catch (e) {
-        console.error("❌ Stats laden fehlgeschlagen:", e);
-    }
-}
-
-function renderStatistics(stats) {
-    document.getElementById('stat-total').textContent = stats.total_runs || 0;
-    document.getElementById('stat-success').textContent = stats.successful_runs || 0;
-    document.getElementById('stat-failed').textContent = stats.failed_runs || 0;
-    document.getElementById('stat-success-rate').textContent = (stats.success_rate || 0).toFixed(1) + '%';
-    document.getElementById('stat-avg-duration').textContent = (stats.avg_duration || 0).toFixed(2) + 's';
-    document.getElementById('stat-max-duration').textContent = (stats.max_duration || 0).toFixed(2) + 's';
-    
-    // Update Erfolgsrate im Header
-    document.getElementById('success-rate').textContent = (stats.success_rate || 0).toFixed(0) + '%';
 }
 
 // ===== EXPORT =====

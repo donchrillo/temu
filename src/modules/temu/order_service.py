@@ -2,9 +2,8 @@
 
 import json
 import traceback
-from pathlib import Path
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 from config.settings import DB_TOCI
 from src.modules.temu.config import TEMU_API_RESPONSES_DIR
@@ -12,7 +11,6 @@ from src.db.connection import db_connect
 from src.db.repositories.temu.order_repository import OrderRepository, Order
 from src.db.repositories.temu.order_item_repository import OrderItemRepository, OrderItem
 from src.services.log_service import log_service
-from src.modules.temu.logger import temu_logger
 
 class OrderService:
     """Business Logic - Importiert API Responses mit Merge-Logik"""

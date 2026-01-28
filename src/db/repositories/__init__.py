@@ -1,22 +1,6 @@
 """Repositories Package - Data Access Layer"""
 
-# TEMU Repositories
-from .temu.order_repository import OrderRepository, Order
-from .temu.order_item_repository import OrderItemRepository, OrderItem
-from .temu.product_repository import ProductRepository
-from .temu.inventory_repository import InventoryRepository
+# Lazy imports to avoid circular dependencies
+# Import repositories directly where needed instead of from __init__.py
 
-# JTL Common Repositories
-from .jtl_common.jtl_repository import JtlRepository
-
-# Common Repositories
-from .common.log_repository import LogRepository
-
-__all__ = [
-    'OrderRepository', 'Order', 
-    'OrderItemRepository', 'OrderItem',
-    'ProductRepository',
-    'InventoryRepository',
-    'JtlRepository',
-    'LogRepository'
-]
+__all__ = []

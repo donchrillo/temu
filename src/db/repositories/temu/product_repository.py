@@ -1,9 +1,11 @@
 """Product Repository - SQLAlchemy + Raw SQL (Final & Optimized)"""
 
 from typing import List, Dict, Any
-from sqlalchemy import text, bindparam
-from sqlalchemy.engine import Connection
-from src.modules.temu.logger import temu_logger
+from sqlalchemy import text
+# Lazy import to avoid circular dependency
+def _get_log_service():
+    from src.services.log_service import log_service
+    return log_service
 from src.db.connection import get_engine
 from config.settings import DB_TOCI
 from src.db.repositories.base import BaseRepository
@@ -62,7 +64,7 @@ class ProductRepository(BaseRepository):
             return {"inserted": inserted, "updated": updated}
 
         except Exception as e:
-            temu_logger.error(f"ProductRepository upsert_products: {e}", exc_info=True)
+            _get_log_service().log("SYSTEM_ERROR", "productrepository" , "ERROR", f"ProductRepository upsert_products: {e}")
             return {"inserted": 0, "updated": 0}
 
     def deactivate_missing(self, active_skus: List[str]) -> int:
@@ -81,7 +83,7 @@ class ProductRepository(BaseRepository):
             return result.rowcount
             
         except Exception as e:
-            temu_logger.error(f"ProductRepository deactivate_missing: {e}", exc_info=True)
+            _get_log_service().log("SYSTEM_ERROR", "productrepository" , "ERROR", f"ProductRepository deactivate_missing: {e}")
             return 0
 
     def fetch_all(self) -> List[Dict]:
@@ -91,7 +93,7 @@ class ProductRepository(BaseRepository):
             rows = self._fetch_all(sql)
             return [dict(row._mapping) for row in rows]
         except Exception as e:
-            temu_logger.error(f"ProductRepository fetch_all: {e}", exc_info=True)
+            _get_log_service().log("SYSTEM_ERROR", "productrepository" , "ERROR", f"ProductRepository fetch_all: {e}")
             return []
 
     def update_jtl_article_id(self, product_id: int, jtl_article_id: int) -> bool:
@@ -101,5 +103,5 @@ class ProductRepository(BaseRepository):
             self._execute_stmt(sql, {"jtl_id": jtl_article_id, "product_id": product_id})
             return True
         except Exception as e:
-            temu_logger.error(f"ProductRepository update_jtl_article_id: {e}", exc_info=True)
+            _get_log_service().log("SYSTEM_ERROR", "productrepository" , "ERROR", f"ProductRepository update_jtl_article_id: {e}")
             return False

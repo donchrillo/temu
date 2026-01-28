@@ -1,9 +1,11 @@
 """Inventory Repository - SQLAlchemy + Raw SQL (Final & Optimized)"""
 
 from typing import List, Dict, Any
-from sqlalchemy import text, bindparam
-from sqlalchemy.engine import Connection
-from src.modules.temu.logger import temu_logger
+from sqlalchemy import text
+# Lazy import to avoid circular dependency
+def _get_log_service():
+    from src.services.log_service import log_service
+    return log_service
 from src.db.connection import get_engine
 from config.settings import DB_TOCI
 from src.db.repositories.base import BaseRepository
@@ -61,7 +63,7 @@ class InventoryRepository(BaseRepository):
             return {"inserted": inserted, "updated": updated}
 
         except Exception as e:
-            temu_logger.error(f"InventoryRepository upsert_inventory: {e}", exc_info=True)
+            _get_log_service().log("SYSTEM_ERROR", "inventoryrepository" , "ERROR", f"InventoryRepository upsert_inventory: {e}")
             return {"inserted": 0, "updated": 0}
 
     def get_needs_sync(self) -> List[Dict[str, Any]]:
@@ -77,7 +79,7 @@ class InventoryRepository(BaseRepository):
             rows = self._fetch_all(sql)
             return [dict(row._mapping) for row in rows]
         except Exception as e:
-            temu_logger.error(f"InventoryRepository get_needs_sync: {e}", exc_info=True)
+            _get_log_service().log("SYSTEM_ERROR", "inventoryrepository" , "ERROR", f"InventoryRepository get_needs_sync: {e}")
             return []
 
     def mark_synced(self, items: List[Dict[str, Any]]) -> int:
@@ -110,5 +112,5 @@ class InventoryRepository(BaseRepository):
             return len(items)
             
         except Exception as e:
-            temu_logger.error(f"InventoryRepository mark_synced: {e}", exc_info=True)
+            _get_log_service().log("SYSTEM_ERROR", "inventoryrepository" , "ERROR", f"InventoryRepository mark_synced: {e}")
             return 0
