@@ -106,7 +106,7 @@ class SchedulerService:
 
             # Führe entsprechenden Job aus (Workflows loggen selbst strukturiert)
             if job_type == JobType.SYNC_ORDERS:
-                from src.modules.temu.order_workflow_service import OrderWorkflowService
+                from modules.temu.services.order_workflow_service import OrderWorkflowService
                 service = OrderWorkflowService()
                 result = await self._async_wrapper(
                     service.run_complete_workflow,
@@ -118,7 +118,7 @@ class SchedulerService:
                 log_service.log(job_id, job_type.value, "INFO", f"Job Ergebnis: {result}")
 
             elif job_type == JobType.SYNC_INVENTORY:
-                from src.modules.temu.inventory_workflow_service import InventoryWorkflowService
+                from modules.temu.services.inventory_workflow_service import InventoryWorkflowService
                 service = InventoryWorkflowService()
                 result = await self._async_wrapper(
                     service.run_complete_workflow,
