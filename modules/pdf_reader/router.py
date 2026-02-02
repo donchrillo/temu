@@ -17,8 +17,8 @@ from fastapi.responses import FileResponse
 
 from modules.shared import log_service, app_logger
 
-# Import bestehende Services (keine Änderung nötig!)
-from src.modules.pdf_reader.config import (
+# Import Services aus eigenem Modul
+from .services.config import (
     ORDNER_EINGANG_RECHNUNGEN,
     ORDNER_EINGANG_WERBUNG,
     ORDNER_AUSGANG,
@@ -26,9 +26,9 @@ from src.modules.pdf_reader.config import (
     ensure_directories,
     TMP_ORDNER as _DIR_TMP
 )
-from src.modules.pdf_reader.werbung_extraction_service import extract_and_save_first_page
-from src.modules.pdf_reader.werbung_service import process_ad_pdfs
-from src.modules.pdf_reader.rechnungen_service import process_rechnungen
+from .services.werbung_extraction_service import extract_and_save_first_page
+from .services.werbung_service import process_ad_pdfs
+from .services.rechnungen_service import process_rechnungen
 
 # Router erstellen
 router = APIRouter()
@@ -272,7 +272,7 @@ async def pdf_cleanup():
 
     # Reinitialize logger handlers
     try:
-        from src.modules.pdf_reader.logger import reinitialize_loggers
+        from .services.logger import reinitialize_loggers
         reinitialize_loggers()
     except Exception as e:
         app_logger.error(f"Fehler beim Reinitialize der Logger-Handler: {e}")
