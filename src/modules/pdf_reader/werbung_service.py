@@ -10,17 +10,39 @@ from .patterns import pattern as pat
 from .document_identifier import determine_country_and_document_type
 from .config import TMP_ORDNER, ORDNER_AUSGANG
 from .logger import werbung_logger
+from .werbung_extraction_service import load_filename_mapping
 
 # Logger direkt nutzen
 logger = werbung_logger
 
 
-def extract_data_from_pdf(pdf_path: Path) -> Optional[dict]:
+def parse_amount(amount_str: str, currency: str) -> float:
+    """
+    Parst einen Betrag basierend auf der Währung.
+
+    Args:
+        amount_str: Betrag als String (z.B. "1.234,56" oder "1,234.56")
+        currency: Währung (z.B. "EUR", "GBP", "USD")
+
+    Returns:
+        float: Geparster Betrag
+    """
+    # UK und US verwenden Punkt als Dezimaltrennzeichen
+    if currency.upper() in ["GBP", "USD"]:
+        # Format: 1,234.56 -> entferne Kommas, behalte Punkt
+        return float(amount_str.replace(",", ""))
+    else:
+        # EU-Format: 1.234,56 -> entferne Punkte, ersetze Komma durch Punkt
+        return float(amount_str.replace(".", "").replace(",", "."))
+
+
+def extract_data_from_pdf(pdf_path: Path, original_filename: Optional[str] = None) -> Optional[dict]:
     """
     Extrahiert strukturierte Daten aus einer Amazon-Werbekostenrechnung (PDF).
 
     Args:
         pdf_path: Pfad zur PDF-Datei.
+        original_filename: Ursprünglicher Dateiname (falls umbenannt).
 
     Returns:
         dict or None: Extrahierte Daten oder None bei Fehlern.
@@ -46,7 +68,7 @@ def extract_data_from_pdf(pdf_path: Path) -> Optional[dict]:
             return None
 
         data = {
-            "Dateiname": pdf_path.name,
+            "Dateiname": original_filename if original_filename else pdf_path.name,
             "Country_Code": country_code,
             "Dokumenttyp": document_type,
             "Rechnungsnummer": "",
@@ -73,19 +95,20 @@ def extract_data_from_pdf(pdf_path: Path) -> Optional[dict]:
                 data["Zeitraum_Start"] = match.group(1)
                 data["Zeitraum_Ende"] = match.group(2)
 
+        # Währung aus patterns extrahieren
+        currency = lang_patterns.get("währung", "EUR")
+
         if lang_patterns.get("summe"):
-            match = re.search(fr"{re.escape(lang_patterns['summe'])}\s*([\d.,]+)\s*{lang_patterns['währung']}", text)
+            match = re.search(fr"{re.escape(lang_patterns['summe'])}\s*([\d.,]+)\s*{currency}", text)
             if match:
-                bruttowert = match.group(1).replace(".", "").replace(",", ".")
-                data["Bruttowert"] = float(bruttowert)
+                data["Bruttowert"] = parse_amount(match.group(1), currency)
 
         if lang_patterns.get("mwst"):
             try:
-                pattern = fr"{re.escape(lang_patterns['mwst'])}\s*([\d.,]+)\s*{lang_patterns['währung']}"
+                pattern = fr"{re.escape(lang_patterns['mwst'])}\s*([\d.,]+)\s*{currency}"
                 match = re.search(pattern, text)
                 if match:
-                    mwst = match.group(1).replace(".", "").replace(",", ".")
-                    data["Mehrwertsteuer"] = float(mwst)
+                    data["Mehrwertsteuer"] = parse_amount(match.group(1), currency)
             except Exception as e:
                 logger.warning(f"Fehler beim Extrahieren der MwSt: {e}")
 
@@ -95,19 +118,28 @@ def extract_data_from_pdf(pdf_path: Path) -> Optional[dict]:
         return None
 
 
-def process_ad_pdfs(directory: Path = TMP_ORDNER, output_excel: Path = ORDNER_AUSGANG / "werbung.xlsx") -> pd.DataFrame:
+def process_ad_pdfs(directory: Path = TMP_ORDNER, output_excel: Path = ORDNER_AUSGANG / "werbung.xlsx",
+                    filename_mapping: Optional[dict[Path, str]] = None) -> pd.DataFrame:
     """
     Verarbeitet alle Werbe-PDFs im Verzeichnis und exportiert sie als Excel-Datei.
 
     Args:
         directory: Pfad zum Verzeichnis mit einseitigen PDFs.
         output_excel: Pfad zur Zieldatei.
+        filename_mapping: Mapping von Dateipfad zu ursprünglichem Dateinamen.
+                         Falls None, wird versucht, das Mapping aus dem directory zu laden.
 
     Returns:
         pd.DataFrame: Extrahierte Daten als DataFrame.
     """
     logger.info(f"🧪 process_ad_pdfs START: directory={directory}")
-    
+
+    # Lade Mapping aus JSON, falls nicht übergeben
+    if filename_mapping is None:
+        filename_mapping = load_filename_mapping(directory)
+        if filename_mapping:
+            logger.info(f"Dateinamen-Mapping geladen: {len(filename_mapping)} Einträge")
+
     pdf_files = list(directory.rglob("*.pdf"))
     if not pdf_files:
         logger.warning(f"Keine PDF-Dateien im Verzeichnis '{directory}' gefunden.")
@@ -115,7 +147,8 @@ def process_ad_pdfs(directory: Path = TMP_ORDNER, output_excel: Path = ORDNER_AU
 
     all_data = []
     for pdf_file in pdf_files:
-        result = extract_data_from_pdf(pdf_file)
+        original_name = filename_mapping.get(pdf_file) if filename_mapping else None
+        result = extract_data_from_pdf(pdf_file, original_filename=original_name)
         if result:
             all_data.append(result)
 

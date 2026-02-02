@@ -1,5 +1,6 @@
 """Hilfsmodul zum Extrahieren der ersten Seite von Werbe-PDFs."""
 import re
+import json
 from datetime import datetime
 from pathlib import Path
 
@@ -13,6 +14,30 @@ from .logger import werbung_extraction_logger
 
 # Logger direkt nutzen
 logger = werbung_extraction_logger
+
+
+def load_filename_mapping(mapping_dir: Path = TMP_ORDNER) -> dict[Path, str]:
+    """
+    Lädt das gespeicherte Dateinamen-Mapping aus dem JSON-File.
+
+    Args:
+        mapping_dir: Verzeichnis, in dem das Mapping gespeichert ist.
+
+    Returns:
+        dict[Path, str]: Mapping von Pfad zu ursprünglichem Dateinamen.
+    """
+    mapping_file = mapping_dir / "filename_mapping.json"
+    if not mapping_file.exists():
+        logger.warning(f"Kein Dateinamen-Mapping gefunden: {mapping_file}")
+        return {}
+
+    try:
+        with open(mapping_file, "r", encoding="utf-8") as f:
+            mapping_for_json = json.load(f)
+        return {Path(k): v for k, v in mapping_for_json.items()}
+    except Exception as e:
+        logger.error(f"Fehler beim Laden des Dateinamen-Mappings: {e}")
+        return {}
 
 
 def _to_iso_date(s: str) -> str:
@@ -44,19 +69,22 @@ def _to_iso_date(s: str) -> str:
     raise ValueError(f"Unbekanntes Datumsformat: {s}")
 
 
-def extract_and_save_first_page(input_dir: Path = ORDNER_EINGANG_WERBUNG, output_dir: Path = TMP_ORDNER) -> list[Path]:
+def extract_and_save_first_page(input_dir: Path = ORDNER_EINGANG_WERBUNG, output_dir: Path = TMP_ORDNER) -> dict[Path, str]:
     """
     Extrahiert die erste Seite aller PDFs im Eingangsverzeichnis und speichert sie
     unter neuem, sprechendem Namen im Zielverzeichnis.
 
     Neuer Dateiname: "<land>_<YYYY-MM-DD>_<YYYY-MM-DD>.pdf"
+
+    Returns:
+        dict[Path, str]: Mapping von neuem Pfad zu ursprünglichem Dateinamen
     """
     pdf_files = [file for file in input_dir.iterdir() if file.suffix.lower() == ".pdf"]
     if not pdf_files:
         logger.warning(f"Keine PDF-Dateien im Eingangsverzeichnis '{input_dir}' gefunden.")
-        return []
+        return {}
 
-    new_paths: list[Path] = []
+    path_mapping: dict[Path, str] = {}
     for file in pdf_files:
         file_path = input_dir / file
         try:
@@ -101,8 +129,16 @@ def extract_and_save_first_page(input_dir: Path = ORDNER_EINGANG_WERBUNG, output
                 writer.write(f_out)
 
             logger.info(f"Erste Seite gespeichert als: {output_path}")
-            new_paths.append(output_path)
+            path_mapping[output_path] = file.name
         except Exception as e:
             logger.error(f"Fehler bei Datei {file_path}: {e}")
 
-    return new_paths
+    # Speichere Mapping als JSON für spätere Verwendung
+    if path_mapping:
+        mapping_file = output_dir / "filename_mapping.json"
+        mapping_for_json = {str(k): v for k, v in path_mapping.items()}
+        with open(mapping_file, "w", encoding="utf-8") as f:
+            json.dump(mapping_for_json, f, ensure_ascii=False, indent=2)
+        logger.info(f"Dateinamen-Mapping gespeichert: {mapping_file}")
+
+    return path_mapping

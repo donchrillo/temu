@@ -124,6 +124,11 @@ async def get_logs(job_id: str = None, level: str = None, limit: int = 100, offs
     """Hole Logs mit Filtern"""
     return log_service.get_logs(job_id, level, limit, offset)
 
+@app.get("/api/logs/stats")
+async def get_log_stats(job_id: str = None, days: int = 7):
+    """Hole Log-Statistiken"""
+    return log_service.get_statistics(job_id, days)
+
 @app.get("/api/logs/export")
 async def export_logs(job_id: str = None, format: str = "json", days: int = 7):
     """✅ Export Logs als JSON/CSV"""
@@ -178,16 +183,16 @@ async def upload_werbung(files: List[UploadFile] = File(default=[]), process: bo
         log_service.log(job_id, "pdf_upload", "INFO", f"{len(saved_paths)} Werbung-PDFs gespeichert")
 
         result = None
-        extracted = []
+        filename_mapping = {}
         if process:
-            extracted = extract_and_save_first_page()
-            result = process_ad_pdfs()
+            filename_mapping = extract_and_save_first_page()
+            result = process_ad_pdfs(filename_mapping=filename_mapping)
             log_service.log(job_id, "pdf_upload", "INFO", f"Werbung verarbeitet: {len(result) if hasattr(result, '__len__') else 0} Einträge")
 
         return {
             "status": "ok",
             "saved": saved_paths,
-            "extracted": [str(p) for p in extracted],
+            "extracted": [str(p) for p in filename_mapping.keys()],
             "processed": bool(result is not None)
         }
     except Exception as e:
@@ -224,11 +229,11 @@ async def extract_werbung():
     """Extrahiere erste Seiten von bereits hochgeladenen Werbungs-PDFs."""
     job_id = f"pdf_extract_{int(time.time())}"
     try:
-        extracted = extract_and_save_first_page()
-        log_service.log(job_id, "pdf_upload", "INFO", f"Extrahiert: {len(extracted)} Dateien")
+        filename_mapping = extract_and_save_first_page()
+        log_service.log(job_id, "pdf_upload", "INFO", f"Extrahiert: {len(filename_mapping)} Dateien")
         return {
             "status": "ok",
-            "extracted": [str(p) for p in extracted]
+            "extracted": [str(p) for p in filename_mapping.keys()]
         }
     except Exception as e:
         app_logger.error(f"Werbung Extract Fehler: {e}", exc_info=True)
