@@ -3,172 +3,173 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TEMU ERP System</title>
-    <style>
-        :root {
-            --primary: #007AFF;
-            --success: #34C759;
-            --bg: #F2F2F7;
-            --card-bg: #FFFFFF;
-            --text: #1C1C1E;
-            --text-secondary: #8E8E93;
-            --shadow: rgba(0, 0, 0, 0.1);
-            --radius-lg: 16px;
-            --spacing-lg: 24px;
-            --spacing-xl: 32px;
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            line-height: 1.5;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .container {
-            max-width: 800px;
-            width: 100%;
-            padding: var(--spacing-lg);
-        }
-
-        .header {
-            text-align: center;
-            margin-bottom: var(--spacing-xl);
-        }
-
-        .header h1 {
-            font-size: 48px;
-            font-weight: 600;
-            margin-bottom: 8px;
-        }
-
-        .subtitle {
-            color: var(--text-secondary);
-            font-size: 18px;
-        }
-
-        .modules-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: var(--spacing-lg);
-            margin-bottom: var(--spacing-xl);
-        }
-
-        .module-card {
-            background: var(--card-bg);
-            border-radius: var(--radius-lg);
-            padding: var(--spacing-xl);
-            text-align: center;
-            box-shadow: 0 2px 8px var(--shadow);
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-            cursor: pointer;
-            text-decoration: none;
-            color: inherit;
-            display: block;
-        }
-
-        .module-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 8px 24px var(--shadow);
-        }
-
-        .module-icon {
-            font-size: 64px;
-            margin-bottom: 16px;
-        }
-
-        .module-title {
-            font-size: 24px;
-            font-weight: 600;
-            margin-bottom: 8px;
-        }
-
-        .module-desc {
-            color: var(--text-secondary);
-            font-size: 14px;
-        }
-
-        .info-card {
-            background: var(--card-bg);
-            border-radius: var(--radius-lg);
-            padding: var(--spacing-lg);
-            box-shadow: 0 2px 8px var(--shadow);
-            text-align: center;
-        }
-
-        .info-card h3 {
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 12px;
-        }
-
-        .info-links {
-            display: flex;
-            justify-content: center;
-            gap: 16px;
-            flex-wrap: wrap;
-        }
-
-        .info-links a {
-            color: var(--primary);
-            text-decoration: none;
-            font-weight: 500;
-        }
-
-        .info-links a:hover {
-            text-decoration: underline;
-        }
-
-        @media (max-width: 768px) {
-            .header h1 {
-                font-size: 36px;
-            }
-
-            .modules-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
+    <meta name="theme-color" content="#0f172a">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Toci JTL Tools</title>
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <link rel="stylesheet" href="/static/dashboard.css">
 </head>
 <body>
+    <!-- Burger Menu Navigation -->
+    <nav class="mobile-nav">
+        <div class="mobile-nav-header">
+            <h2>🛠️ Toci JTL Tools</h2>
+            <button class="burger-toggle" onclick="toggleMenu()">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+        <div class="mobile-menu" id="mobile-menu">
+            <a href="/" class="menu-item active">🏠 Dashboard</a>
+            <a href="/temu" class="menu-item">🚀 TEMU Integration</a>
+            <a href="/pdf" class="menu-item">📁 PDF Reader</a>
+            <a href="/docs" class="menu-item">📚 API Docs</a>
+        </div>
+    </nav>
+
     <div class="container">
+        <!-- Header -->
         <header class="header">
-            <h1>🚀 TEMU ERP System</h1>
-            <p class="subtitle">Modulares System für PDF-Processing & TEMU Integration</p>
+            <h1>🛠️ Toci JTL Tools</h1>
+            <p class="subtitle">Werkzeuge und Dashboards für JTL-Integrationen</p>
         </header>
 
-        <div class="modules-grid">
-            <a href="/pdf" class="module-card">
-                <div class="module-icon">📄</div>
-                <div class="module-title">PDF Processor</div>
-                <div class="module-desc">Rechnung & Werbung Verarbeitung</div>
-            </a>
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Module Cards Grid -->
+            <section class="modules-grid">
+                <!-- TEMU Module -->
+                <a href="/temu" class="module-card temu-card">
+                    <div class="module-icon">🚀</div>
+                    <div class="module-content">
+                        <h2>TEMU Integration</h2>
+                        <p class="module-desc">Order & Inventory Synchronisation</p>
+                        <div class="module-features">
+                            <span class="feature-tag">Order Sync</span>
+                            <span class="feature-tag">Inventory Sync</span>
+                            <span class="feature-tag">Jobs</span>
+                        </div>
+                    </div>
+                    <div class="module-arrow">→</div>
+                </a>
 
-            <a href="/temu" class="module-card">
-                <div class="module-icon">📦</div>
-                <div class="module-title">TEMU Integration</div>
-                <div class="module-desc">Order & Inventory Sync</div>
-            </a>
-        </div>
+                <!-- PDF Reader Module -->
+                <a href="/pdf" class="module-card pdf-card">
+                    <div class="module-icon">📄</div>
+                    <div class="module-content">
+                        <h2>PDF Processor</h2>
+                        <p class="module-desc">Rechnung & Werbung Verarbeitung</p>
+                        <div class="module-features">
+                            <span class="feature-tag">Werbung</span>
+                            <span class="feature-tag">Rechnungen</span>
+                            <span class="feature-tag">Excel Export</span>
+                        </div>
+                    </div>
+                    <div class="module-arrow">→</div>
+                </a>
 
-        <div class="info-card">
-            <h3>🔗 Weitere Links</h3>
-            <div class="info-links">
-                <a href="/docs">📚 API Docs</a>
-                <a href="/api/health">🏥 Health Check</a>
-                <a href="/api/jobs">⚙️ Jobs API</a>
-            </div>
-        </div>
+                <!-- API Docs Module -->
+                <a href="/docs" class="module-card docs-card">
+                    <div class="module-icon">📚</div>
+                    <div class="module-content">
+                        <h2>API Documentation</h2>
+                        <p class="module-desc">Swagger UI & API Reference</p>
+                        <div class="module-features">
+                            <span class="feature-tag">REST API</span>
+                            <span class="feature-tag">WebSocket</span>
+                            <span class="feature-tag">Interactive</span>
+                        </div>
+                    </div>
+                    <div class="module-arrow">→</div>
+                </a>
+
+                <!-- Coming Soon Module -->
+                <div class="module-card coming-soon-card disabled">
+                    <div class="module-icon">📦</div>
+                    <div class="module-content">
+                        <h2>XML Export</h2>
+                        <p class="module-desc">Exporttools und Integrationen</p>
+                        <div class="module-features">
+                            <span class="feature-tag disabled">In Vorbereitung</span>
+                        </div>
+                    </div>
+                    <div class="module-arrow">→</div>
+                </div>
+            </section>
+
+            <!-- System Status -->
+            <section class="status-section">
+                <div class="card status-overview">
+                    <h3>📊 System Status</h3>
+                    <div class="status-grid">
+                        <div class="status-item">
+                            <div class="status-label">Gateway</div>
+                            <div class="status-value" id="gateway-status">
+                                <span class="status-indicator online"></span> Online
+                            </div>
+                        </div>
+                        <div class="status-item">
+                            <div class="status-label">Modules</div>
+                            <div class="status-value" id="modules-count">Loading...</div>
+                        </div>
+                        <div class="status-item">
+                            <div class="status-label">Version</div>
+                            <div class="status-value" id="version">Loading...</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
     </div>
+
+    <script>
+        // Burger Menu Toggle
+        function toggleMenu() {
+            const menu = document.getElementById('mobile-menu');
+            const toggle = document.querySelector('.burger-toggle');
+            menu.classList.toggle('active');
+            toggle.classList.toggle('active');
+        }
+
+        // Close menu when clicking outside
+        document.addEventListener('click', (e) => {
+            const nav = document.querySelector('.mobile-nav');
+            const menu = document.getElementById('mobile-menu');
+            const toggle = document.querySelector('.burger-toggle');
+
+            if (!nav.contains(e.target) && menu && menu.classList.contains('active')) {
+                menu.classList.remove('active');
+                toggle.classList.remove('active');
+            }
+        });
+
+        // Load system status
+        async function loadStatus() {
+            try {
+                const res = await fetch('/api/health');
+                const data = await res.json();
+
+                document.getElementById('modules-count').textContent = data.modules?.length || 0;
+                document.getElementById('version').textContent = data.version || 'N/A';
+            } catch (err) {
+                console.error('Failed to load status:', err);
+                document.getElementById('gateway-status').innerHTML = '<span class="status-indicator offline"></span> Offline';
+            }
+        }
+
+        // Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js').catch(console.error);
+            });
+        }
+
+        // Load status on page load
+        loadStatus();
+    </script>
 </body>
 </html>

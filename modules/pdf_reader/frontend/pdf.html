@@ -7,6 +7,24 @@
     <link rel="stylesheet" href="/static/pdf.css">
 </head>
 <body>
+    <!-- Burger Menu Navigation -->
+    <nav class="mobile-nav">
+        <div class="mobile-nav-header">
+            <h2>📄 PDF Processor</h2>
+            <button class="burger-toggle" onclick="toggleMenu()">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+        <div class="mobile-menu" id="mobile-menu">
+            <a href="/" class="menu-item">🏠 Dashboard</a>
+            <a href="/temu" class="menu-item">🚀 TEMU Integration</a>
+            <a href="/pdf" class="menu-item active">📁 PDF Processor</a>
+            <a href="/docs" class="menu-item">📚 API Docs</a>
+        </div>
+    </nav>
+
     <div class="container">
         <!-- Header -->
         <header class="header">
@@ -115,20 +133,29 @@
 
         <!-- Toast Notifications -->
         <div id="toast-container"></div>
-
-        <!-- Progress Bar Overlay -->
-        <div id="progress-overlay" class="progress-overlay">
-            <div class="progress-container">
-                <div class="progress-icon">⚙️</div>
-                <div class="progress-text" id="progress-text">Verarbeite...</div>
-                <div class="progress-bar">
-                    <div class="progress-fill" id="progress-fill"></div>
-                </div>
-                <div class="progress-percent" id="progress-percent">0%</div>
-            </div>
-        </div>
     </div>
 
+    <script>
+        // Burger Menu Toggle
+        function toggleMenu() {
+            const menu = document.getElementById('mobile-menu');
+            const toggle = document.querySelector('.burger-toggle');
+            menu.classList.toggle('active');
+            toggle.classList.toggle('active');
+        }
+
+        // Close menu when clicking outside
+        document.addEventListener('click', (e) => {
+            const nav = document.querySelector('.mobile-nav');
+            const menu = document.getElementById('mobile-menu');
+            const toggle = document.querySelector('.burger-toggle');
+
+            if (!nav.contains(e.target) && menu && menu.classList.contains('active')) {
+                menu.classList.remove('active');
+                toggle.classList.remove('active');
+            }
+        });
+    </script>
     <script src="/static/pdf.js"></script>
 </body>
 </html>

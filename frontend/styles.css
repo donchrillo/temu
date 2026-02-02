@@ -544,3 +544,134 @@ button {
     gap: 10px;
     justify-content: flex-end;
 }
+
+/* ===== BURGER MENU (Mobile Navigation) ===== */
+.mobile-nav {
+    background: #111827;
+    border-bottom: 1px solid #1f2937;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.mobile-nav-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px;
+    max-width: 1600px;
+    margin: 0 auto;
+}
+
+.mobile-nav-header h2 {
+    font-size: 18px;
+    font-weight: 700;
+    color: #e2e8f0;
+    margin: 0;
+}
+
+.burger-toggle {
+    display: none;
+    flex-direction: column;
+    justify-content: space-around;
+    width: 28px;
+    height: 24px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+}
+
+.burger-toggle span {
+    width: 100%;
+    height: 3px;
+    background: #e2e8f0;
+    border-radius: 2px;
+    transition: all 0.3s ease;
+}
+
+.burger-toggle.active span:nth-child(1) {
+    transform: rotate(45deg) translate(6px, 6px);
+}
+
+.burger-toggle.active span:nth-child(2) {
+    opacity: 0;
+}
+
+.burger-toggle.active span:nth-child(3) {
+    transform: rotate(-45deg) translate(7px, -7px);
+}
+
+.mobile-menu {
+    display: flex;
+    gap: 8px;
+    padding: 0 20px 12px 20px;
+    max-width: 1600px;
+    margin: 0 auto;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.mobile-menu::-webkit-scrollbar {
+    display: none;
+}
+
+.menu-item {
+    color: #94a3b8;
+    text-decoration: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 14px;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+}
+
+.menu-item:hover {
+    color: #e2e8f0;
+    background: #1f2937;
+}
+
+.menu-item.active {
+    color: #3b82f6;
+    background: #1e293b;
+}
+
+/* Mobile: Show burger, hide menu items */
+@media (max-width: 768px) {
+    .burger-toggle {
+        display: flex;
+    }
+
+    .mobile-menu {
+        display: none;
+        flex-direction: column;
+        gap: 0;
+        padding: 0;
+    }
+
+    .mobile-menu.active {
+        display: flex;
+    }
+
+    .menu-item {
+        padding: 16px 20px;
+        border-radius: 0;
+        border-bottom: 1px solid #1f2937;
+    }
+
+    .menu-item:last-child {
+        border-bottom: none;
+    }
+}
+
+/* Desktop: Show menu items, hide burger */
+@media (min-width: 769px) {
+    .burger-toggle {
+        display: none;
+    }
+
+    .mobile-menu {
+        display: flex;
+    }
+}

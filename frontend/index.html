@@ -13,6 +13,26 @@
     <link rel="stylesheet" href="styles.css?v=3">
     <script src="navbar.js" defer></script>
     <script>
+        // Burger Menu Toggle
+        function toggleMenu() {
+            const menu = document.getElementById('mobile-menu');
+            const toggle = document.querySelector('.burger-toggle');
+            menu.classList.toggle('active');
+            toggle.classList.toggle('active');
+        }
+
+        // Close menu when clicking outside
+        document.addEventListener('click', (e) => {
+            const nav = document.querySelector('.mobile-nav');
+            const menu = document.getElementById('mobile-menu');
+            const toggle = document.querySelector('.burger-toggle');
+
+            if (!nav.contains(e.target) && menu.classList.contains('active')) {
+                menu.classList.remove('active');
+                toggle.classList.remove('active');
+            }
+        });
+
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('/service-worker.js')
@@ -74,6 +94,24 @@
     
 </head>
 <body>
+    <!-- Burger Menu Navigation -->
+    <nav class="mobile-nav">
+        <div class="mobile-nav-header">
+            <h2>🛠️ Toci JTL Tools</h2>
+            <button class="burger-toggle" onclick="toggleMenu()">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+        <div class="mobile-menu" id="mobile-menu">
+            <a href="/" class="menu-item active">🏠 Dashboard</a>
+            <a href="/temu" class="menu-item">🚀 TEMU Integration</a>
+            <a href="/pdf-reader.html" class="menu-item">📁 PDF Reader</a>
+            <a href="/docs" class="menu-item">📚 API Docs</a>
+        </div>
+    </nav>
+
     <div class="landing">
         <header>
             <h1>🛠️ Toci JTL Tools</h1>

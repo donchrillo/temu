@@ -257,8 +257,39 @@ async def websocket_logs(websocket: WebSocket):
 
 frontend_dir = Path(__file__).resolve().parent / "frontend"
 
-# Mount static files
-app.mount("/static", StaticFiles(directory=str(frontend_dir)), name="static")
+# Mount static files - DISABLED, using custom route instead
+# app.mount("/static", StaticFiles(directory=str(frontend_dir)), name="static")
+
+@app.get("/static/{filename}")
+async def serve_module_static(filename: str):
+    """Serve static files from modules or frontend"""
+    allowed_extensions = {'.css', '.js', '.json', '.png', '.ico', '.svg', '.woff', '.woff2', '.ttf'}
+
+    # Check if file extension is allowed
+    if not any(filename.endswith(ext) for ext in allowed_extensions):
+        raise HTTPException(status_code=403, detail="File type not allowed")
+
+    # Try module-specific files first (pdf.css, temu.js, etc.)
+    base_dir = Path(__file__).parent
+
+    # Check PDF module
+    if filename.startswith('pdf.'):
+        pdf_file = base_dir / "modules" / "pdf_reader" / "frontend" / filename
+        if pdf_file.exists():
+            return FileResponse(str(pdf_file))
+
+    # Check TEMU module
+    if filename.startswith('temu.'):
+        temu_file = base_dir / "modules" / "temu" / "frontend" / filename
+        if temu_file.exists():
+            return FileResponse(str(temu_file))
+
+    # Fallback to frontend directory
+    frontend_file = frontend_dir / filename
+    if frontend_file.exists():
+        return FileResponse(str(frontend_file))
+
+    raise HTTPException(status_code=404, detail=f"Static file not found: {filename}")
 
 @app.get("/")
 async def root():
@@ -284,18 +315,18 @@ async def root():
 
 @app.get("/pdf")
 async def pdf_ui():
-    """PDF-Reader UI"""
-    return FileResponse(str(frontend_dir / "pdf-new.html"))
+    """PDF-Reader UI - serviert direkt aus Modul"""
+    pdf_html = Path(__file__).parent / "modules" / "pdf_reader" / "frontend" / "pdf.html"
+    if not pdf_html.exists():
+        raise HTTPException(status_code=404, detail="PDF Frontend not found")
+    return FileResponse(str(pdf_html))
 
 @app.get("/temu")
 async def temu_ui():
-    """TEMU Dashboard"""
-    # Kopiere temu.html nach frontend/ wenn nicht vorhanden
-    temu_html = frontend_dir / "temu-new.html"
+    """TEMU Dashboard - serviert direkt aus Modul"""
+    temu_html = Path(__file__).parent / "modules" / "temu" / "frontend" / "temu.html"
     if not temu_html.exists():
-        source = Path(__file__).parent / "modules" / "temu" / "frontend" / "temu.html"
-        import shutil
-        shutil.copy(source, temu_html)
+        raise HTTPException(status_code=404, detail="TEMU Frontend not found")
     return FileResponse(str(temu_html))
 
 @app.get("/manifest.json")
