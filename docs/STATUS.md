@@ -4,7 +4,7 @@
 
 ### Git Status
 - **Active Branch:** `feature/streamlit-integration` (tracking `origin/feature/streamlit-integration`)
-- **Latest Commit:** (pending) – log filtering improvements
+- **Latest Commit:** (pending) – logging improvements + error handling
 - **Main Production:** `main` at `4577c1e` (stable, last merge 26.01.)
 
 ### Untracked Files
@@ -12,25 +12,7 @@
 
 ---
 
-## ✅ Completed (28. Januar – Log Filtering System)
-
-### 28. Januar – Log Filter Frontend Umstellung (FESTE Filter-Optionen)
-- ✅ **Problem:** Log-Filter zeigte dynamisch alle job_id Präfixe, aber Sub-Jobs (order_workflow, tracking_service) waren nicht sichtbar
-- ✅ **Analyse:** Erkannt, dass Sub-Jobs die GLEICHE job_id wie Master-Job haben (z.B. `temu_orders_1769614356` für order_service UND tracking_service)
-- ✅ **Solution:** 
-  - Frontend: Wechsel von dynamischen zu FESTEN Filter-Optionen mit Beschreibungen
-  - Filter-Optionen mit LIKE-Patterns:
-    - "TEMU Bestellungen (Auftragsverarbeitung)" → `temu_orders%`
-    - "TEMU Lagerbestand (Inventar)" → `temu_inventory%`
-    - "Synchronisiere neue Temu Aufträge" → `sync_orders%`
-    - "Synchronisiere Temu Lagerbestand" → `sync_inventory%`
-  - Backend: Anpassung von `LogRepository.get_logs()` um bereits mit `%` versehene Patterns zu akzeptieren
-- ✅ **Result:** LIKE-Filter zeigt nun alle Sub-Jobs einer Master-Job-ID (z.B. `temu_orders%` zeigt `order_service`, `order_workflow`, `tracking_service` etc.)
-- 📄 **Dokumentation:** [docs/FRONTEND/architecture.md](docs/FRONTEND/architecture.md#6-log-filtering-system) – Abschnitt "Log Filtering System"
-- 📄 **Code-Änderungen:**
-  - [frontend/app.js](frontend/app.js#L168-L185) - `updateJobFilter()` mit festen Optionen
-  - [frontend/app.js](frontend/app.js#L117-L135) - `loadAllLogs()` mit LIKE-Pattern Handling
-  - [src/db/repositories/common/log_repository.py](src/db/repositories/common/log_repository.py#L73-L108) - `get_logs()` mit flexiblem Pattern-Handling
+## ✅ Completed (28. Januar – Logger Handler & Error Detection)
 
 ### 28. Januar – Logger Handler Fix & Error Logging
 - ✅ **Problem:** Nach PDF Cleanup wurden Logfiles erstellt, aber nicht gefüllt (Logger-Handler zeigten auf alte, gelöschte Datei-Handles)
