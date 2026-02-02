@@ -3,7 +3,7 @@ module.exports = {
     {
       name: "temu-api",
       script: "/home/chx/temu/.venv/bin/python3",
-      args: "-m uvicorn api.server:app --host 0.0.0.0 --port 8000",
+      args: "-m uvicorn main:app --host 0.0.0.0 --port 8000",
       cwd: "/home/chx/temu",
       env: {
         PYTHONPATH: "/home/chx/temu"
