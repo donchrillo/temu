@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Processor</title>
+    <link rel="stylesheet" href="/static/pdf.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>📄 PDF Processor</h1>
+            <p class="subtitle">Rechnung & Werbung Verarbeitung</p>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Status Cards -->
+            <section class="status-section">
+                <div class="card status-card">
+                    <div class="card-icon">📊</div>
+                    <div class="card-content">
+                        <h3>Status</h3>
+                        <div id="status-info">Lädt...</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab-button active" data-tab="werbung">Werbung</button>
+                <button class="tab-button" data-tab="rechnungen">Rechnungen</button>
+            </div>
+
+            <!-- Werbung Tab -->
+            <div class="tab-content active" id="tab-werbung">
+                <div class="card upload-card">
+                    <h2>📦 Werbung PDFs</h2>
+                    <p class="description">Amazon Advertising Rechnungen hochladen und verarbeiten</p>
+
+                    <div class="upload-zone" id="werbung-dropzone">
+                        <div class="upload-icon">📁</div>
+                        <p>PDFs hier ablegen oder klicken zum Auswählen</p>
+                        <input type="file" id="werbung-input" multiple accept=".pdf" hidden>
+                    </div>
+
+                    <div class="file-list" id="werbung-files"></div>
+
+                    <div class="action-buttons">
+                        <button class="btn btn-primary" onclick="uploadWerbung()">
+                            <span>📤 Hochladen</span>
+                        </button>
+                        <button class="btn btn-secondary" onclick="extractWerbung()">
+                            <span>✂️ Extrahieren</span>
+                        </button>
+                        <button class="btn btn-secondary" onclick="processWerbung()">
+                            <span>⚙️ Verarbeiten</span>
+                        </button>
+                        <button class="btn btn-success" onclick="downloadWerbung()">
+                            <span>💾 Excel Download</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Rechnungen Tab -->
+            <div class="tab-content" id="tab-rechnungen">
+                <div class="card upload-card">
+                    <h2>🧾 Rechnungen</h2>
+                    <p class="description">Standard-Rechnungen hochladen und verarbeiten</p>
+
+                    <div class="upload-zone" id="rechnungen-dropzone">
+                        <div class="upload-icon">📁</div>
+                        <p>PDFs hier ablegen oder klicken zum Auswählen</p>
+                        <input type="file" id="rechnungen-input" multiple accept=".pdf" hidden>
+                    </div>
+
+                    <div class="file-list" id="rechnungen-files"></div>
+
+                    <div class="action-buttons">
+                        <button class="btn btn-primary" onclick="uploadRechnungen()">
+                            <span>📤 Hochladen</span>
+                        </button>
+                        <button class="btn btn-secondary" onclick="processRechnungen()">
+                            <span>⚙️ Verarbeiten</span>
+                        </button>
+                        <button class="btn btn-success" onclick="downloadRechnungen()">
+                            <span>💾 Excel Download</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Logs Section -->
+            <section class="logs-section">
+                <div class="card">
+                    <h3>📋 Logs</h3>
+                    <div class="log-tabs">
+                        <button class="log-tab active" onclick="showLog('werbung_read')">Werbung Read</button>
+                        <button class="log-tab" onclick="showLog('werbung_extraction')">Werbung Extract</button>
+                        <button class="log-tab" onclick="showLog('rechnung_read')">Rechnung Read</button>
+                    </div>
+                    <pre class="log-content" id="log-content">Keine Logs verfügbar</pre>
+                </div>
+            </section>
+
+            <!-- Cleanup Section -->
+            <section class="cleanup-section">
+                <button class="btn btn-danger" onclick="cleanup()">
+                    <span>🗑️ Aufräumen (Alle Dateien löschen)</span>
+                </button>
+            </section>
+        </main>
+
+        <!-- Toast Notifications -->
+        <div id="toast-container"></div>
+    </div>
+
+    <script src="/static/pdf.js"></script>
+</body>
+</html>
