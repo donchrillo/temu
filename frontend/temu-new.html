@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TEMU Integration</title>
+    <link rel="stylesheet" href="/static/temu.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>📦 TEMU Integration</h1>
+            <p class="subtitle">Order & Inventory Synchronisation</p>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Status Cards -->
+            <section class="status-grid">
+                <div class="card stat-card">
+                    <div class="stat-icon">📋</div>
+                    <div class="stat-content">
+                        <h3>Orders</h3>
+                        <div class="stat-value" id="stat-orders">-</div>
+                        <div class="stat-label">Total</div>
+                    </div>
+                </div>
+
+                <div class="card stat-card">
+                    <div class="stat-icon">📦</div>
+                    <div class="stat-content">
+                        <h3>Inventory</h3>
+                        <div class="stat-value" id="stat-inventory">-</div>
+                        <div class="stat-label">SKUs</div>
+                    </div>
+                </div>
+
+                <div class="card stat-card">
+                    <div class="stat-icon">⚙️</div>
+                    <div class="stat-content">
+                        <h3>Jobs</h3>
+                        <div class="stat-value" id="stat-jobs">-</div>
+                        <div class="stat-label">Active</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Manual Triggers -->
+            <section class="triggers-section">
+                <div class="card">
+                    <h2>📤 Manual Triggers</h2>
+                    <p class="description">Start Workflows manuell</p>
+
+                    <div class="trigger-grid">
+                        <!-- Order Sync -->
+                        <div class="trigger-card">
+                            <h3>🛒 Order Sync</h3>
+                            <p class="trigger-desc">5-Step Workflow</p>
+                            <div class="steps">
+                                <span class="step">1️⃣ Fetch</span>
+                                <span class="step">2️⃣ Import</span>
+                                <span class="step">3️⃣ XML</span>
+                                <span class="step">4️⃣ Upload</span>
+                                <span class="step">5️⃣ Tracking</span>
+                            </div>
+                            <button class="btn btn-primary" onclick="triggerOrderSync()">
+                                <span>▶️ Start Order Sync</span>
+                            </button>
+                        </div>
+
+                        <!-- Inventory Sync -->
+                        <div class="trigger-card">
+                            <h3>📦 Inventory Sync</h3>
+                            <p class="trigger-desc">4-Step Workflow</p>
+                            <div class="steps">
+                                <span class="step">1️⃣ Download</span>
+                                <span class="step">2️⃣ Fetch</span>
+                                <span class="step">3️⃣ Compare</span>
+                                <span class="step">4️⃣ Push</span>
+                            </div>
+                            <button class="btn btn-success" onclick="triggerInventorySync()">
+                                <span>▶️ Start Inventory Sync</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Jobs List -->
+            <section class="jobs-section">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>⚙️ Scheduled Jobs</h2>
+                        <button class="btn btn-secondary btn-sm" onclick="refreshJobs()">
+                            <span>🔄 Refresh</span>
+                        </button>
+                    </div>
+
+                    <div id="jobs-container" class="jobs-list">
+                        <div class="loading">Lade Jobs...</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Logs Section -->
+            <section class="logs-section">
+                <div class="card">
+                    <h3>📋 Recent Logs</h3>
+                    <div class="log-controls">
+                        <select id="log-filter" onchange="filterLogs()">
+                            <option value="">Alle Jobs</option>
+                            <option value="sync_orders">Order Sync</option>
+                            <option value="sync_inventory">Inventory Sync</option>
+                        </select>
+                        <button class="btn btn-secondary btn-sm" onclick="refreshLogs()">
+                            <span>🔄 Refresh</span>
+                        </button>
+                    </div>
+                    <div class="logs-content" id="logs-content">
+                        Keine Logs verfügbar
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Toast Notifications -->
+        <div id="toast-container"></div>
+
+        <!-- Progress Bar -->
+        <div id="progress-overlay" class="progress-overlay">
+            <div class="progress-container">
+                <div class="progress-icon">⚙️</div>
+                <div class="progress-text" id="progress-text">Verarbeite...</div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+                <div class="progress-percent" id="progress-percent">0%</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/temu.js"></script>
+</body>
+</html>
