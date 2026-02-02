@@ -18,6 +18,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from workers.worker_service import SchedulerService
 from src.services.log_service import log_service
 from src.services import app_logger
+
+# ✅ NEU: Import des neuen PDF-Reader Moduls
+from modules.pdf_reader import get_router as get_pdf_router
 from src.modules.pdf_reader.config import (
     ORDNER_EINGANG_RECHNUNGEN,
     ORDNER_EINGANG_WERBUNG,
@@ -69,6 +72,13 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+# ✅ NEU: PDF-Reader Modul einbinden (neue modulare Version)
+app.include_router(
+    get_pdf_router(),
+    prefix="/api/pdf-new",
+    tags=["PDF Processor (NEW)"]
 )
 
 # REST API Endpoints
@@ -443,6 +453,12 @@ async def root():
 async def temu_dashboard():
     """Serve TEMU dashboard page"""
     return FileResponse(str(frontend_dir / "temu.html"))
+
+@app.get("/pdf-new")
+async def pdf_new_ui():
+    """✅ NEU: Serve neue PDF-Reader UI mit Progress-Bar"""
+    pdf_html = frontend_dir / "pdf-new.html"
+    return FileResponse(str(pdf_html))
 
 @app.get("/manifest.json")
 async def get_manifest():
