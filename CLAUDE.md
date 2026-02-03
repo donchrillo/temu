@@ -1,10 +1,11 @@
 # CLAUDE.md
 
-> ✅ **UPDATED:** 3. Februar 2026 - Monorepo Migration Complete
+> ✅ **UPDATED:** 3. Februar 2026 - Monorepo Migration Complete + CSV-Verarbeiter Setup
 >
 > This file describes the NEW monorepo structure.
 >
-> **Migration completed successfully** - all modules migrated to `modules/` structure.
+> **Monorepo Migration:** ✅ Completed - all modules migrated to `modules/` structure.
+> **CSV-Verarbeiter Migration:** 🔄 In Progress - Phase 1 setup complete, Phase 2-7 pending.
 
 ---
 
@@ -173,6 +174,17 @@ Each workflow step uses separate database transactions to ensure data persistenc
   - `xml_export_service.py`: Converts orders to JTL XML format
   - Future: Direct API connector module
 
+**`modules/csv_verarbeiter/`** - CSV Processing (JTL2DATEV) [🔄 In Development]
+- `router.py`: FastAPI routes (`/api/csv/*`)
+- `frontend/`: Light Apple-design interface
+- `services/`: CSV processing logic
+  - Processes Amazon/DATEV-compatible CSV files
+  - Replaces Amazon Order IDs with SQL customer numbers
+  - Validates critical accounts (0-20)
+  - Generates Excel reports and ZIP exports
+- Data directories: `data/csv_verarbeiter/{eingang,ausgang,reports}`
+- Logs: `logs/csv_verarbeiter/`
+
 ### Important Patterns
 
 **SQL Server 2100 Parameter Limit:**
@@ -226,6 +238,10 @@ The log service captures job execution and broadcasts updates to all connected W
     router.py         - API routes
   /jtl/               - JTL ERP integration
     /xml_export/      - XML generation service
+  /csv_verarbeiter/   - CSV processing (JTL2DATEV) [🔄 In Dev]
+    /services/        - CSV processing logic
+    /frontend/        - Light Apple-design UI
+    router.py         - API routes
 
 /workers/             - APScheduler job management
 /data/                - Runtime data (JSON, XML, PDFs)

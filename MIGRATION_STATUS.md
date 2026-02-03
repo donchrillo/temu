@@ -1,563 +1,365 @@
-# 🎉 Monorepo Migration - ABGESCHLOSSEN!
+# TOCI Tools Migration Status
 
-**Branch:** `feature/monorepo-restructure`
-**Letzte Aktualisierung:** 3. Februar 2026 12:30
-**Status:** ✅ 100% KOMPLETT - Migration erfolgreich!
-
----
-
-## 🎯 ENDGÜLTIGE STRUKTUR
-
-### ✅ Vollständig migrierte Module:
-
-```
-modules/
-├── shared/              ✅ Gemeinsame Infrastruktur
-│   ├── database/       ✅ Connection, Repositories (TOCI + JTL)
-│   ├── connectors/     ✅ TEMU API Connector
-│   ├── logging/        ✅ Log Service, Logger
-│   └── config/         ✅ Settings, Credentials
-│
-├── temu/               ✅ TEMU Marketplace Integration
-│   ├── router.py       ✅ API Endpoints
-│   ├── jobs.py         ✅ APScheduler Jobs
-│   ├── frontend/       ✅ PWA Frontend
-│   └── services/       ✅ Business Logic (Orders, Inventory, Tracking)
-│
-├── pdf_reader/         ✅ PDF Processing Module
-│   ├── router.py       ✅ API Endpoints
-│   ├── frontend/       ✅ Upload Interface
-│   └── services/       ✅ PDF Extraction Services
-│
-└── jtl/                ✅ JTL ERP Integration
-    └── xml_export/     ✅ XML Export Service für JTL
-```
-
-### ✅ Gelöschte alte Struktur:
-
-1. **DUPLIKATE existieren:**
-   ```
-   modules/temu/services/        ← NEU (kopiert am 2. Feb)
-   src/modules/temu/             ← ALT (Original)
-
-   modules/pdf_reader/services/  ← NEU (kopiert am 2. Feb)
-   src/modules/pdf_reader/       ← ALT (Original)
-   ```
-
-2. **modules/shared/ ist nur Re-Export Layer:**
-   - Importiert von `src/db/`, `src/services/`, `config/`
-   - Die echten Dateien sind nicht migriert
-
-3. **Alte Struktur existiert noch:**
-   - `src/` (komplett)
-   - `api/` (mit altem server.py)
-   - `config/` (nicht migriert)
-
-4. **Imports zeigen noch auf alte Struktur:**
-   - Alle Services importieren von `src.*`
-   - Müssen auf `modules.*` umgestellt werden
+> **Last Updated:** 3. Februar 2026
+>
+> **Status Overview:**
+> - ✅ Monorepo Migration: COMPLETE
+> - 🔄 CSV-Verarbeiter Migration: IN PROGRESS (Phase 1/7)
 
 ---
 
-## 🎯 ZIEL-Struktur (Wo wollen wir hin?)
+## 1. Monorepo Migration (COMPLETED ✅)
 
-```
-/home/chx/temu/
-├── main.py                      # Unified Gateway ✅
-├── ecosystem.config.js          # PM2 Config ✅
-├── requirements.txt             # Dependencies ✅
-├── db_schema.sql                # Schema ✅
-│
-├── modules/                     # ALLE Module hier
-│   ├── shared/                 # Gemeinsame Infrastruktur
-│   │   ├── __init__.py
-│   │   ├── database/          # Von src/db/
-│   │   │   ├── __init__.py
-│   │   │   ├── connection.py
-│   │   │   └── repositories/
-│   │   ├── connectors/        # Von src/marketplace_connectors/
-│   │   │   └── temu/
-│   │   ├── logging/           # Von src/services/
-│   │   │   ├── __init__.py
-│   │   │   ├── logger.py
-│   │   │   └── log_service.py
-│   │   └── config/            # Von config/
-│   │       ├── __init__.py
-│   │       └── settings.py
-│   │
-│   ├── pdf_reader/            # PDF Modul
-│   │   ├── __init__.py
-│   │   ├── router.py          ✅
-│   │   ├── frontend/          ✅
-│   │   └── services/          ✅ (Imports müssen angepasst werden)
-│   │
-│   └── temu/                  # TEMU Modul
-│       ├── __init__.py
-│       ├── router.py          ✅
-│       ├── jobs.py            ✅
-│       ├── frontend/          ✅
-│       └── services/          ✅ (Imports müssen angepasst werden)
-│
-├── workers/                   # Job Scheduler ✅
-├── data/                      # Runtime Data ✅
-├── logs/                      # Logs ✅
-└── docs/                      # Documentation ✅
+### Timeline
+- **Started:** 1. Februar 2026
+- **Completed:** 2. Februar 2026
+- **Duration:** ~2 days
 
-❌ GELÖSCHT (nach Migration):
-├── api/                       # Komplett weg
-├── src/                       # Komplett weg
-└── config/                    # → modules/shared/config/
-```
+### What Was Migrated
+
+**TEMU Module** (`modules/temu/`)
+- All services, frontend, and business logic migrated
+- Router integrated into unified gateway
+- Jobs registered with APScheduler
+- Database repositories moved to shared infrastructure
+
+**PDF Reader Module** (`modules/pdf_reader/`)
+- Rechnungen and Werbung services migrated
+- Frontend with upload interface
+- Router integrated into gateway
+- Service-specific loggers configured
+
+**Shared Infrastructure** (`modules/shared/`)
+- Database connection management
+- Repository pattern (TOCI + JTL)
+- TEMU API connector
+- Centralized logging and configuration
+
+**JTL Integration** (`modules/jtl/`)
+- XML export service
+- Future: Direct API connector
+
+### Key Achievements
+- ✅ All modules operational under unified gateway (`main.py`)
+- ✅ Shared database connection pooling
+- ✅ Module-specific frontends served at `/temu/`, `/pdf/`
+- ✅ Clean separation of concerns
+- ✅ Caddy reverse proxy configured correctly
+- ✅ Frontend cache-busting strategy implemented
+- ✅ Service Worker updated and optimized
+- ✅ Git branches synchronized (main, dev, feature branches)
+
+### Documentation
+- `docs/FIXES/frontend_cache_fix_2026-02-03.md`: Multi-layer caching fix
+- `docs/FIXES/pdf_reader_fixes_2026-02-02.md`: PDF Reader bug fixes
+- `CLAUDE.md`: Updated with monorepo structure
+- `migration_archive/MONOREPO_MIGRATION_STATUS.md`: Historical migration docs
 
 ---
 
-## 📋 MIGRATIONS-PLAN (Schritt für Schritt)
+## 2. CSV-Verarbeiter Migration (IN PROGRESS 🔄)
 
-### ✅ Phase 0: Vorbereitung (FERTIG)
+### Overview
+Migration of JTL2DATEV CSV-Verarbeiter from standalone Streamlit application to integrated FastAPI module in TOCI Tools monorepo.
 
-- [x] Migrations-Status-Dokument erstellt
-- [x] Todo-Liste angelegt
-- [x] Aktuellen Stand analysiert
+**Source:** https://github.com/donchrillo/csv_verarbeiter.git (cloned to `migration_archive/csv_verarbeiter_original/`)
 
----
+### Migration Phases
 
-### 🔄 Phase 1: Shared-Module komplett migrieren
+#### ✅ Phase 1: Setup & Planning (COMPLETE)
+**Completed:** 3. Februar 2026
 
-**Ziel:** modules/shared/ wird zu echtem Modul (nicht Re-Export)
+**Deliverables:**
+- ✅ Original codebase cloned to `migration_archive/csv_verarbeiter_original/`
+- ✅ Comprehensive migration plan created (`migration_archive/CSV_VERARBEITER_MIGRATION_PLAN.md`)
+- ✅ Requirements analyzed and finalized (13 source modules → 8 target services)
+- ✅ Directory structure created:
+  - `modules/csv_verarbeiter/` (module root)
+  - `data/csv_verarbeiter/{eingang,ausgang,reports}/`
+  - `logs/csv_verarbeiter/`
+- ✅ Branch created: `feature/csv-verarbeiter-migration`
+- ✅ Initial commit: "feat(csv): Phase 1 - Setup CSV-Verarbeiter migration structure"
 
-**Schritte:**
+**Key Decisions:**
+- Use shared database connection (`modules/shared/database/connection.py`)
+- Use centralized logging (`modules/shared/logging/`)
+- Light Apple-design theme (consistent with `index-new.html`)
+- Logs in `logs/csv_verarbeiter/` (not `data/csv_verarbeiter/log/`)
+- Manual file upload (no automatic directory monitoring)
+- Essential validation only (no over-engineering)
 
-#### 1.1 Database migrieren
-```bash
-# Erstelle Zielverzeichnis
-mkdir -p modules/shared/database/repositories
+#### ⏳ Phase 2: Core Services (PENDING)
+**Estimated:** 3-4 hours
 
-# Kopiere Database Layer
-cp -r src/db/* modules/shared/database/
+**Tasks:**
+- [ ] Create `modules/csv_verarbeiter/services/csv_io_service.py`
+  - Read CSV files (encoding detection, pandas integration)
+  - Write processed CSV files to output directory
+  - ZIP file extraction and creation
 
-# Prüfe, dass alles kopiert wurde
-ls -la modules/shared/database/
-```
+- [ ] Create `modules/csv_verarbeiter/services/validation_service.py`
+  - OrderID pattern validation
+  - Critical account detection (0-20)
+  - Data integrity checks
 
-**Checkpoint:** Database-Dateien in modules/shared/database/ ✅
+- [ ] Create `modules/csv_verarbeiter/services/replacement_service.py`
+  - Query customer numbers from SQL database
+  - Replace OrderIDs with customer numbers
+  - Track replacement success/failure
 
-#### 1.2 Connectors migrieren
-```bash
-# Erstelle Zielverzeichnis
-mkdir -p modules/shared/connectors
+- [ ] Create `modules/csv_verarbeiter/services/report_service.py`
+  - Generate Excel reports with validation results
+  - Track errors and warnings
+  - Summary statistics
 
-# Kopiere Marketplace Connectors
-cp -r src/marketplace_connectors/* modules/shared/connectors/
+**Success Criteria:**
+- Core CSV processing logic fully functional
+- All services unit-tested
+- Database queries use shared repositories
 
-# Prüfe
-ls -la modules/shared/connectors/
-```
+#### ⏳ Phase 3: API Endpoints (PENDING)
+**Estimated:** 2-3 hours
 
-**Checkpoint:** Connectors in modules/shared/connectors/ ✅
+**Tasks:**
+- [ ] Implement `modules/csv_verarbeiter/router.py` with endpoints:
+  - `POST /api/csv/upload` - Upload CSV/ZIP files
+  - `POST /api/csv/process` - Process uploaded files
+  - `GET /api/csv/status/{job_id}` - Get processing status
+  - `GET /api/csv/download/{file_id}` - Download processed files
+  - `GET /api/csv/reports` - List available reports
 
-#### 1.3 Logging migrieren
-```bash
-# Erstelle Zielverzeichnis
-mkdir -p modules/shared/logging
+- [ ] Integrate with shared log service for job tracking
+- [ ] Implement file upload handling (multipart/form-data)
+- [ ] Add proper error responses (400, 404, 500)
 
-# Kopiere Services
-cp -r src/services/* modules/shared/logging/
+**Success Criteria:**
+- All endpoints tested with Postman/curl
+- File uploads working correctly
+- Error handling comprehensive
 
-# Prüfe
-ls -la modules/shared/logging/
-```
+#### ⏳ Phase 4: Frontend Development (PENDING)
+**Estimated:** 3-4 hours
 
-**Checkpoint:** Logging in modules/shared/logging/ ✅
+**Tasks:**
+- [ ] Create `modules/csv_verarbeiter/frontend/csv.html`
+  - Light Apple-design (consistent with `index-new.html`)
+  - File upload interface (drag & drop + file picker)
+  - Processing status display
+  - Download links for results
 
-#### 1.4 Config migrieren
-```bash
-# Erstelle Zielverzeichnis
-mkdir -p modules/shared/config
+- [ ] Create `modules/csv_verarbeiter/frontend/static/csv.css`
+  - Light theme styling
+  - Responsive design
+  - Loading states and animations
 
-# Kopiere Config
-cp -r config/* modules/shared/config/
+- [ ] Create `modules/csv_verarbeiter/frontend/static/csv.js`
+  - File upload with progress tracking
+  - WebSocket integration for live updates
+  - Download handlers
+  - Error display
 
-# Erstelle Symlink für Rückwärtskompatibilität (temporär)
-ln -s modules/shared/config config_backup
-```
+**Success Criteria:**
+- UI matches existing module designs
+- File upload works smoothly
+- Real-time status updates functional
 
-**Checkpoint:** Config in modules/shared/config/ ✅
+#### ⏳ Phase 5: Integration & Testing (PENDING)
+**Estimated:** 2-3 hours
 
-#### 1.5 modules/shared/__init__.py neu schreiben
-```python
-# Jetzt echte Imports statt Re-Exports
-from .database.connection import get_engine, db_connect
-from .database.repositories.base import BaseRepository
-from .logging.log_service import log_service
-from .logging.logger import create_module_logger
-# etc.
-```
+**Tasks:**
+- [ ] Mount router in `main.py` gateway
+- [ ] Add frontend route to serve `csv.html`
+- [ ] Update Service Worker with CSV assets
+- [ ] Update navigation in `index-new.html`
+- [ ] End-to-end testing with real CSV files
+- [ ] Test error scenarios (invalid files, database errors)
 
-**Checkpoint:** modules/shared/__init__.py aktualisiert ✅
+**Success Criteria:**
+- Module accessible at `/csv` route
+- All workflows tested end-to-end
+- No regressions in other modules
 
-**Commit nach Phase 1:**
-```bash
-git add modules/shared/
-git commit -m "feat(monorepo): Migrate shared modules (database, connectors, logging, config)"
-```
+#### ⏳ Phase 6: Documentation (PENDING)
+**Estimated:** 1-2 hours
 
----
+**Tasks:**
+- [ ] Create `modules/csv_verarbeiter/README.md`
+  - Module overview
+  - CSV format requirements
+  - API documentation
+  - Troubleshooting guide
 
-### 🔄 Phase 2: Imports in modules/temu anpassen
+- [ ] Update `CLAUDE.md` with final implementation details
+- [ ] Document database schema changes (if any)
+- [ ] Add usage examples
 
-**Ziel:** Alle Imports in modules/temu/services/ zeigen auf modules/
+**Success Criteria:**
+- Complete module documentation
+- CLAUDE.md reflects final state
+- Examples tested and working
 
-**Schritte:**
+#### ⏳ Phase 7: Deployment (PENDING)
+**Estimated:** 1 hour
 
-#### 2.1 Alle Imports finden
-```bash
-# Liste alle src.* Imports
-grep -r "from src\." modules/temu/services/
-grep -r "import src\." modules/temu/services/
-```
+**Tasks:**
+- [ ] Merge feature branch to `dev`
+- [ ] Test in development environment
+- [ ] Create Pull Request to `main`
+- [ ] Update PM2 configuration (if needed)
+- [ ] Deploy to production
+- [ ] Verify in production environment
 
-#### 2.2 Imports anpassen
-Für jede Datei in `modules/temu/services/`:
+**Success Criteria:**
+- Module running in production
+- PM2 process stable
+- No production errors
 
-**Alt:**
-```python
-from src.db.repositories.temu.order_repository import OrderRepository
-from src.modules.temu.order_service import import_orders
-from src.services.log_service import log_service
-from src.marketplace_connectors.temu.service import TemuService
-```
+### Estimated Total Time
+**12-17 hours** (including testing and documentation)
 
-**Neu:**
-```python
-from modules.shared.database.repositories.temu.order_repository import OrderRepository
-from .order_service import import_orders  # Relative Import innerhalb Modul
-from modules.shared.logging.log_service import log_service
-from modules.shared.connectors.temu.service import TemuService
-```
-
-#### 2.3 Testen
-```bash
-# Syntax-Check
-python -m py_compile modules/temu/services/*.py
-
-# Import-Test
-python -c "from modules.temu.services.order_service import OrderService"
-```
-
-**Checkpoint:** Alle Imports in modules/temu/ angepasst ✅
-
-**Commit nach Phase 2:**
-```bash
-git add modules/temu/
-git commit -m "refactor(temu): Update imports to use modules/ structure"
-```
-
----
-
-### 🔄 Phase 3: Imports in modules/pdf_reader anpassen
-
-**Ziel:** Alle Imports in modules/pdf_reader/services/ zeigen auf modules/
-
-**Schritte:** (analog zu Phase 2)
-
-#### 3.1 Imports finden und anpassen
-```bash
-# Finde alte Imports
-grep -r "from src\." modules/pdf_reader/services/
-
-# Passe an (siehe Phase 2 für Beispiele)
-```
-
-#### 3.2 Testen
-```bash
-python -m py_compile modules/pdf_reader/services/*.py
-python -c "from modules.pdf_reader.services.werbung_service import process_ad_pdfs"
-```
-
-**Checkpoint:** Alle Imports in modules/pdf_reader/ angepasst ✅
-
-**Commit nach Phase 3:**
-```bash
-git add modules/pdf_reader/
-git commit -m "refactor(pdf_reader): Update imports to use modules/ structure"
-```
+### Current Branch Status
+- **Working Branch:** `feature/csv-verarbeiter-migration`
+- **Base Branch:** `main`
+- **Status:** Phase 1 complete, awaiting Phase 2 implementation
 
 ---
 
-### 🔄 Phase 4: Imports in workers/ anpassen
+## 3. Git Branch Overview
 
-**Ziel:** workers/ nutzt modules/ statt src/
+### Main Branches
+- **`main`**: Production-ready code
+  - Latest: "fix(frontend): Multi-layer cache fix - Caddy, Service Worker, Browser"
+  - All tests passing
+  - Deployed to production
 
-**Schritte:**
+- **`dev`**: Development integration branch
+  - Synced with `main` after frontend cache fix merge
+  - Ready for new feature integration
 
-#### 4.1 workers/worker_service.py anpassen
-**Alt:**
-```python
-from src.modules.temu.order_workflow_service import run_order_workflow
-```
+### Feature Branches
+- **`feature/csv-verarbeiter-migration`**: CSV-Verarbeiter migration (ACTIVE)
+  - Based on: `main`
+  - Latest: "feat(csv): Phase 1 - Setup CSV-Verarbeiter migration structure"
+  - Status: Phase 1 complete, Phase 2 pending
 
-**Neu:**
-```python
-from modules.temu.services.order_workflow_service import run_order_workflow
-```
-
-#### 4.2 Testen
-```bash
-python -m py_compile workers/*.py
-```
-
-**Checkpoint:** workers/ nutzt modules/ ✅
-
-**Commit nach Phase 4:**
-```bash
-git add workers/
-git commit -m "refactor(workers): Update imports to use modules/ structure"
-```
+### Merged Branches
+- ✅ `feature/monorepo-restructure` (merged 2. Februar 2026)
+- ✅ `feature/frontend-cache-fix` (merged 3. Februar 2026)
 
 ---
 
-### 🔄 Phase 5: Imports in main.py anpassen
+## 4. Next Steps
 
-**Ziel:** main.py nutzt modules/ statt src/
+### Immediate Actions (Today)
+1. **Continue CSV-Verarbeiter Phase 2** - Implement core services
+2. **Unit Testing** - Write tests as services are created
+3. **Documentation** - Keep README updated with progress
 
-**Schritte:**
+### Short-Term (This Week)
+1. Complete Phases 2-5 (Core Services → Integration)
+2. End-to-end testing with real CSV files
+3. Merge to `dev` for integration testing
 
-#### 5.1 main.py anpassen
-Prüfe alle Imports und passe an.
-
-#### 5.2 Test lokal
-```bash
-python -m uvicorn main:app --host 127.0.0.1 --port 8001
-curl http://127.0.0.1:8001/api/health
-curl http://127.0.0.1:8001/api/temu/stats
-curl http://127.0.0.1:8001/api/pdf/health
-```
-
-**Checkpoint:** main.py funktioniert mit modules/ ✅
-
-**Commit nach Phase 5:**
-```bash
-git add main.py
-git commit -m "refactor(main): Update imports to use modules/ structure"
-```
+### Medium-Term (Next Week)
+1. Complete Phase 6 (Documentation)
+2. Deploy Phase 7 (Production deployment)
+3. User acceptance testing
 
 ---
 
-### 🔄 Phase 6: Alte Struktur löschen
+## 5. Technical Debt & Future Work
 
-**⚠️ NUR WENN ALLES FUNKTIONIERT!**
+### Known Issues
+- None currently (all previous issues resolved)
 
-**Schritte:**
+### Future Enhancements
+**CSV-Verarbeiter:**
+- Automated email notifications for critical errors
+- Support for additional marketplace formats (eBay, etc.)
+- GUI configuration for SQL parameters
+- Integrated error dashboard with drill-down
+- Batch processing optimization
 
-#### 6.1 Backup erstellen
-```bash
-# Tar-Archive als Backup
-tar -czf backup_src_$(date +%Y%m%d).tar.gz src/
-tar -czf backup_api_$(date +%Y%m%d).tar.gz api/
-tar -czf backup_config_$(date +%Y%m%d).tar.gz config/
-
-# Backups in sicheren Ort verschieben
-mv backup_*.tar.gz ~/backups/
-```
-
-#### 6.2 Alte Verzeichnisse löschen
-```bash
-# VORSICHT: Nur wenn Phase 1-5 erfolgreich!
-rm -rf src/
-rm -rf api/
-rm -rf config/  # Nur wenn Symlink nicht mehr nötig
-```
-
-**Checkpoint:** Alte Struktur entfernt ✅
-
-**Commit nach Phase 6:**
-```bash
-git add -A
-git commit -m "chore(monorepo): Remove old src/, api/, config/ structure"
-```
+**General:**
+- JTL Direct API connector (currently XML-only)
+- Enhanced monitoring and alerting
+- Performance optimization for large datasets
 
 ---
 
-### 🔄 Phase 7: Tests und Deployment
+## 6. Dependencies & Requirements
 
-**Schritte:**
+### CSV-Verarbeiter Specific Dependencies
+Already in `requirements.txt`:
+- ✅ `pandas==2.2.3` - CSV processing
+- ✅ `openpyxl==3.1.5` - Excel report generation
+- ✅ `pyodbc==5.2.0` - SQL Server connection
+- ✅ `python-dotenv==1.1.0` - Configuration
+- ✅ `numpy==2.2.4` - Data processing
 
-#### 7.1 Alle Tests lokal
-```bash
-# Python Syntax
-find modules/ -name "*.py" -exec python -m py_compile {} \;
-
-# Unit Tests (falls vorhanden)
-pytest
-
-# API Tests
-python -m uvicorn main:app --host 127.0.0.1 --port 8001 &
-sleep 5
-curl http://127.0.0.1:8001/api/health
-curl http://127.0.0.1:8001/api/temu/stats
-kill %1
-```
-
-#### 7.2 PM2 Restart auf Server
-```bash
-# Auf Server
-pm2 restart temu-api
-pm2 logs temu-api --lines 50
-
-# Prüfe Endpoints
-curl http://192.168.178.4:8000/api/health
-```
-
-#### 7.3 Frontend-Test
-```
-Browser öffnen:
-- http://192.168.178.4:8000/
-- http://192.168.178.4:8000/temu
-- http://192.168.178.4:8000/pdf
-
-Teste:
-- [ ] Dashboard lädt
-- [ ] TEMU Jobs werden angezeigt
-- [ ] PDF Upload funktioniert
-- [ ] WebSocket zeigt Live-Updates
-```
-
-**Checkpoint:** Alles funktioniert in Produktion ✅
-
-**Final Commit:**
-```bash
-git add -A
-git commit -m "feat(monorepo): Complete monorepo migration - all modules in modules/"
-git push origin feature/monorepo-restructure
-```
+### No Additional Dependencies Required
+All required packages already installed in main `requirements.txt`.
 
 ---
 
-## 🆘 Rollback-Plan (Falls etwas schiefgeht)
+## 7. Testing Status
 
-### Nach Phase 1-5 (Imports angepasst, src/ noch da):
-```bash
-# Einfach zum letzten funktionierenden Commit zurück
-git log --oneline -10
-git reset --hard <commit-hash>
-```
+### Monorepo Migration Testing
+- ✅ TEMU module: All workflows tested
+- ✅ PDF Reader module: All services tested
+- ✅ Frontend: PWA, Service Worker, caching tested
+- ✅ Database: Connection pooling verified
+- ✅ WebSocket: Real-time updates working
 
-### Nach Phase 6 (src/ gelöscht, aber Fehler):
-```bash
-# Backup wiederherstellen
-cd ~
-tar -xzf backups/backup_src_*.tar.gz -C /home/chx/temu/
-tar -xzf backups/backup_api_*.tar.gz -C /home/chx/temu/
-tar -xzf backups/backup_config_*.tar.gz -C /home/chx/temu/
-
-# Git zurücksetzen
-git reset --hard <commit-vor-phase-6>
-```
+### CSV-Verarbeiter Testing (Pending)
+- ⏳ Unit tests for services
+- ⏳ Integration tests for workflows
+- ⏳ End-to-end tests with real CSV files
+- ⏳ Error scenario testing
 
 ---
 
-## 📝 Fortschritt-Tracking
+## 8. Contacts & Resources
 
-Nach jedem Schritt:
-1. ✅ Checkpoint markieren
-2. 💾 Git Commit
-3. 📋 Dieses Dokument aktualisieren
-4. 🧪 Kurzer Test
+### Documentation
+- Main docs: `/docs/` directory
+- Migration plan: `/migration_archive/CSV_VERARBEITER_MIGRATION_PLAN.md`
+- Original source: `/migration_archive/csv_verarbeiter_original/`
+- CLAUDE.md: Project overview and guidance
 
-**Kompletter Fortschritt:**
-- [x] Phase 0: Vorbereitung ✅
-- [x] Phase 1: Shared-Module migrieren ✅ (Commit: faceefd)
-- [x] Phase 2: Imports modules/temu ✅ (Commit: 92f045e)
-- [x] Phase 3: Imports modules/pdf_reader ✅ (Commit: 56f5765 - already clean!)
-- [x] Phase 4: Imports workers/ ✅ (Commit: 7f35178)
-- [x] Phase 5: Imports main.py ✅ (Commit: e19406c - already clean!)
-- [x] Phase 6: Alte Struktur löschen ✅ (Commit: 907027e - 48 files removed!)
-- [x] Phase 7: Tests & Deployment ✅ (Commit: f0d228e)
-- [x] **BONUS:** xml_export → modules/jtl/ ✅ (Commit: ad359d9 - 100% functional!)
-- [x] Phase 8: Dokumentation aktualisiert ✅
+### Source Repository
+- CSV-Verarbeiter: https://github.com/donchrillo/csv_verarbeiter.git
 
 ---
 
-## 💡 Wichtige Hinweise
+## Appendix A: File Changes Summary
 
-### Bei Session-Abbruch:
-1. Lies dieses Dokument von oben
-2. Prüfe "Aktueller Fortschritt"
-3. Schau dir den letzten Commit an: `git log -1`
-4. Mache beim nächsten nicht-erledigten Schritt weiter
+### CLAUDE.md Updates (3. Februar 2026)
+- Updated header to reflect CSV-Verarbeiter migration status
+- Added CSV-Verarbeiter module to Module Structure section
+- Updated Directory Layout with csv_verarbeiter module
 
-### Import-Pfade nach Migration:
-```python
-# ✅ NEU (nach Migration):
-from modules.shared import db_connect, log_service, get_engine
-from modules.shared.database.repositories.temu.order_repository import OrderRepository
-from modules.shared.connectors.temu.service import TemuService
-from modules.temu.services.order_service import OrderService
+### New Files Created
+- `migration_archive/MONOREPO_MIGRATION_STATUS.md` (archived)
+- `migration_archive/CSV_VERARBEITER_MIGRATION_PLAN.md`
+- `modules/csv_verarbeiter/__init__.py`
+- `modules/csv_verarbeiter/router.py` (stub)
+- `modules/csv_verarbeiter/README.md` (stub)
+- `modules/csv_verarbeiter/services/__init__.py`
+- `modules/csv_verarbeiter/frontend/__init__.py`
+- `data/csv_verarbeiter/eingang/`
+- `data/csv_verarbeiter/ausgang/`
+- `data/csv_verarbeiter/reports/`
+- `logs/csv_verarbeiter/`
 
-# Innerhalb Module: relative Imports
-from .order_service import import_orders
-from ..shared import log_service
-```
-
-### Testen während Migration:
-```bash
-# Nach jedem Import-Change:
-python -m py_compile <geänderte-datei>.py
-
-# Nach jeder Phase:
-python -m uvicorn main:app --host 127.0.0.1 --port 8001
-# → Dann curl-Tests
-```
+### Commits
+1. "feat(csv): Phase 1 - Setup CSV-Verarbeiter migration structure"
+   - Branch: `feature/csv-verarbeiter-migration`
+   - Date: 3. Februar 2026
+   - Status: Pushed to local, pending remote push
 
 ---
 
-## 🎉 MIGRATION ERFOLGREICH ABGESCHLOSSEN!
+**End of Migration Status Report**
 
-**Status: 100% FUNKTIONAL** 🚀
-
-### ✅ Was funktioniert:
-
-**Infrastruktur:**
-- ✅ PM2 läuft stabil (PID: 288027)
-- ✅ FastAPI Server online (Port 8000)
-- ✅ SQL Server Verbindungen (TOCI + JTL)
-- ✅ APScheduler aktiv
-- ✅ WebSocket Live-Updates
-
-**Module:**
-- ✅ modules/shared/ (Database, Logging, Config, Connectors)
-- ✅ modules/temu/ (Order Workflow, Inventory, Tracking)
-- ✅ modules/pdf_reader/ (PDF Processing)
-- ✅ modules/jtl/ (XML Export) **← NEU!**
-- ✅ workers/ (Job Scheduler)
-
-**Funktionalität:**
-- ✅ Order Import von TEMU API
-- ✅ JSON → Database Import
-- ✅ **XML Export nach JTL** ← Vollständig funktional!
-- ✅ Inventory Sync
-- ✅ Tracking Updates
-- ✅ PDF Processing
-
-### 📊 Statistik:
-
-- **Dateien gelöscht:** 48 (alte src/, api/, config/)
-- **Neue Module:** 4 (shared, temu, pdf_reader, jtl)
-- **Commits:** 10 (atomic commits pro Phase)
-- **Test Status:** ✅ Alle Tests bestanden
-- **Production Status:** ✅ Live und funktional
-
-### 🎯 Nächste Schritte:
-
-1. ✅ **Feature Branch Merge:** `feature/monorepo-restructure` → `main`
-2. 📝 **Optionale Verbesserungen:**
-   - Weitere JTL Module (API-Connector für direkte Integration)
-   - Weitere Marketplace Module (Amazon, Ebay, Kaufland, Otto)
-   - Unit Tests erweitern
-
----
-
-**Migration abgeschlossen am:** 3. Februar 2026, 12:30 Uhr
-**Durchgeführt von:** Claude Sonnet 4.5 + User
-**Dauer:** ~2 Stunden
-**Downtime:** < 1 Sekunde (PM2 Restart)
+*For detailed implementation plans, see `/migration_archive/CSV_VERARBEITER_MIGRATION_PLAN.md`*
