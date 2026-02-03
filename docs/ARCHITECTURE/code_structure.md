@@ -14,13 +14,14 @@ Quick Reference für die TEMU-Integration Codebase.
 │   ├── __init__.py
 │   └── settings.py                  # Konfiguration (DB, TEMU Keys)
 ├── data/
-│   ├── api_responses/               # JSON-Caches von TEMU API
-│   │   ├── temu_sku_status2.json    # Status 2 SKUs
-│   │   ├── temu_sku_status3.json    # Status 3 SKUs
-│   │   ├── api_response_orders.json # Orders-Rohdaten
-│   │   ├── api_response_shipping_all.json
-│   │   └── api_response_amount_all.json
-│   └── jtl_temu_bestellungen.xml    # JTL Export (Orders→XML)
+│   ├── temu/                        # TEMU-Daten
+│   │   ├── api_responses/           # JSON-Caches von TEMU API
+│   │   ├── xml/                     # JTL Exporte (Orders→XML)
+│   │   └── export/                  # Export-Arbeitsverzeichnis
+│   └── pdf_reader/                  # PDF Reader Daten
+│       ├── eingang/{rechnungen,werbung}
+│       ├── ausgang/
+│       └── tmp/
 ├── frontend/
 │   ├── index.html                   # Hauptseite (PWA)
 │   ├── app.js                       # Hauptlogik (API, WebSocket)
@@ -52,16 +53,23 @@ Quick Reference für die TEMU-Integration Codebase.
 │   │       ├── service.py           # High-level Connector
 │   │       └── signature.py         # Request Signing
 │   ├── modules/
-│   │   └── temu/
-│   │       ├── order_service.py         # JSON→DB Import
-│   │       ├── inventory_service.py     # SKU Download, JTL Refresh
-│   │       ├── stock_sync_service.py    # DB→API Deltas
-│   │       ├── tracking_service.py      # JTL→DB Tracking
-│   │       ├── order_workflow_service.py    # 5-Step Orchestrierung
-│   │       └── inventory_workflow_service.py # 4-Step Orchestrierung
+│   │   ├── temu/
+│   │   │   ├── order_service.py         # JSON→DB Import
+│   │   │   ├── inventory_service.py     # SKU Download, JTL Refresh
+│   │   │   ├── stock_sync_service.py    # DB→API Deltas
+│   │   │   ├── tracking_service.py      # JTL→DB Tracking
+│   │   │   ├── order_workflow_service.py    # 5-Step Orchestrierung
+│   │   │   ├── inventory_workflow_service.py # 4-Step Orchestrierung
+│   │   │   └── logger.py               # TEMU-spezifischer Logger (logs/temu)
+│   │   └── pdf_reader/
+│   │       ├── config.py               # Pfade data/pdf_reader + logs/pdf_reader
+│   │       ├── logger.py               # PDF Reader Logger (logs/pdf_reader)
+│   │       ├── rechnungen_service.py   # Rechnungserkennung
+│   │       ├── werbung_service.py      # Werbungserkennung
+│   │       └── werbung_extraction_service.py # Seite-1-Extraktion
 │   └── services/
-│       ├── log_service.py           # Job Logging
-│       └── logger.py                # Logger Setup
+│       ├── log_service.py           # Job Logging (DB)
+│       └── logger.py                # Base Logger Factory (app/temu/pdf_reader)
 ├── workers/
 │   ├── worker_service.py            # Job Execution
 │   ├── job_models.py                # Job State Models
@@ -221,7 +229,7 @@ class OrderService:
 ```python
 class InventoryService:
     fetch_and_store_raw_skus(status_list) → Stored SKUs
-    # Holt SKUs von TEMU API, speichert in data/api_responses/
+  # Holt SKUs von TEMU API, speichert in data/temu/api_responses/
     
     import_skus_from_json(json_data) → Imported Count
     # Parst JSON, speichert in temu_products DB
@@ -278,7 +286,7 @@ class StockSyncService:
 ```
 Step 1: API→JSON
   - Fetch Orders + Shipping + Amounts from TEMU
-  - Save as JSON files in data/api_responses/
+  - Save as JSON files in data/temu/api_responses/
 
 Step 2: JSON→DB
   - Parse JSON
@@ -286,7 +294,7 @@ Step 2: JSON→DB
 
 Step 3: DB→XML
   - Export Orders as XML (for JTL import)
-  - Save to data/jtl_temu_bestellungen.xml
+  - Save to data/temu/xml/jtl_temu_bestellungen.xml
 
 Step 4: JTL→Tracking
   - Lookup Tracking numbers in JTL

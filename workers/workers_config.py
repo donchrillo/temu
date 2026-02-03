@@ -4,7 +4,13 @@ import json
 from pathlib import Path
 from typing import Dict, List
 from datetime import datetime
-from src.services.logger import app_logger
+from modules.shared.logging.logger import create_module_logger
+import logging
+
+# Workers Config Logger
+app_logger = create_module_logger('WORKERS_CONFIG', 'app',
+                                  console_level=logging.ERROR,
+                                  file_level=logging.ERROR)
 
 # ✅ KORRIGIERT: CONFIG_FILE unter workers/config/
 CONFIG_FILE = Path(__file__).parent / 'config' / 'workers_config.json'

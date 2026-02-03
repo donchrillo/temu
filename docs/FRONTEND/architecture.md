@@ -439,6 +439,80 @@ curl -k https://192.168.178.4/icons/icon-192.png
 
 ---
 
+## 6. Log Filtering System (28. Januar 2026)
+
+### Problem & Lösung
+**Problem:** Log-Filter zeigte dynamisch alle job_id Präfixe, aber Sub-Jobs (order_workflow, tracking_service) waren nicht sichtbar
+
+**Root Cause:** Sub-Jobs teilen die GLEICHE job_id wie Master-Job:
+```
+temu_orders_1769614356
+├── job_type: order_service     (part of same job_id)
+├── job_type: order_workflow    (part of same job_id)
+├── job_type: tracking_service  (part of same job_id)
+└── job_type: temu_service      (part of same job_id)
+```
+
+### Lösung: FESTE Filter-Optionen mit LIKE-Pattern Matching
+
+**Frontend (app.js):**
+```javascript
+function updateJobFilter() {
+    const select = document.getElementById('filter-job');
+    
+    // Feste Filter-Optionen mit LIKE-Patterns
+    const filterOptions = [
+        { value: '', label: '— Alle Jobs —' },
+        { value: 'temu_orders%', label: 'TEMU Bestellungen (Auftragsverarbeitung)' },
+        { value: 'temu_inventory%', label: 'TEMU Lagerbestand (Inventar)' },
+        { value: 'sync_orders%', label: 'Synchronisiere neue Temu Aufträge' },
+        { value: 'sync_inventory%', label: 'Synchronisiere Temu Lagerbestand' }
+    ];
+    
+    filterOptions.forEach(opt => {
+        const option = document.createElement('option');
+        option.value = opt.value;  // z.B. "temu_orders%"
+        option.textContent = opt.label;
+        select.appendChild(option);
+    });
+}
+
+async function loadAllLogs() {
+    const jobIdPattern = document.getElementById('filter-job').value; // "temu_orders%"
+    const url = `${API_URL}/logs?job_id=${jobIdPattern}`;
+    // Sendet "temu_orders%" an Backend
+}
+```
+
+**Backend (src/db/repositories/common/log_repository.py):**
+```python
+def get_logs(self, job_id: str = None, ...):
+    if job_id:
+        # job_id kommt bereits als LIKE-Pattern z.B. "temu_orders%"
+        if '%' in job_id:
+            where_clauses.append("job_id LIKE :job_id_pattern")
+            params["job_id_pattern"] = job_id  # Nutze direkt ohne % hinzuzufügen
+        else:
+            where_clauses.append("job_id LIKE :job_id_pattern")
+            params["job_id_pattern"] = f"{job_id}%"  # Füge % hinzu wenn nicht vorhanden
+```
+
+### Effekt
+| Filter | Zeigt Logs von | Beispiel job_types |
+|--------|-----------------|------------------|
+| `temu_orders%` | Alle Aufträge verarbeitung | order_service, order_workflow, tracking_service, temu_service |
+| `temu_inventory%` | Alle Lagerbestand Operationen | inventory_workflow, inventory_to_api, jtl_to_inventory |
+| `sync_orders%` | Manuelle Auftrags-Sync | sync_orders |
+| `sync_inventory%` | Manuelle Lagerbestand-Sync | sync_inventory |
+
+### Zukünftige Filter hinzufügen
+Einfach neue Optionen in `filterOptions` Array (frontend/app.js) hinzufügen:
+```javascript
+{ value: 'pdf_upload%', label: 'PDF Upload & Verarbeitung' }
+```
+
+---
+
 ## 12. Deployment Checklist
 
 - [x] manifest.json mit korrektem Icons-Pfad
