@@ -6,8 +6,8 @@ from sqlalchemy import text
 def _get_log_service():
     from ...logging.log_service import log_service
     return log_service
-from ..connection import get_engine
-from ...config.settings import TABLE_ORDER_ITEMS, DB_TOCI
+from ...connection import get_engine
+from ....config.settings import TABLE_ORDER_ITEMS, DB_TOCI
 from ..base import BaseRepository
 
 class OrderItem:

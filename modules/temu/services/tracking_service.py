@@ -1,8 +1,8 @@
 """Tracking Service - Hole Tracking aus JTL, Update DB, Upload zu TEMU"""
 
 from typing import Dict, List, Optional
-from src.db.repositories.temu.order_repository import OrderRepository
-from src.db.repositories.jtl_common.jtl_repository import JtlRepository
+from modules.shared.database.repositories.temu.order_repository import OrderRepository
+from modules.shared.database.repositories.jtl_common.jtl_repository import JtlRepository
 from modules.shared import log_service
 
 class TrackingService:

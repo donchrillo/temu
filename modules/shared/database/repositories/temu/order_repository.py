@@ -2,8 +2,8 @@
 
 from typing import Optional, List, Dict
 from sqlalchemy import text
-from ..connection import get_engine
-from ...config.settings import TABLE_ORDERS, TABLE_ORDER_ITEMS, DB_TOCI
+from ...connection import get_engine
+from ....config.settings import TABLE_ORDERS, TABLE_ORDER_ITEMS, DB_TOCI
 from ..base import BaseRepository
 
 # Lazy import to avoid circular dependency

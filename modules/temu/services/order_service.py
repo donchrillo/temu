@@ -5,11 +5,11 @@ import traceback
 from datetime import datetime
 from typing import Dict, Optional
 
-from config.settings import DB_TOCI
+from modules.shared.config.settings import DB_TOCI
 from .config import TEMU_API_RESPONSES_DIR
 from modules.shared import db_connect
-from src.db.repositories.temu.order_repository import OrderRepository, Order
-from src.db.repositories.temu.order_item_repository import OrderItemRepository, OrderItem
+from modules.shared.database.repositories.temu.order_repository import OrderRepository, Order
+from modules.shared.database.repositories.temu.order_item_repository import OrderItemRepository, OrderItem
 from modules.shared import log_service
 
 class OrderService:

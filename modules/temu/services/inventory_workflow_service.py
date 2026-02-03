@@ -3,13 +3,13 @@
 from datetime import datetime
 from typing import Dict, Any
 
-from config.settings import TEMU_APP_KEY, TEMU_APP_SECRET, TEMU_ACCESS_TOKEN, TEMU_API_ENDPOINT, DB_TOCI, DB_JTL
+from modules.shared.config.settings import TEMU_APP_KEY, TEMU_APP_SECRET, TEMU_ACCESS_TOKEN, TEMU_API_ENDPOINT, DB_TOCI, DB_JTL
 from modules.shared import log_service
 from modules.shared import db_connect
-from src.db.repositories.temu.product_repository import ProductRepository
-from src.db.repositories.temu.inventory_repository import InventoryRepository
-from src.db.repositories.jtl_common.jtl_repository import JtlRepository
-from src.marketplace_connectors.temu.service import TemuMarketplaceService
+from modules.shared.database.repositories.temu.product_repository import ProductRepository
+from modules.shared.database.repositories.temu.inventory_repository import InventoryRepository
+from modules.shared.database.repositories.jtl_common.jtl_repository import JtlRepository
+from modules.shared.connectors.temu.service import TemuMarketplaceService
 from .inventory_service import InventoryService
 from .stock_sync_service import StockSyncService
 

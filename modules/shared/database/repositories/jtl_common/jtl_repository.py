@@ -7,7 +7,7 @@ from sqlalchemy.engine import Connection
 def _get_log_service():
     from ...logging.log_service import log_service
     return log_service
-from ...config.settings import DB_JTL
+from ....config.settings import DB_JTL
 from ..base import BaseRepository
 
 class JtlRepository(BaseRepository):

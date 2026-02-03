@@ -6,16 +6,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional, List
 
-from config.settings import (
+from modules.shared.config.settings import (
     TEMU_APP_KEY, TEMU_APP_SECRET, TEMU_ACCESS_TOKEN, TEMU_API_ENDPOINT,
     DB_TOCI, DB_JTL
 )
 from .config import TEMU_API_RESPONSES_DIR
 from modules.shared import db_connect
-from src.db.repositories.temu.order_repository import OrderRepository
-from src.db.repositories.temu.order_item_repository import OrderItemRepository
-from src.db.repositories.jtl_common.jtl_repository import JtlRepository
-from src.marketplace_connectors.temu.service import TemuMarketplaceService
+from modules.shared.database.repositories.temu.order_repository import OrderRepository
+from modules.shared.database.repositories.temu.order_item_repository import OrderItemRepository
+from modules.shared.database.repositories.jtl_common.jtl_repository import JtlRepository
+from modules.shared.connectors.temu.service import TemuMarketplaceService
 from .order_service import OrderService
 from src.modules.xml_export.xml_export_service import XmlExportService
 from .tracking_service import TrackingService
