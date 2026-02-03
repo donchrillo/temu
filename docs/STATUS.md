@@ -1,8 +1,33 @@
-# 📊 Project Status – 28. Januar 2026
+# 📊 Project Status – 3. Februar 2026
 
-## 🔄 Current State
+## ⚠️ CRITICAL UPDATE - Monorepo Migration in Progress
 
-### Git Status
+**Current Status:** 🔄 MONOREPO MIGRATION ACTIVE (70% complete)
+
+**Branch:** `feature/monorepo-restructure` (NOT feature/streamlit-integration!)
+
+**Migration Tracking:** See [MIGRATION_STATUS.md](../MIGRATION_STATUS.md) for detailed progress
+
+**What's Happening:**
+- Full restructure to monorepo architecture (Option A)
+- Moving all code from `src/`, `api/`, `config/` → `modules/`
+- Services already copied to `modules/temu/services/` and `modules/pdf_reader/services/`
+- Import paths need complete overhaul
+- Expected completion: 3. Februar 2026
+
+**⚠️ Documentation Status:**
+- `MIGRATION_STATUS.md` - ✅ Current and authoritative
+- `CLAUDE.md` - ⚠️ Describes OLD structure (will be updated after migration)
+- `docs/ARCHITECTURE/code_structure.md` - ⚠️ Describes OLD structure (will be updated after migration)
+- This file (`docs/STATUS.md`) - ✅ Updated with migration info
+
+**Next Steps:** See MIGRATION_STATUS.md Phase 1-7
+
+---
+
+## 🔄 Previous State (28. Januar 2026)
+
+### Git Status (OUTDATED - see above)
 - **Active Branch:** `feature/streamlit-integration` (tracking `origin/feature/streamlit-integration`)
 - **Latest Commit:** (pending) – log filtering improvements
 - **Main Production:** `main` at `4577c1e` (stable, last merge 26.01.)

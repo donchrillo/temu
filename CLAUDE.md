@@ -1,5 +1,15 @@
 # CLAUDE.md
 
+> ⚠️ **MIGRATION IN PROGRESS (3. Feb 2026)**
+>
+> This file describes the OLD structure (`src/`, `api/`, `config/`).
+>
+> **For current migration status, see:** [MIGRATION_STATUS.md](MIGRATION_STATUS.md)
+>
+> This file will be completely rewritten after migration is complete (Phase 8).
+
+---
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
