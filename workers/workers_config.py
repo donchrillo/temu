@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Dict, List
 from datetime import datetime
-from src.services.logger import create_module_logger
+from modules.shared.logging.logger import create_module_logger
 import logging
 
 # Workers Config Logger

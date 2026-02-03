@@ -10,7 +10,7 @@ from pathlib import Path
 
 from workers.workers_config import WorkersConfig
 from workers.job_models import JobType, JobStatusEnum, JobConfig, JobSchedule  # ← KORRIGIERT: job_models statt jobs!
-from src.services.log_service import log_service
+from modules.shared.logging.log_service import log_service
 
 
 class SchedulerService:
