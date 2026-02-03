@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PDF Processor</title>
-    <link rel="stylesheet" href="/static/pdf.css">
+    <link rel="stylesheet" href="/static/pdf.css?v=20260203">
 </head>
 <body>
     <!-- Burger Menu Navigation -->
@@ -168,6 +168,32 @@
             }
         });
     </script>
-    <script src="/static/pdf.js"></script>
+
+    <!-- Force Service Worker Update -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(registrations => {
+                registrations.forEach(registration => {
+                    // Force update check on every page load
+                    registration.update().then(() => {
+                        console.log('Service Worker update check completed');
+                    });
+
+                    // Listen for new service worker
+                    registration.addEventListener('updatefound', () => {
+                        const newWorker = registration.installing;
+                        newWorker.addEventListener('statechange', () => {
+                            if (newWorker.state === 'activated') {
+                                console.log('New Service Worker activated, reloading page...');
+                                window.location.reload();
+                            }
+                        });
+                    });
+                });
+            });
+        }
+    </script>
+
+    <script src="/static/pdf.js?v=20260203"></script>
 </body>
 </html>

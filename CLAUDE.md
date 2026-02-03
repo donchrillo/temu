@@ -284,8 +284,25 @@ The log service captures job execution and broadcasts updates to all connected W
 **PM2 Process Management:**
 PM2 auto-restarts on crash, limits memory to 500MB, logs to `logs/pm2-*.log`. Configuration in `ecosystem.config.js`.
 
+**Caddy Reverse Proxy:**
+Production deployment uses Caddy reverse proxy on `https://192.168.178.4` → `localhost:8000`. Critical caching rules in `/etc/caddy/Caddyfile`:
+- **API routes (`/api/*`)**: NEVER cached (`no-cache, no-store, must-revalidate`)
+- **Module static files (`/static/*.js`, `/static/*.css`)**: Short cache (5 minutes) with `must-revalidate`
+- **Other routes**: 1 hour cache
+
+After Caddy config changes: `sudo systemctl reload caddy`
+
 **Frontend PWA:**
 Progressive Web App supports offline mode via service worker. Manifest at `/frontend/manifest.json`. Icons must be served from `/static/icons/` route.
+
+**Cache-Busting Strategy:**
+- Module CSS/JS files use query parameters: `/static/pdf.js?v=20260203`
+- Service Worker cache version: `toci-tools-cache-v20260203` (increment on changes)
+- When updating frontend code:
+  1. Update query parameter version in HTML (`?v=YYYYMMDD`)
+  2. Update Service Worker `CACHE_NAME` version
+  3. Ensure query parameters match between HTML and Service Worker `ASSETS`
+- No PM2 restart needed for frontend changes (FastAPI serves static files directly)
 
 **Database Connections:**
 Connection pool shared across requests. Avoid holding transactions open across async boundaries. Use repository context managers for proper cleanup.
@@ -302,5 +319,6 @@ Comprehensive architecture documentation located in `docs/` directory:
 - `PERFORMANCE/architecture.md`: Benchmarks, monitoring, optimization
 - `FIXES/`: Critical bug fixes and their solutions
   - `pdf_reader_fixes_2026-02-02.md`: Filename mapping, decimal separators, import fixes
+  - `frontend_cache_fix_2026-02-03.md`: Multi-layer caching (Caddy, Service Worker, Browser), frontend cleanup
 
 Refer to these docs for detailed patterns, troubleshooting, and best practices.
