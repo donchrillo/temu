@@ -1,12 +1,10 @@
 # CLAUDE.md
 
-> ⚠️ **MIGRATION IN PROGRESS (3. Feb 2026)**
+> ✅ **UPDATED:** 3. Februar 2026 - Monorepo Migration Complete
 >
-> This file describes the OLD structure (`src/`, `api/`, `config/`).
+> This file describes the NEW monorepo structure.
 >
-> **For current migration status, see:** [MIGRATION_STATUS.md](MIGRATION_STATUS.md)
->
-> This file will be completely rewritten after migration is complete (Phase 8).
+> **Migration completed successfully** - all modules migrated to `modules/` structure.
 
 ---
 
@@ -27,15 +25,15 @@ source .venv/bin/activate
 pip install -r requirements.txt
 
 # Configure environment variables
-# Edit config/.env with database credentials and TEMU API keys
+# Edit modules/shared/config/.env with database credentials and TEMU API keys
 ```
 
 ### Running the Application
 
 **Development (local):**
 ```bash
-# Start the API server with auto-reload
-python -m uvicorn api.server:app --host 0.0.0.0 --port 8000 --reload
+# Start the unified gateway with auto-reload
+python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 **Production (PM2):**
@@ -63,7 +61,7 @@ pm2 status
 pytest
 
 # Run with coverage
-pytest --cov=src --cov-report=html
+pytest --cov=modules --cov-report=html
 
 # Run specific test file
 pytest tests/test_order_service.py
@@ -76,24 +74,24 @@ pytest tests/test_order_service.py::test_import_orders
 
 ```bash
 # Format code with Black
-black src/ api/ workers/
+black modules/ workers/ main.py
 
 # Lint with flake8
-flake8 src/ api/ workers/
+flake8 modules/ workers/ main.py
 
 # Type checking with mypy
-mypy src/ api/ workers/
+mypy modules/ workers/ main.py
 ```
 
 ## Architecture
 
 ### Core Components
 
-**API Server** (`api/server.py`)
-- FastAPI application serving REST endpoints and WebSocket connections
-- Handles job management, PDF uploads, and log queries
+**API Gateway** (`main.py`)
+- Unified FastAPI gateway serving all module routes
+- Mounts TEMU module (`/api/temu/*`) and PDF Reader module (`/api/pdf/*`)
 - WebSocket endpoint (`/ws/logs`) broadcasts real-time job updates every 2 seconds
-- Serves static frontend files from `/frontend/` directory
+- Serves module-specific frontends (`/temu/`, `/pdf/`)
 
 **Scheduler** (`workers/worker_service.py`)
 - APScheduler (AsyncIO-based) manages periodic jobs
@@ -108,14 +106,14 @@ mypy src/ api/ workers/
 
 ### Data Flow Patterns
 
-**5-Step Order Workflow** (`src/modules/temu/order_workflow_service.py`):
+**5-Step Order Workflow** (`modules/temu/services/order_workflow_service.py`):
 1. Fetch orders from TEMU API → save JSON response
 2. Import JSON to database (`temu_orders`, `temu_order_items`)
-3. Generate XML exports for JTL
-4. Upload XML to JTL (future implementation)
+3. Generate XML exports for JTL via `modules/jtl/xml_export/`
+4. Upload XML to JTL (future: direct API integration)
 5. Fetch tracking from JTL, update orders, report back to TEMU
 
-**4-Step Inventory Workflow** (`src/modules/temu/inventory_workflow_service.py`):
+**4-Step Inventory Workflow** (`modules/temu/services/inventory_workflow_service.py`):
 1. Download SKU list from TEMU
 2. Fetch stock levels from JTL database
 3. Compare and mark deltas in `temu_inventory` table
@@ -140,35 +138,40 @@ Each workflow step uses separate database transactions to ensure data persistenc
 **Connection Management:**
 - SQLAlchemy engine with connection pooling (size: 10, overflow: 20)
 - Platform-aware ODBC driver selection (Linux vs Windows)
-- Repository pattern for all database operations (`src/db/repositories/`)
+- Repository pattern for all database operations (`modules/shared/database/repositories/`)
 - Context managers handle transaction lifecycle
 
-### Module Structure
+### Module Structure (Monorepo Architecture)
 
-**`src/marketplace_connectors/temu/`**
-- `api_client.py`: Low-level HTTP client with request signing
-- `orders_api.py`, `inventory_api.py`: API endpoint wrappers
-- `service.py`: High-level marketplace connector
-- `signature.py`: TEMU request signature generation
+**`modules/shared/`** - Common Infrastructure
+- `database/`: Connection management, repositories (TOCI + JTL)
+  - `connection.py`: Engine pooling, db_connect context manager
+  - `repositories/temu/`: Order, OrderItem, Product, Inventory repositories
+  - `repositories/jtl_common/`: JTL database access
+  - `repositories/common/`: Log repository
+- `connectors/temu/`: TEMU API client (HTTP, signing, endpoints)
+- `logging/`: Log service, logger factory
+- `config/`: Settings loader, .env file
 
-**`src/modules/temu/`**
-- Business logic services for order import, inventory sync, tracking
-- Workflow orchestration services coordinate multi-step processes
-- Module-specific logger writes to `logs/temu/`
+**`modules/temu/`** - TEMU Marketplace Integration
+- `router.py`: FastAPI routes (`/api/temu/*`)
+- `jobs.py`: APScheduler job definitions
+- `frontend/`: PWA interface
+- `services/`: Business logic
+  - `order_workflow_service.py`: 5-step order sync orchestration
+  - `inventory_workflow_service.py`: 4-step inventory sync
+  - `tracking_service.py`: Tracking updates from JTL
+  - `order_service.py`, `inventory_service.py`: Core business logic
 
-**`src/modules/pdf_reader/`**
-- PDF processing for invoices (`rechnungen`) and advertisements (`werbung`)
-- Extract first pages, generate Excel reports
-- Input/output directories in `data/pdf_reader/`
+**`modules/pdf_reader/`** - PDF Processing
+- `router.py`: FastAPI routes (`/api/pdf/*`)
+- `frontend/`: Upload interface
+- `services/`: PDF extraction (rechnungen, werbung)
 
-**`src/db/repositories/`**
-- Repository pattern isolates database operations
-- Base repository provides common CRUD operations
-- Specialized repositories for orders, products, inventory, logs
-
-**`src/services/`**
-- `log_service.py`: Job logging to database with WebSocket broadcasting
-- `logger.py`: Logger factory for module-specific logging
+**`modules/jtl/`** - JTL ERP Integration
+- `xml_export/`: XML generation service for JTL
+  - `xml_export_service.py`: Converts orders to JTL XML format
+  - Future: Direct API connector module
 
 ### Important Patterns
 
@@ -188,45 +191,57 @@ This ensures correct amount parsing for invoices from different countries.
 Jobs transition through states: `pending` → `running` → `completed`/`failed`. State persists in database (`temu_logs`) and broadcasts via WebSocket. Jobs can be manually triggered even if scheduled.
 
 **Module Logging:**
-Each module creates its own logger with the module name:
+Centralized logging via shared module:
 ```python
-from src.modules.temu.logger import temu_logger
-temu_logger.info("Processing order...")
+from modules.shared.logging.log_service import log_service
+log_service.log(job_id, "order_workflow", "INFO", "Processing order...")
 ```
-Logs write to both console and module-specific files in `logs/<module>/`.
+Logs write to database (`scheduler_logs`) and broadcast via WebSocket to frontend.
 
 **Configuration Management:**
-- Environment variables loaded from `config/.env` via python-dotenv
-- `config/settings.py` provides centralized access to credentials
+- Environment variables loaded from `modules/shared/config/.env` via python-dotenv
+- `modules/shared/config/settings.py` provides centralized access to credentials
 - Never commit `.env` file (contains database passwords, API keys)
 
 **WebSocket Updates:**
 The log service captures job execution and broadcasts updates to all connected WebSocket clients. Frontend automatically reconnects on disconnect with exponential backoff.
 
-## Directory Layout
+## Directory Layout (Monorepo Structure)
 
 ```
-/api/           - FastAPI server and REST endpoints
-/config/        - Configuration (settings.py reads from .env)
-/data/          - Runtime data (JSON responses, XML exports, PDFs)
-/docs/          - Detailed architecture documentation by topic
-/frontend/      - PWA frontend (HTML, CSS, JavaScript)
-/logs/          - Runtime logs organized by module
-/src/           - Core application logic
-  /db/          - Database connection and repositories
-  /marketplace_connectors/  - External marketplace integrations
-  /modules/     - Domain-specific business logic
-  /services/    - Cross-cutting concerns (logging)
-/workers/       - Background job scheduler and models
+/modules/              - ALL application modules (monorepo)
+  /shared/            - Common infrastructure
+    /database/        - Connection, repositories (TOCI + JTL)
+    /connectors/      - Marketplace API clients (TEMU)
+    /logging/         - Log service, logger factory
+    /config/          - Settings, .env file
+  /temu/              - TEMU marketplace integration
+    /services/        - Business logic (orders, inventory, tracking)
+    /frontend/        - PWA interface
+    router.py         - API routes
+    jobs.py           - Scheduled jobs
+  /pdf_reader/        - PDF processing module
+    /services/        - PDF extraction logic
+    /frontend/        - Upload interface
+    router.py         - API routes
+  /jtl/               - JTL ERP integration
+    /xml_export/      - XML generation service
+
+/workers/             - APScheduler job management
+/data/                - Runtime data (JSON, XML, PDFs)
+/docs/                - Architecture documentation
+/logs/                - Runtime logs by module
+/main.py              - Unified FastAPI gateway
+/ecosystem.config.js  - PM2 configuration
 ```
 
 ## Critical Files
 
-- `api/server.py`: API server entry point with lifespan management
+- `main.py`: Unified gateway mounting all module routes
 - `workers/worker_service.py`: Job scheduler implementation
 - `workers/config/workers_config.json`: Job schedules (persisted across restarts)
-- `config/.env`: Credentials and secrets (NOT in git)
-- `config/settings.py`: Configuration loader
+- `modules/shared/config/.env`: Credentials and secrets (NOT in git)
+- `modules/shared/config/settings.py`: Configuration loader
 - `db_schema.sql`: Database schema definition
 - `ecosystem.config.js`: PM2 production deployment config
 - `requirements.txt`: Python dependencies
@@ -234,26 +249,28 @@ The log service captures job execution and broadcasts updates to all connected W
 ## Common Tasks
 
 **Add a new scheduled job:**
-1. Define job function in relevant service (e.g., `src/modules/temu/`)
+1. Define job function in relevant service (e.g., `modules/temu/services/`)
 2. Add job type to `workers/job_models.py` JobType enum
 3. Register job in `SchedulerService.initialize_from_config()`
 4. Job configuration auto-saves to `workers/config/workers_config.json`
 
 **Add a new REST endpoint:**
-1. Add route handler to `api/server.py`
+1. Add route to module router (e.g., `modules/temu/router.py`)
 2. Use dependency injection for services (avoid global state)
 3. Return structured responses (use Pydantic models)
 4. Add error handling with appropriate HTTP status codes
+5. Routes auto-mount in `main.py` via module routers
 
 **Add a new database table:**
 1. Update `db_schema.sql` with table definition
-2. Create repository class in `src/db/repositories/`
+2. Create repository class in `modules/shared/database/repositories/`
 3. Inherit from `BaseRepository` for common operations
 4. Use context managers for transaction handling
 
 **Debug a workflow:**
-1. Check logs in `logs/<module>/` for detailed execution traces
+1. Check database logs in `scheduler_logs` table
 2. View WebSocket updates in frontend for real-time status
+3. Use `pm2 logs temu-api` for server logs
 3. Query `temu_logs` table for historical job execution
 4. Use `/api/logs` endpoint with filters for specific job types
 
