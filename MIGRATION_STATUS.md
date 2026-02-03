@@ -462,8 +462,8 @@ Nach jedem Schritt:
 - [x] Phase 1: Shared-Module migrieren ✅ (Commit: faceefd)
 - [x] Phase 2: Imports modules/temu ✅ (Commit: 92f045e)
 - [x] Phase 3: Imports modules/pdf_reader ✅ (Commit: 56f5765 - already clean!)
-- [ ] Phase 4: Imports workers/
-- [ ] Phase 5: Imports main.py
+- [x] Phase 4: Imports workers/ ✅ (Commit: 7f35178)
+- [ ] Phase 5: Imports main.py (LAST critical imports!)
 - [ ] Phase 6: Alte Struktur löschen
 - [ ] Phase 7: Tests & Deployment
 
