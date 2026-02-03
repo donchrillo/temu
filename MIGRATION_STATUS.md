@@ -459,7 +459,7 @@ Nach jedem Schritt:
 
 **Aktueller Fortschritt:**
 - [x] Phase 0: Vorbereitung ✅
-- [ ] Phase 1: Shared-Module migrieren
+- [x] Phase 1: Shared-Module migrieren ✅ (Commit: faceefd)
 - [ ] Phase 2: Imports modules/temu
 - [ ] Phase 3: Imports modules/pdf_reader
 - [ ] Phase 4: Imports workers/
