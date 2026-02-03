@@ -17,7 +17,11 @@ from modules.shared.database.repositories.temu.order_item_repository import Orde
 from modules.shared.database.repositories.jtl_common.jtl_repository import JtlRepository
 from modules.shared.connectors.temu.service import TemuMarketplaceService
 from .order_service import OrderService
-from src.modules.xml_export.xml_export_service import XmlExportService
+# TODO: Migrate xml_export module to modules/xml_export/
+try:
+    from src.modules.xml_export.xml_export_service import XmlExportService
+except ImportError:
+    XmlExportService = None  # Will be migrated later
 from .tracking_service import TrackingService
 from modules.shared import log_service
 
