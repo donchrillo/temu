@@ -1,25 +1,25 @@
 """
-Shared Module - Re-Export Layer für gemeinsame Funktionen
+Shared Module - Zentrale Infrastruktur für alle Module
 
-Dieses Modul bietet einen einfachen Import-Layer für alle gemeinsamen
-Funktionen (Database, Logging, Config), ohne die bestehende Architektur
-in src/ zu verändern.
+Dieses Modul bietet gemeinsame Funktionen für Database, Logging, Config und Connectors.
+Alle Module importieren von hier, nicht direkt von den Untermodulen.
 
 Verwendung in neuen Modulen:
-    from shared import db_connect, BaseRepository, setup_logger, settings
+    from modules.shared import db_connect, BaseRepository, log_service
+    from modules.shared.config.settings import TEMU_APP_KEY
 """
 
-# Database (re-export von src/db/)
-from src.db.connection import get_engine, db_connect, get_db, close_all_engines
-from src.db.repositories.base import BaseRepository
+# Database (lokale Imports aus modules/shared/database/)
+from .database.connection import get_engine, db_connect, get_db, close_all_engines
+from .database.repositories.base import BaseRepository
 
-# Logging (re-export von src/services/)
-from src.services.logger import create_module_logger
-from src.services.log_service import log_service
-from src.services import app_logger
+# Logging (lokale Imports aus modules/shared/logging/)
+from .logging.logger import create_module_logger
+from .logging.log_service import log_service
+from .logging import app_logger
 
-# Config (re-export von config/)
-from config.settings import (
+# Config (lokale Imports aus modules/shared/config/)
+from .config.settings import (
     SQL_SERVER,
     SQL_USERNAME,
     SQL_PASSWORD,
@@ -78,4 +78,4 @@ __all__ = [
 ]
 
 # Version
-__version__ = "0.1.0"
+__version__ = "1.0.0"

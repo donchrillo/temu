@@ -8,7 +8,7 @@ Stellt die bewährte src/db/ Funktionalität bereit:
 - Support für 2 Datenbanken (toci, eazybusiness)
 """
 
-from src.db.connection import (
+from ..connection import (
     get_engine,
     db_connect,
     get_db,
@@ -17,7 +17,7 @@ from src.db.connection import (
     _build_connection_url
 )
 
-from src.db.repositories.base import BaseRepository
+from ..base import BaseRepository
 
 __all__ = [
     "get_engine",

@@ -8,8 +8,8 @@ Stellt die bewährte Logging-Funktionalität bereit:
 """
 
 from src.services.logger import create_module_logger
-from src.services.log_service import log_service
-from src.services import app_logger
+from ...logging.log_service import log_service
+from ...logging import app_logger
 
 __all__ = [
     "create_module_logger",
