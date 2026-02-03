@@ -48,7 +48,8 @@ def create_module_logger(
     logger.addHandler(console_handler)
 
     # 2. File Handler (logs/{log_subdir}/{file_name})
-    log_dir = Path(__file__).parent.parent.parent / "logs" / log_subdir
+    # Go up to project root: modules/shared/logging/ -> modules/shared/ -> modules/ -> root/
+    log_dir = Path(__file__).parent.parent.parent.parent / "logs" / log_subdir
     log_dir.mkdir(parents=True, exist_ok=True)
     
     log_file = file_name or f"{log_subdir}.log"
