@@ -460,7 +460,7 @@ Nach jedem Schritt:
 **Aktueller Fortschritt:**
 - [x] Phase 0: Vorbereitung ✅
 - [x] Phase 1: Shared-Module migrieren ✅ (Commit: faceefd)
-- [ ] Phase 2: Imports modules/temu
+- [x] Phase 2: Imports modules/temu ✅ (Commit: 92f045e)
 - [ ] Phase 3: Imports modules/pdf_reader
 - [ ] Phase 4: Imports workers/
 - [ ] Phase 5: Imports main.py
