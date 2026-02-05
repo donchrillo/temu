@@ -53,6 +53,9 @@ Die Migration des JTL2DATEV CSV-Verarbeiters von einer Standalone-Anwendung in d
 *   **Frontend Cache Fix:** Behebung eines Multi-Layer-Caching-Problems für PDF Reader und TEMU Frontend. Details in `docs/FIXES/OVERVIEW.md`.
 *   **PDF Reader Fixes:** Behebung von Dateinamen-Mapping, Import-Fehlern und Dezimaltrennzeichen-Problemen für Werbungsrechnungen. Details in `docs/FIXES/OVERVIEW.md`.
 *   **Transaction Isolation Bug Fix:** Behebung eines kritischen Datenintegritäts-Bugs durch Anpassung der SQL-Transaktionsgrenzen. Details in `docs/FIXES/OVERVIEW.md`.
+*   **Logging Architecture Refactoring:** Vollständige Zentralisierung des Loggings. `log_service` (DB) für Business-Events, `app_logger` (File) für technische Fehler. Entfernung aller redundanten Logger-Dateien.
+*   **PDF Reader 2.0:** Umfangreiches Update des PDF-Moduls. Entfernung des komplexen Dateinamen-Mappings, Implementierung robuster Fallback-Strategien für DE/UK-Rechnungen (Tabellen-Parsing), Vereinheitlichung der Job-Typen (`pdf_werbung_*`, `pdf_rechnungen_*`) und Modernisierung des Frontends (Unified Log View mit Filtern).
+*   **Frontend Log System:** Vereinheitlichung der Log-Anzeige in TEMU und PDF Modulen (Dropdown-Filter, Refresh, konsistentes Datumsformat).
 *   **Log Filtering System:** Umstellung des Frontend-Log-Filters auf feste Optionen mit LIKE-Pattern Matching für eine bessere Übersichtlichkeit der Sub-Jobs.
 *   **Logger Handler Fix & Error Logging:** Korrektur von Logger-Handlern nach PDF-Cleanup und Verbesserung des Error-Loggings.
 *   **XML Export Connection Fix:** Behebung eines Problems, bei dem der XML-Export aufgrund geschlossener DB-Verbindungen fehlschlug.

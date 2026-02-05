@@ -16,22 +16,27 @@
 
 ---
 
-## 2. PDF Reader Fixes (2026-02-02)
+## 2. PDF Reader Fixes
 
-### 2.1 Dateinamen-Mapping für Werbungsrechnungen
-*   **Problem:** Die Excel-Ausgabe von Werbungsrechnungen zeigte den intern umbenannten Dateinamen (`country_code_start_date_end_date.pdf`) anstelle des ursprünglichen Dateinamens der hochgeladenen PDF-Datei.
-*   **Lösung:** Eine `filename_mapping.json`-Datei wurde im temporären Verzeichnis (`TMP_ORDNER`) implementiert, die den umbenannten Pfad dem ursprünglichen Dateinamen zuordnet. Der `werbung_extraction_service.py` erstellt dieses Mapping, und der `werbung_service.py` verwendet es, um den ursprünglichen Dateinamen im Excel-Export anzuzeigen.
-*   **Lessons Learned:** Sicherstellung der Datenkonsistenz und -nachvollziehbarkeit über verschiedene Verarbeitungsstufen hinweg, insbesondere bei Dateiumbenennungen.
+### 2.1 Vereinfachung Dateinamen-Handling (2026-02-05)
+*   **Problem:** Die ursprüngliche Implementierung nutzte ein komplexes `filename_mapping.json` System, um temporäre Dateien umzubenennen, was zu unnötiger Komplexität führte.
+*   **Lösung:** Das Mapping wurde entfernt. Extrahierte Seiten werden nun direkt unter dem Originaldateinamen im `TMP_ORDNER` gespeichert. Dies vereinfacht den Workflow massiv und eliminiert eine Fehlerquelle.
+*   **Lessons Learned:** Keep it simple. Wenn der Originalname erhalten bleiben soll, speichere ihn direkt so, statt Mapping-Layer zu bauen.
 
 ### 2.2 Import-Fehler `app_logger`
 *   **Problem:** Der Server startete aufgrund eines `ImportError` (`cannot import name 'app_logger' from 'src.services.logger'`).
-*   **Lösung:** Der Importpfad in `api/server.py` wurde von `from src.services.logger import app_logger` zu `from src.services import app_logger` korrigiert.
-*   **Lessons Learned:** Die genaue Kenntnis der Modulstruktur und der korrekten Importpfade ist entscheidend, besonders in komplexen Projekten. (Hinweis: Die Struktur wurde im Zuge der Monorepo-Migration weiter geändert; der korrekte Pfad ist nun `modules.shared.logging.logger` oder `modules.shared.logging`).
+*   **Lösung:** Die Logging-Architektur wurde am 05.02.2026 komplett refactored. Es gibt nun einen zentralen `log_service` (DB) für Business-Events und `app_logger` (File) für technische Errors. Redundante Logger-Dateien wurden entfernt.
+*   **Lessons Learned:** Zentrale Infrastruktur (`modules/shared`) muss sauber definiert sein. Circular Imports vermeiden durch strikte Trennung von Factory und Instanz.
 
 ### 2.3 Dezimaltrennzeichen für GBP/USD
-*   **Problem:** UK-Rechnungen (GBP) mit Dezimalpunkten (z.B. `121.22 GBP`) wurden in Excel falsch geparst und angezeigt (z.B. `12.122,00 GBP`), da die Logik das Komma als standardmäßiges Dezimaltrennzeichen annahm.
-*   **Lösung:** Eine währungsbewusste Hilfsfunktion `parse_amount(amount_str, currency)` wurde in `src/modules/pdf_reader/werbung_service.py` (jetzt `modules/pdf_reader/services/werbung_service.py`) implementiert, die das korrekte Dezimaltrennzeichen basierend auf der Währung erkennt und anwendet (Punkt für GBP/USD, Komma für EUR/SEK/PLN).
-*   **Lessons Learned:** Bei der Verarbeitung internationaler Daten müssen lokale Formatierungskonventionen (insbesondere für Zahlen und Währungen) explizit berücksichtigt werden, um Datenintegrität zu gewährleisten.
+*   **Problem:** UK-Rechnungen (GBP) mit Dezimalpunkten wurden in Excel falsch geparst.
+*   **Lösung:** Eine währungsbewusste Hilfsfunktion `parse_amount` wurde implementiert. Zusätzlich wurde am 05.02.2026 eine `parse_amount_local` Funktion ergänzt, die anhand des Ländercodes (z.B. 'de' vs 'uk') entscheidet, ob Punkt oder Komma das Dezimaltrennzeichen ist.
+
+### 2.4 Verbesserte Erkennung & Extraktion (2026-02-05)
+*   **Problem:** Bestimmte deutsche Rechnungen (z.B. Amazon VCS Layouts) und UK-Werberechnungen wurden nicht als solche erkannt oder die Beträge wurden nicht extrahiert, da sie von den Standard-Patterns abwichen (z.B. "Rechnung Nr." statt "Rechnungsnummer:", tabellarisches Layout statt Zeilen-Format).
+*   **Lösung:**
+    *   **Erkennung:** Robuste Fallback-Regeln in `document_identifier.py` hinzugefügt (z.B. Prüfung auf "Gesamtbetrag" oder "Rechnung Nr.").
+    *   **Extraktion:** Neue Fallback-Logik in `rechnungen_service.py` implementiert, die gezielt nach Einzelwerten (Netto, Steuer, Brutto) sucht, falls das strikte Zeilen-Regex fehlschlägt.
 
 ---
 
