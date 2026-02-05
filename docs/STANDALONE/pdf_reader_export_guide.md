@@ -1,6 +1,6 @@
 # PDF Reader Standalone Export Guide
 
-> **Created:** 3. Februar 2026
+> **Created:** 5. Februar 2026
 > **Purpose:** Export PDF Reader from Monorepo to Standalone FastAPI Application
 > **Target Repo:** `pdf-reader-fastapi` (separate GitHub repository)
 
@@ -49,9 +49,8 @@ pdf-reader-fastapi/                    # Standalone Repository
 │   ├── router.py                      # FastAPI Router
 │   ├── frontend/
 │   │   ├── pdf.html
-│   │   └── static/
-│   │       ├── pdf.css
-│   │       └── pdf.js
+│   │   ├── pdf.css                    # Modul-spezifisches CSS
+│   │   └── pdf.js                     # Modul-spezifisches JavaScript
 │   └── services/
 │       ├── __init__.py
 │       ├── logger.py
@@ -167,7 +166,7 @@ echo ""
 
 # Step 1: Create target directory structure
 echo -e "${YELLOW}Step 1: Creating directory structure...${NC}"
-mkdir -p "$TARGET_DIR"/{pdf_reader/{frontend/static,services},shared/{config,logging},data/{werbung/{input,output,tmp},rechnungen/{input,output,tmp}},logs/pdf_reader,docs}
+mkdir -p "$TARGET_DIR"/{pdf_reader/{frontend,services},shared/{config,logging},data/{werbung/{input,output,tmp},rechnungen/{input,output,tmp}},logs/pdf_reader,docs}
 
 # Step 2: Copy PDF Reader module
 echo -e "${YELLOW}Step 2: Copying PDF Reader module...${NC}"
@@ -209,7 +208,7 @@ app = FastAPI(
 )
 
 # Mount static files
-app.mount("/static", StaticFiles(directory="pdf_reader/frontend/static"), name="static")
+app.mount("/static", StaticFiles(directory="pdf_reader/frontend"), name="static")
 
 # Include PDF Reader router
 app.include_router(pdf_router, prefix="/api/pdf", tags=["PDF Reader"])
@@ -370,6 +369,10 @@ Open browser: `http://localhost:8000`
 ```
 pdf-reader-fastapi/
 ├── pdf_reader/         # PDF processing module
+│   ├── frontend/
+│   │   ├── pdf.html
+│   │   ├── pdf.css
+│   │   └── pdf.js
 ├── shared/             # Configuration and logging
 ├── data/               # Input/output files
 ├── logs/               # Log files
@@ -916,6 +919,6 @@ After export:
 
 ---
 
-**Last Updated:** 3. Februar 2026
+**Last Updated:** 5. Februar 2026
 **Script Location:** `/home/chx/temu/scripts/export_pdf_reader.sh`
 **Standalone Repo:** `pdf-reader-fastapi` (GitHub)

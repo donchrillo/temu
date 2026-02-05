@@ -6,6 +6,10 @@ Alle technischen Dokumentationen der TEMU-Integration sind hier organisiert. Die
 
 ---
 
+**Datum:** 5. Februar 2026
+
+---
+
 ## 📂 Struktur
 
 ### [ARCHITECTURE/](./ARCHITECTURE/)
@@ -95,6 +99,21 @@ Benchmarks, Optimization Guides, Monitoring
   - Performance Tuning (Memory, CPU, Queries)
   - Monitoring Tools & Health Checks
 
+### [FIXES/](./FIXES/)
+Behobene Fehler & Lessons Learned
+
+- **[OVERVIEW.md](./FIXES/OVERVIEW.md)** – Konsolidierte Übersicht der Fixes und Best Practices
+
+### [CURRENT_STATUS.md](./CURRENT_STATUS.md)
+Aktueller Projektstatus
+
+- **[CURRENT_STATUS.md](./CURRENT_STATUS.md)** – Konsolidierter Überblick über den aktuellen Stand und abgeschlossene Migrationen
+
+### [TODO_LIST.md](./TODO_LIST.md)
+Ausstehende Aufgaben & Zukünftige Erweiterungen
+
+- **[TODO_LIST.md](./TODO_LIST.md)** – Konsolidierte Liste aller offenen Aufgaben, bekannten Probleme und zukünftigen Arbeiten
+
 ---
 
 ## 🎯 Wie man Docs nutzt
@@ -106,7 +125,7 @@ Benchmarks, Optimization Guides, Monitoring
 4. Frontend: [FRONTEND/architecture.md](./FRONTEND/architecture.md) – PWA & HTTPS
 5. Workflows: [WORKFLOWS/architecture.md](./WORKFLOWS/architecture.md) – Job Orchestrierung
 6. Deployment: [DEPLOYMENT/architecture.md](./DEPLOYMENT/architecture.md) – SSH & PM2
-7. Code: Mit Best Practices in `src/` anfangen
+7. Code: Mit Best Practices in `modules/` anfangen
 
 ### Für Code-Reviews
 - Überprüfen: Befolgt die Dokumentation alle Patterns?
@@ -138,6 +157,9 @@ Benchmarks, Optimization Guides, Monitoring
 - [Workflows & Job Orchestrierung](./WORKFLOWS/architecture.md)
 - [Remote SSH & PM2 Setup](./DEPLOYMENT/architecture.md)
 - [Performance Benchmarks](./PERFORMANCE/architecture.md)
+- [Behobene Fehler & Lessons Learned](./FIXES/OVERVIEW.md)
+- [Aktueller Projektstatus](./CURRENT_STATUS.md)
+- [Ausstehende Aufgaben & Zukünftige Erweiterungen](./TODO_LIST.md)
 - [Projektbaum](./ARCHITECTURE/code_structure.md#1-projektbaum)
 - [Order & Inventory Workflows](./ARCHITECTURE/code_structure.md#3-data-flow-diagramme)
 - [SQL-Server 2100-Parameter Workaround](./DATABASE/architecture.md#6-batch-query-optimierungen)
@@ -152,5 +174,5 @@ Benchmarks, Optimization Guides, Monitoring
 
 ---
 
-**Zuletzt aktualisiert:** 27. Januar 2026  
+**Zuletzt aktualisiert:** 5. Februar 2026  
 **Wartbar:** Ja ✅

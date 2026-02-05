@@ -1,6 +1,6 @@
 # Development Environment Setup
 
-> **Created:** 3. Februar 2026
+> **Created:** 5. Februar 2026
 > **Purpose:** Separate Development und Production Environment auf einem Server
 > **Target:** Linux Server (SSH-basierte Entwicklung)
 

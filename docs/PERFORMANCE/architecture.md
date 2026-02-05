@@ -4,6 +4,10 @@ Benchmarks, Monitoring, Optimization Guides für Produktiv-System.
 
 ---
 
+**Datum:** 5. Februar 2026
+
+---
+
 ## 1. Baseline Benchmarks
 
 ### Database Queries
@@ -147,7 +151,7 @@ curl http://127.0.0.1:8000/api/jobs/status
 
 ### Database Connection Pool
 ```python
-# src/db/connection.py konfiguriert:
+# modules/shared/database/connection.py konfiguriert:
 pool_size=10          # Basis Connections
 max_overflow=20       # Zusätzliche bei Spikes
 pool_pre_ping=True    # Self-healing (tote Connections raus)
@@ -300,7 +304,7 @@ skus = [p.sku for p in products]
 
 # Chunk in 1000er-Blöcken
 stocks = {}
-for chunk in chunks(skus, 1000):
+for chunk in chunks(skus, 1000): # Annahme: 'chunks' ist eine Utility-Funktion (z.B. aus itertools.chunked)
     chunk_stocks = get_stocks_batch(chunk)  # 1x Query pro 1000
     stocks.update(chunk_stocks)
 # Total: 1 Query, ~0.08s
@@ -313,7 +317,7 @@ from functools import lru_cache
 @lru_cache(maxsize=128)
 def get_jlt_article_id_cached(sku: str) -> int:
     """Cache die letzten 128 Lookups (1h TTL nicht implemented)"""
-    return db.get_article_id(sku)
+    return repository.get_article_id(sku)
 
 # Aber: DB-Query sollte schnell genug sein
 # Caching empfohlen NUR wenn >100ms pro Query

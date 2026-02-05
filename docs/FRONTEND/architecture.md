@@ -4,6 +4,10 @@ PWA (Progressive Web App) für Worker Dashboard mit WebSocket Live-Updates, HTTP
 
 ---
 
+**Datum:** 5. Februar 2026
+
+---
+
 ## 1. PWA Übersicht
 
 ### Was ist eine PWA?
@@ -26,17 +30,25 @@ PWA (Progressive Web App) für Worker Dashboard mit WebSocket Live-Updates, HTTP
 
 ```
 frontend/
-  index.html           # Hauptseite
-  app.js              # Hauptlogik (API URL, WebSocket, DOM Updates)
-  navbar.js           # Navigationskomponente
-  styles.css          # Styling
-  manifest.json       # PWA Manifest
-  service-worker.js   # Offline-Caching & Lifecycle
-  test_websocket.html # Debug-Tool für WS-Verbindung
-  pwa-debug.html      # PWA-Validierungs-Check
-  icons/
-    icon-192.png      # App-Icon (192x192)
-    icon-512.png      # App-Icon (512x512)
+  dashboard.css          # CSS für Root Dashboard
+  icons/                 # PWA Icons
+    icon-192.png
+    icon-512.png
+  index-new.html         # Root Dashboard (aktiv)
+  manifest.json          # PWA Manifest
+  service-worker.js      # Service Worker
+
+modules/
+├── pdf_reader/
+│   └── frontend/
+│       ├── pdf.html       # PDF Reader UI
+│       ├── pdf.css        # Modul-spezifisches CSS
+│       └── pdf.js         # Modul-spezifisches JavaScript
+└── temu/
+    └── frontend/
+        ├── temu.html      # TEMU Dashboard UI
+        ├── temu.css       # Modul-spezifisches CSS
+        └── temu.js        # Modul-spezifisches JavaScript
 ```
 
 ---
@@ -126,7 +138,7 @@ function initWebSocket() {
 
 ### Caddy Reverse Proxy – WebSocket Support
 ```caddyfile
-192.168.178.4 {
+your-server.de {
     reverse_proxy localhost:8000 {
         # ✅ WebSocket Upgrade Headers
         header_up Upgrade {http.request.header.Upgrade}
@@ -199,13 +211,18 @@ function initWebSocket() {
 const CACHE_NAME = 'toci-v1';
 const STATIC_ASSETS = [
   '/',
-  '/index.html',
-  '/app.js',
-  '/navbar.js',
-  '/styles.css',
+  '/index-new.html',
+  '/dashboard.css',
   '/manifest.json',
+  '/service-worker.js',
   '/icons/icon-192.png',
-  '/icons/icon-512.png'
+  '/icons/icon-512.png',
+  '/static/pdf.html',
+  '/static/pdf.css',
+  '/static/pdf.js',
+  '/static/temu.html',
+  '/static/temu.css',
+  '/static/temu.js'
 ];
 
 // Installation: Cache statische Assets
@@ -291,11 +308,13 @@ convert -size 512x512 xc:'#0f172a' \
 ## 8. Backend: Icon-Route
 
 ```python
-# api/server.py
+# main.py
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
+from starlette.responses import FileResponse
 
-frontend_dir = Path(__file__).parent.parent / "frontend"
+# frontend_dir ist jetzt das Haupt-frontend Verzeichnis
+frontend_dir = Path(__file__).parent / "frontend"
 
 @app.get("/icons/{filename}")
 async def serve_icons(filename: str):
@@ -439,7 +458,7 @@ curl -k https://192.168.178.4/icons/icon-192.png
 
 ---
 
-## 6. Log Filtering System (28. Januar 2026)
+## 12. Log Filtering System (28. Januar 2026)
 
 ### Problem & Lösung
 **Problem:** Log-Filter zeigte dynamisch alle job_id Präfixe, aber Sub-Jobs (order_workflow, tracking_service) waren nicht sichtbar
@@ -455,7 +474,7 @@ temu_orders_1769614356
 
 ### Lösung: FESTE Filter-Optionen mit LIKE-Pattern Matching
 
-**Frontend (app.js):**
+**Frontend (in den relevanten Modul-JS-Dateien, z.B. `/modules/temu/frontend/temu.js` oder `/modules/pdf_reader/frontend/pdf.js`):**
 ```javascript
 function updateJobFilter() {
     const select = document.getElementById('filter-job');
@@ -484,7 +503,7 @@ async function loadAllLogs() {
 }
 ```
 
-**Backend (src/db/repositories/common/log_repository.py):**
+**Backend (modules/shared/database/repositories/common/log_repository.py):**
 ```python
 def get_logs(self, job_id: str = None, ...):
     if job_id:
@@ -513,7 +532,7 @@ Einfach neue Optionen in `filterOptions` Array (frontend/app.js) hinzufügen:
 
 ---
 
-## 12. Deployment Checklist
+## 13. Deployment Checklist
 
 - [x] manifest.json mit korrektem Icons-Pfad
 - [x] Icons in frontend/icons/ vorhanden (PNG, 192x192 + 512x512)

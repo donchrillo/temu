@@ -1,7 +1,7 @@
 # 📘 TEMU Integration – Architektur-Dokumentation: Workflows
 
 **Status:** 🟢 STABLE / VERIFIED  
-**Datum:** 23. Januar 2026  
+**Datum:** 5. Februar 2026  
 **Bereich:** Job Orchestrierung, APScheduler, PM2 Integration
 
 ---
@@ -74,7 +74,7 @@ Database Layer (Transactional)
 
 ## 2. APScheduler Integration
 
-**Datei:** `workers/worker_service.py` + `workers/workers_config.json`
+**Datei:** `workers/worker_service.py` + `workers/config/workers_config.json`
 
 ### Initialization
 ```python
@@ -200,7 +200,7 @@ module.exports = {
   apps: [
     {
       name: 'temu-api',
-      script: './api/server.py',
+      script: 'main.py',
       interpreter: '/home/chx/temu/.venv/bin/python',
       watch: false,  // Don't auto-restart on file changes
       max_memory_restart: '1G',  // Auto-restart wenn > 1GB RAM
@@ -221,6 +221,7 @@ module.exports = {
       ref: 'origin/main',
       repo: 'git@github.com:...',
       path: '/home/chx/temu',
+      script: 'main.py',
       'pre-deploy-local': '',
       'post-deploy': 'npm install && npm run build',
       'pre-deploy': 'echo "Deploying to production server"',
@@ -308,7 +309,7 @@ class Job:
             "enabled": self.enabled
         }
     
-    def is_running(self) -> bool:
+    def is_running() -> bool:
         return self.status.status == "running"
     
     def mark_started(self):
@@ -397,14 +398,14 @@ def _execute_job(self, job_id: str, params: Dict[str, Any]):
 def _execute_workflow(self, job_id: str, params: Dict[str, Any]):
     """Delegate an entsprechende Workflow-Klasse"""
     if "inventory" in job_id:
-        from src.modules.temu.inventory_workflow_service import InventoryWorkflowService
+        from modules.temu.services.inventory_workflow_service import InventoryWorkflowService
         workflow = InventoryWorkflowService()
         return workflow.run_complete_workflow(
             mode=params.get("mode", "quick"),
             verbose=params.get("verbose", False)
         )
     elif "order" in job_id:
-        from src.modules.temu.order_workflow_service import OrderWorkflowService
+        from modules.temu.services.order_workflow_service import OrderWorkflowService
         workflow = OrderWorkflowService()
         return workflow.run_complete_workflow(**params)
     else:
@@ -460,7 +461,7 @@ def _schedule_retry(self, job_id: str, params: Dict[str, Any]):
 
 ### Inventory Workflow (4 Schritte)
 ```python
-from src.modules.temu.inventory_workflow_service import InventoryWorkflowService
+from modules.temu.services.inventory_workflow_service import InventoryWorkflowService
 
 class InventoryWorkflow:
     """4-Schritt Orchestrierung"""
@@ -655,7 +656,7 @@ def get_job_health_status(self) -> Dict[str, Any]:
 
 ### Metrics & Alerts
 ```python
-from src.services.logger import app_logger
+from modules.shared.logging.logger import app_logger
 
 def log_job_metrics(self, job_id: str, duration: float, success: bool):
     """Logs Job-Metriken für Monitoring"""
@@ -689,7 +690,7 @@ module.exports = {
   apps: [
     {
       name: 'temu-api',
-      script: './api/server.py',
+      script: 'main.py',
       interpreter: '/home/chx/temu/.venv/bin/python',
       instances: 4,  // ← 4 Worker-Prozesse
       exec_mode: 'cluster',  // ← Cluster Mode (mit Load Balancer)
