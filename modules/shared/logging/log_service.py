@@ -2,7 +2,7 @@
 
 from typing import Optional, List, Dict
 from ..database.repositories.common.log_repository import LogRepository
-from . import app_logger
+from .logger import app_logger
 
 class LogService:
     """Verwaltet strukturiertes Logging"""
@@ -31,7 +31,7 @@ class LogService:
         
         # In SQL Server
         # TEMU-Jobs + SYSTEM_ERROR → DB-Logging
-        is_temu_job = job_type and any(t in job_type.lower() for t in ["order", "inventory", "stock", "tracking", "temu"])
+        is_temu_job = job_type and any(t in job_type.lower() for t in ["order", "inventory", "stock", "tracking", "temu", "pdf"])
         is_system_error = job_id == "SYSTEM_ERROR"
         
         if is_temu_job or is_system_error:

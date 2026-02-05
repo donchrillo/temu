@@ -262,10 +262,8 @@ async function triggerInventorySync() {
 
 async function loadLogs() {
     try {
-        const filter = document.getElementById('log-filter').value;
-        const url = filter
-            ? `${API_BASE}/logs?job_id=${filter}&limit=50`
-            : `${API_BASE}/logs?limit=50`;
+        const filter = document.getElementById('log-filter').value || 'temu';
+        const url = `${API_BASE}/logs?job_id=${filter}&limit=200`;
 
         const res = await fetch(url);
         const logs = await res.json();
@@ -279,7 +277,7 @@ async function loadLogs() {
 
         container.textContent = logs.map(log => {
             const time = new Date(log.timestamp).toLocaleString('de-DE');
-            return `[${time}] [${log.level}] ${log.message}`;
+            return `[${time}] [${log.job_type}] [${log.level}] ${log.message}`;
         }).join('\n');
     } catch (err) {
         console.error('Failed to load logs:', err);

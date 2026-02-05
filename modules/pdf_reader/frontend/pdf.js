@@ -4,6 +4,7 @@
 
 // API Base URL
 const API_BASE = '/api/pdf';
+const LOGS_API = '/api/logs';
 
 // State
 let werbungFiles = [];
@@ -17,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initTabs();
     initUploadZones();
     loadStatus();
+    showLog(); // Initial logs
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -178,6 +180,7 @@ async function uploadWerbung() {
                 werbungFiles = [];
                 renderFileList('werbung', []);
                 loadStatus();
+                showLog(); // Refresh logs
             } else {
                 showToast('Upload fehlgeschlagen', 'error');
             }
@@ -201,6 +204,7 @@ async function extractWerbung() {
             if (data.status === 'ok') {
                 showToast(`${data.extracted.length} Seiten extrahiert`, 'success');
                 loadStatus();
+                showLog(); // Refresh logs
             } else {
                 showToast('Extraktion fehlgeschlagen', 'error');
             }
@@ -223,6 +227,7 @@ async function processWerbung() {
             hideProgress();
             if (data.status === 'ok') {
                 showToast(`${data.count} Einträge verarbeitet`, 'success');
+                showLog(); // Refresh logs
             } else {
                 showToast('Verarbeitung fehlgeschlagen', 'error');
             }
@@ -268,6 +273,7 @@ async function uploadRechnungen() {
                 rechnungenFiles = [];
                 renderFileList('rechnungen', []);
                 loadStatus();
+                showLog(); // Refresh logs
             } else {
                 showToast('Upload fehlgeschlagen', 'error');
             }
@@ -290,6 +296,7 @@ async function processRechnungen() {
             hideProgress();
             if (data.status === 'ok') {
                 showToast(`${data.count} Einträge verarbeitet`, 'success');
+                showLog(); // Refresh logs
             } else {
                 showToast('Verarbeitung fehlgeschlagen', 'error');
             }
@@ -308,26 +315,28 @@ function downloadRechnungen() {
 // Logs
 // ═══════════════════════════════════════════════════════════
 
-async function showLog(type) {
-    const logfile = `${type}.log`;
+async function showLog() {
+    const logContent = document.getElementById('log-content');
+    
     try {
-        const res = await fetch(`${API_BASE}/logs/${logfile}`);
-        const data = await res.json();
+        const filter = document.getElementById('log-filter').value || 'pdf';
+        // Fetch logs from central API
+        const res = await fetch(`${LOGS_API}?job_id=${filter}&limit=100`);
+        const logs = await res.json();
 
-        document.getElementById('log-content').textContent =
-            data.status === 'ok' ? data.content : 'Keine Logs verfügbar';
-
-        // Update active tab
-        document.querySelectorAll('.log-tab').forEach(tab => {
-            tab.classList.toggle('active', tab.textContent.includes(type.replace('_', ' ')));
-        });
+        if (logs && logs.length > 0) {
+             // Format logs nicely
+            logContent.textContent = logs.map(log => {
+                const time = new Date(log.timestamp).toLocaleString('de-DE');
+                return `[${time}] [${log.job_type}] [${log.level}] ${log.message}`;
+            }).join('\n');
+        } else {
+            logContent.textContent = 'Keine Logs gefunden.';
+        }
     } catch (err) {
-        document.getElementById('log-content').textContent = `Fehler: ${err.message}`;
+        logContent.textContent = `Fehler beim Laden der Logs: ${err.message}`;
     }
 }
-
-// Load initial log
-setTimeout(() => showLog('werbung_read'), 1000);
 
 // ═══════════════════════════════════════════════════════════
 // Cleanup
@@ -349,9 +358,11 @@ async function cleanup() {
             hideProgress();
             if (data.status === 'ok') {
                 const total = Object.values(data.cleared).reduce((sum, val) => sum + val, 0);
-                showToast(`${total} Dateien gelöscht, ${data.logs_removed} Logs gelöscht`, 'success');
+                showToast(`${total} Dateien gelöscht`, 'success');
                 loadStatus();
-                showLog('werbung_read');
+                // Clear log view
+                document.getElementById('log-content').textContent = "Logs bereinigt.";
+                showLog();
             } else {
                 showToast('Cleanup fehlgeschlagen', 'error');
             }

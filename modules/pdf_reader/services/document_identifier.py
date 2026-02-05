@@ -3,6 +3,9 @@
 rules = [
     # Deutschland
     {"land": "de", "typ": "rechnung", "contains": ["Rechnungsnummer:", "RECHNUNG", "Amazon.de"]},
+    {"land": "de", "typ": "rechnung", "contains": ["Rechnungsnummer:", "Gesamtsumme"]}, # Fallback 1
+    {"land": "de", "typ": "rechnung", "contains": ["Rechnung Nr.", "Gesamtbetrag"]}, # Fallback 2
+    {"land": "de", "typ": "rechnung", "contains": ["Rechnung", "Umsatzsteuer", "EUR"]}, # Fallback 3
     {"land": "de", "typ": "gutschrift", "contains": ["STEUERGUTSCHRIFT", "Gutschriftennummer:", "Amazon.de"]},
     {"land": "de", "typ": "werbung", "contains": ["Amazon Online Germany GmbH", "Rechnungszeitraum"]},
 
@@ -40,6 +43,7 @@ rules = [
     {"land": "co.uk", "typ": "rechnung", "contains": ["Invoice Number:", "INVOICE", "Amazon.co.uk"]},
     {"land": "co.uk", "typ": "gutschrift", "contains": ["TAX CREDIT NOTE", "Credit Note Number:", "Amazon.co.uk"]},
     {"land": "co.uk", "typ": "werbung", "contains": ["Amazon Online UK", "Invoice Period"]},
+    {"land": "co.uk", "typ": "werbung", "contains": ["Amazon", "Invoice Period", "Total Amount Due"]},
 
 
     # Irland

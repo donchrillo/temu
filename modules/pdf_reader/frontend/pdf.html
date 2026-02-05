@@ -114,10 +114,15 @@
             <section class="logs-section">
                 <div class="card">
                     <h3>📋 Logs</h3>
-                    <div class="log-tabs">
-                        <button class="log-tab active" onclick="showLog('werbung_read')">Werbung Read</button>
-                        <button class="log-tab" onclick="showLog('werbung_extraction')">Werbung Extract</button>
-                        <button class="log-tab" onclick="showLog('rechnung_read')">Rechnung Read</button>
+                    <div class="log-controls">
+                        <select id="log-filter" onchange="showLog()">
+                            <option value="pdf">Alle PDF Jobs</option>
+                            <option value="pdf_werbung">Werbung</option>
+                            <option value="pdf_rechnungen">Rechnungen</option>
+                        </select>
+                        <button class="btn btn-secondary btn-sm" onclick="showLog()">
+                            <span>🔄 Refresh</span>
+                        </button>
                     </div>
                     <pre class="log-content" id="log-content">Keine Logs verfügbar</pre>
                 </div>
