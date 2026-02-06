@@ -14,7 +14,7 @@ from typing import Dict, List, Tuple
 from functools import lru_cache
 
 from modules.shared import log_service, app_logger
-from modules.shared.database.jtl_repository import JtlRepository
+from modules.shared.database.repositories.jtl_common.jtl_repository import JtlRepository
 
 
 class ReplacementService:

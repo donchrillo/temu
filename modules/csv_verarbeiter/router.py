@@ -399,11 +399,16 @@ async def list_reports(job_id: Optional[str] = Query(None, description="Filter b
     - job_id: Optional - Filter nach spezifischem Job
     """
     try:
-        reports = reporter.list_reports(job_id=job_id)
+        # ReportService.list_reports() nimmt keine Parameter
+        all_reports = reporter.list_reports()
+        
+        # Optional: Filter nach job_id (manuell)
+        if job_id:
+            all_reports = [r for r in all_reports if job_id in r.get('filename', '')]
         
         return {
-            "total": len(reports),
-            "reports": reports
+            "total": len(all_reports),
+            "reports": all_reports
         }
         
     except Exception as e:
