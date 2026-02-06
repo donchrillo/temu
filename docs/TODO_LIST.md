@@ -1,6 +1,6 @@
 # Project TODO List
 
-**Datum:** 5. Februar 2026
+**Datum:** 6. Februar 2026
 **Zweck:** Auflistung aller ausstehenden Aufgaben, nächsten Schritte, bekannten Probleme und zukünftigen Erweiterungen für das TEMU-Integrationsprojekt.
 
 ---
@@ -9,23 +9,25 @@
 
 Die folgenden Phasen der CSV-Verarbeiter-Migration stehen noch aus:
 
-### ⏳ Phase 2: Core Services (Geschätzt: 3-4 Stunden)
-- [ ] Create `modules/csv_verarbeiter/services/csv_io_service.py`
+### ✅ Phase 2: Core Services (ABGESCHLOSSEN)
+- [x] Create `modules/csv_verarbeiter/services/csv_io_service.py`
   - Read CSV files (encoding detection, pandas integration)
   - Write processed CSV files to output directory
   - ZIP file extraction and creation
-- [ ] Create `modules/csv_verarbeiter/services/validation_service.py`
+- [x] Create `modules/csv_verarbeiter/services/validation_service.py`
   - OrderID pattern validation
   - Critical account detection (0-20)
   - Data integrity checks
-- [ ] Create `modules/csv_verarbeiter/services/replacement_service.py`
+- [x] Create `modules/csv_verarbeiter/services/replacement_service.py`
   - Query customer numbers from SQL database
   - Replace OrderIDs with customer numbers
   - Track replacement success/failure
-- [ ] Create `modules/csv_verarbeiter/services/report_service.py`
+- [x] Create `modules/csv_verarbeiter/services/report_service.py`
   - Generate Excel reports with validation results
   - Track errors and warnings
   - Summary statistics
+- [x] Create `modules/csv_verarbeiter/services/config.py`
+  - Path configuration and constants
 
 ### ⏳ Phase 3: API Endpoints (Geschätzt: 2-3 Stunden)
 - [ ] Implement `modules/csv_verarbeiter/router.py` with endpoints:
@@ -82,9 +84,9 @@ Die folgenden Phasen der CSV-Verarbeiter-Migration stehen noch aus:
 ## 2. Nächste Schritte & Offene Punkte
 
 ### Unmittelbare Aufgaben:
-*   **CSV-Verarbeiter Phase 2 fortsetzen** - Implementierung der Kern-Services.
-*   **Unit Testing** - Erstellung von Tests parallel zur Service-Entwicklung.
-*   **Dokumentation** - `modules/csv_verarbeiter/README.md` aktuell halten.
+*   **CSV-Verarbeiter Phase 3 starten** - Implementierung der API Endpoints (router.py).
+*   **Unit Testing** - Erstellung von Tests für die Core Services.
+*   **Dokumentation** - `modules/csv_verarbeiter/README.md` erstellen.
 
 ### Kurzfristige Aufgaben:
 *   Abschluss der Phasen 2-5 (Core Services → Integration) für CSV-Verarbeiter.

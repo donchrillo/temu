@@ -21,10 +21,16 @@ Die umfangreiche Monorepo-Migration wurde erfolgreich abgeschlossen. Alle Module
 
 ## 2. CSV-Verarbeiter Migration (IN BEARBEITUNG 🔄)
 
-Die Migration des JTL2DATEV CSV-Verarbeiters von einer Standalone-Anwendung in das TOCI Tools Monorepo ist derzeit **in Phase 1 von 7 abgeschlossen**. Der Fokus liegt auf der Integration der Kernfunktionalitäten in das FastAPI-Modul.
+Die Migration des JTL2DATEV CSV-Verarbeiters von einer Standalone-Anwendung in das TOCI Tools Monorepo hat **Phase 2 von 7 abgeschlossen**. Der Fokus liegt auf der Integration der Kernfunktionalitäten in das FastAPI-Modul.
 
 ### Aktueller Status:
 *   **Phase 1: Setup & Planung (ABGESCHLOSSEN ✅):** Original-Codebasis geklont, umfassender Migrationsplan erstellt, Anforderungen analysiert und Verzeichnisstruktur (`modules/csv_verarbeiter/`, `data/csv_verarbeiter/`, `logs/csv_verarbeiter/`) eingerichtet.
+*   **Phase 2: Core Services (ABGESCHLOSSEN ✅):** Alle vier Kern-Services implementiert:
+    *   `csv_io_service.py` - CSV/ZIP Lesen & Schreiben mit automatischer Encoding-Erkennung
+    *   `validation_service.py` - OrderID Pattern-Validierung & Konten-Prüfung (0-20)
+    *   `replacement_service.py` - OrderID → JTL-Kundennummer Ersetzung via DB
+    *   `report_service.py` - Excel-Report-Generierung mit Statistiken
+    *   `config.py` - Pfad- und Konstantenkonfiguration
 *   **Arbeits-Branch:** `feature/csv-verarbeiter-migration` (basiert auf `main`).
 
 ---
