@@ -1,242 +1,226 @@
-"""Report Service - Generierung von Excel-Berichten"""
+"""
+Report Service - Excel-Reports für CSV-Verarbeitung
 
-from datetime import datetime
-from pathlib import Path
-from typing import Dict, List, Optional
+Basiert auf: tmp/csv_verarbeiter_original/src/report_collector.py
+
+Erstellt Excel-Reports mit 4 Sheets:
+1. Mini-Report: Übersicht pro Datei
+2. Änderungen: Erfolgreiche OrderID-Ersetzungen
+3. Nicht gefunden: OrderIDs ohne Match in JTL
+4. Fehler: Fehlerhafte Dateien/Zeilen
+"""
+
+import os
 import pandas as pd
+from pathlib import Path
+from datetime import datetime, date
+from typing import List, Dict, Optional
 
-from modules.shared import log_service
+from modules.shared import log_service, app_logger
+
+
+class ReportCollector:
+    """
+    Sammelt alle Verarbeitungsergebnisse und erstellt Excel-Report.
+    
+    Kompatibel mit Original-Code aus csv_verarbeiter.
+    """
+    
+    def __init__(self):
+        """Initialisiert leere Listen für alle Report-Daten"""
+        self.aenderungen = []
+        self.mini_report = []
+        self.nicht_gefunden = []
+        self.fehler_liste = []
+    
+    def log_aenderung(self, dateiname: str, zeilennummer: int, 
+                     alte_order_id: str, neue_kundennummer: str):
+        """
+        Protokolliert erfolgreiche OrderID-Ersetzung.
+        
+        Args:
+            dateiname: Name der CSV-Datei
+            zeilennummer: Zeilennummer (inkl. Metazeile + Header)
+            alte_order_id: Amazon OrderID vor Ersetzung
+            neue_kundennummer: JTL Kundennummer nach Ersetzung
+        """
+        self.aenderungen.append({
+            "Datei": dateiname,
+            "Zeile": zeilennummer,
+            "Amazon-Order-ID": alte_order_id,
+            "Neue Kundennummer": neue_kundennummer
+        })
+    
+    def log_nicht_gefunden(self, dateiname: str, zeilennummer: int, order_id: str):
+        """
+        Protokolliert nicht gefundene OrderID.
+        
+        Args:
+            dateiname: Name der CSV-Datei
+            zeilennummer: Zeilennummer
+            order_id: Amazon OrderID ohne Match in JTL
+        """
+        self.nicht_gefunden.append({
+            "Datei": dateiname,
+            "Zeile": zeilennummer,
+            "Amazon-Order-ID": order_id
+        })
+    
+    def log_fehler(self, dateiname: str, fehlermeldung: str):
+        """
+        Protokolliert Fehler bei der Verarbeitung.
+        
+        Args:
+            dateiname: Name der CSV-Datei
+            fehlermeldung: Beschreibung des Fehlers
+        """
+        self.fehler_liste.append({
+            "Datei": dateiname,
+            "Fehler": fehlermeldung,
+            "Datum": date.today().isoformat()
+        })
+    
+    def log_report(self, dateiname: str, ersetzt: int, offen: int, 
+                   hat_kritisches_konto: bool, pruefmarke_gesetzt: bool):
+        """
+        Fügt Eintrag zum Mini-Report hinzu (Übersicht pro Datei).
+        
+        Args:
+            dateiname: Name der CSV-Datei
+            ersetzt: Anzahl ersetzter OrderIDs
+            offen: Anzahl nicht gefundener OrderIDs
+            hat_kritisches_konto: True wenn kritisches Gegenkonto (0-20) vorhanden
+            pruefmarke_gesetzt: True wenn Prüfmarken gesetzt wurden
+        """
+        self.mini_report.append({
+            "Datei": dateiname,
+            "Ersetzungen": ersetzt,
+            "Offene Order-IDs": offen,
+            "Kritisches Gegenkonto": "✅" if hat_kritisches_konto else "❌",
+            "Prüfmarke gesetzt": "✅" if pruefmarke_gesetzt else "❌",
+            "Verarbeitung OK": "❌" if any(f["Datei"] == dateiname for f in self.fehler_liste) else "✅",
+            "Letzter Lauf": date.today().isoformat()
+        })
+    
+    def speichere(self, report_dir: Path) -> Optional[str]:
+        """
+        Speichert gesammelten Report als Excel-Datei mit 4 Sheets.
+        
+        Dateiname: auswertung_YYYY-MM-DD_HHMM.xlsx
+        
+        Sheets:
+        1. Mini-Report: Datei-Übersicht
+        2. Änderungen: Erfolgreiche Ersetzungen
+        3. Nicht gefunden: Nicht gefundene OrderIDs
+        4. Fehler: Fehlerhafte Verarbeitungen
+        
+        Args:
+            report_dir: Verzeichnis für Report-Dateien
+            
+        Returns:
+            Pfad zur Report-Datei oder None wenn keine Daten
+        """
+        # Prüfe ob überhaupt Daten vorhanden sind
+        if not self.aenderungen and not self.mini_report and not self.nicht_gefunden and not self.fehler_liste:
+            log_service.log("report", "speichere", "WARN", 
+                          "⚠️ Keine Report-Daten vorhanden, überspringe Excel-Erstellung")
+            return None
+        
+        try:
+            # Erstelle Dateinamen mit Timestamp
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H%M")
+            report_pfad = report_dir / f"auswertung_{timestamp}.xlsx"
+            
+            # Erstelle Excel mit 4 Sheets
+            with pd.ExcelWriter(report_pfad, engine="openpyxl", mode="w") as writer:
+                # Sheet 1: Mini-Report (Übersicht)
+                if self.mini_report:
+                    df_mini = pd.DataFrame(self.mini_report)
+                    df_mini.to_excel(writer, sheet_name="Mini-Report", index=False)
+                
+                # Sheet 2: Änderungen (erfolgreiche Ersetzungen)
+                if self.aenderungen:
+                    df_aenderungen = pd.DataFrame(self.aenderungen)
+                    df_aenderungen.to_excel(writer, sheet_name="Änderungen", index=False)
+                
+                # Sheet 3: Nicht gefunden
+                if self.nicht_gefunden:
+                    df_nicht_gefunden = pd.DataFrame(self.nicht_gefunden)
+                    df_nicht_gefunden.to_excel(writer, sheet_name="Nicht gefunden", index=False)
+                
+                # Sheet 4: Fehler
+                if self.fehler_liste:
+                    df_fehler = pd.DataFrame(self.fehler_liste)
+                    df_fehler.to_excel(writer, sheet_name="Fehler", index=False)
+            
+            log_service.log("report", "speichere", "INFO", 
+                          f"✓ Report gespeichert: {report_pfad.name}")
+            
+            return str(report_pfad)
+            
+        except Exception as e:
+            log_service.log("report", "speichere", "ERROR", 
+                          f"❌ Fehler beim Speichern des Reports: {str(e)}")
+            return None
+    
+    def get_zusammenfassung(self) -> Dict:
+        """
+        Gibt Zusammenfassung der gesammelten Daten zurück.
+        
+        Returns:
+            Dict mit Statistiken
+        """
+        return {
+            "aenderungen_count": len(self.aenderungen),
+            "nicht_gefunden_count": len(self.nicht_gefunden),
+            "fehler_count": len(self.fehler_liste),
+            "dateien_count": len(self.mini_report),
+            "hat_daten": bool(self.aenderungen or self.mini_report or self.nicht_gefunden or self.fehler_liste)
+        }
 
 
 class ReportService:
-    """Service für Excel-Report-Generierung"""
+    """
+    Wrapper-Service für ReportCollector mit zusätzlichen Utility-Funktionen.
+    """
     
-    def __init__(self, reports_dir: Path):
+    def __init__(self, report_dir: Path):
         """
         Args:
-            reports_dir: Verzeichnis für Report-Output
+            report_dir: Verzeichnis für Report-Dateien
         """
-        self.reports_dir = reports_dir
-        self.reports_dir.mkdir(parents=True, exist_ok=True)
+        self.report_dir = report_dir
+        self.report_dir.mkdir(parents=True, exist_ok=True)
     
-    def generate_processing_report(self, 
-                                  job_id: str,
-                                  validation_result: Dict,
-                                  replacement_stats: Dict,
-                                  input_file: str,
-                                  output_file: Optional[str] = None,
-                                  duration_seconds: Optional[float] = None) -> Optional[Path]:
+    def create_collector(self) -> ReportCollector:
         """
-        Generiert Excel-Report über Verarbeitungsergebnisse.
-        
-        Args:
-            job_id: Job ID
-            validation_result: Validierungsergebnisse (von ValidationService)
-            replacement_stats: Ersetzungsstatistiken (von ReplacementService)
-            input_file: Name der Input-Datei
-            output_file: Name der Output-Datei (optional)
-            duration_seconds: Verarbeitungsdauer in Sekunden (optional)
-            
-        Returns:
-            Path: Pfad zum generierten Report oder None bei Fehler
-        """
-        try:
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            report_filename = f"report_{job_id}_{timestamp}.xlsx"
-            report_path = self.reports_dir / report_filename
-            
-            log_service.log(job_id, "csv_report", "INFO", 
-                          f"→ Generiere Report: {report_filename}")
-            
-            # Excel Writer erstellen
-            with pd.ExcelWriter(report_path, engine='openpyxl') as writer:
-                
-                # Sheet 1: Zusammenfassung
-                summary_data = self._create_summary_data(
-                    job_id, input_file, output_file, duration_seconds,
-                    validation_result, replacement_stats
-                )
-                df_summary = pd.DataFrame(summary_data)
-                df_summary.to_excel(writer, sheet_name='Zusammenfassung', index=False)
-                
-                # Sheet 2: Validierungsfehler
-                if validation_result.get('errors'):
-                    df_errors = pd.DataFrame(validation_result['errors'])
-                    df_errors.to_excel(writer, sheet_name='Validierungsfehler', index=False)
-                
-                # Sheet 3: Warnungen
-                if validation_result.get('warnings'):
-                    df_warnings = pd.DataFrame(validation_result['warnings'])
-                    df_warnings.to_excel(writer, sheet_name='Warnungen', index=False)
-                
-                # Sheet 4: Statistiken
-                stats_data = self._create_statistics_data(validation_result, replacement_stats)
-                df_stats = pd.DataFrame(stats_data)
-                df_stats.to_excel(writer, sheet_name='Statistiken', index=False)
-            
-            log_service.log(job_id, "csv_report", "INFO", 
-                          f"✓ Report erstellt: {report_filename}")
-            
-            return report_path
-            
-        except Exception as e:
-            log_service.log(job_id, "csv_report", "ERROR", 
-                          f"❌ Fehler bei Report-Generierung: {str(e)}")
-            return None
-    
-    def _create_summary_data(self, job_id: str, input_file: str, 
-                           output_file: Optional[str], duration_seconds: Optional[float],
-                           validation_result: Dict, replacement_stats: Dict) -> List[Dict]:
-        """
-        Erstellt Zusammenfassungsdaten für Report.
+        Erstellt neuen ReportCollector für einen Verarbeitungsdurchlauf.
         
         Returns:
-            List[Dict]: Daten für Zusammenfassungs-Sheet
+            Neue ReportCollector-Instanz
         """
-        return [
-            {'Feld': 'Job ID', 'Wert': job_id},
-            {'Feld': 'Zeitstempel', 'Wert': datetime.now().strftime('%d.%m.%Y %H:%M:%S')},
-            {'Feld': 'Input-Datei', 'Wert': input_file},
-            {'Feld': 'Output-Datei', 'Wert': output_file or 'N/A'},
-            {'Feld': 'Verarbeitungsdauer (Sekunden)', 'Wert': f"{duration_seconds:.2f}" if duration_seconds else 'N/A'},
-            {'Feld': '', 'Wert': ''},  # Leerzeile
-            {'Feld': '=== VALIDIERUNG ===', 'Wert': ''},
-            {'Feld': 'Valide Zeilen', 'Wert': validation_result.get('valid_rows', 0)},
-            {'Feld': 'Ungültige OrderID-Patterns', 'Wert': validation_result.get('invalid_pattern', 0)},
-            {'Feld': 'Kritische Konten (0-20)', 'Wert': validation_result.get('critical_accounts', 0)},
-            {'Feld': 'Validierungsfehler', 'Wert': len(validation_result.get('errors', []))},
-            {'Feld': 'Warnungen', 'Wert': len(validation_result.get('warnings', []))},
-            {'Feld': '', 'Wert': ''},  # Leerzeile
-            {'Feld': '=== ERSETZUNG ===', 'Wert': ''},
-            {'Feld': 'Zeilen verarbeitet', 'Wert': replacement_stats.get('total', 0)},
-            {'Feld': 'Erfolgreich ersetzt', 'Wert': replacement_stats.get('success', 0)},
-            {'Feld': 'Ersetzung fehlgeschlagen', 'Wert': replacement_stats.get('failed', 0)},
-            {'Feld': 'Kritische Konten übersprungen', 'Wert': replacement_stats.get('skipped_critical', 0)},
-            {'Feld': 'Ungültige OrderIDs übersprungen', 'Wert': replacement_stats.get('skipped_invalid', 0)},
-            {'Feld': '', 'Wert': ''},  # Leerzeile
-            {'Feld': '=== ERFOLG ===', 'Wert': ''},
-            {'Feld': 'Status', 'Wert': 'ERFOLGREICH' if validation_result.get('success') else 'MIT FEHLERN'}
-        ]
+        return ReportCollector()
     
-    def _create_statistics_data(self, validation_result: Dict, 
-                               replacement_stats: Dict) -> List[Dict]:
+    def list_reports(self) -> List[Dict]:
         """
-        Erstellt Statistikdaten für Report.
+        Listet alle vorhandenen Report-Dateien auf.
         
         Returns:
-            List[Dict]: Daten für Statistik-Sheet
-        """
-        total_validation = validation_result.get('valid_rows', 0) + \
-                          validation_result.get('invalid_pattern', 0) + \
-                          validation_result.get('critical_accounts', 0)
-        
-        stats = [
-            {'Kategorie': 'Validierung', 'Metrik': 'Gesamt geprüft', 'Wert': total_validation},
-            {'Kategorie': 'Validierung', 'Metrik': 'Valide', 'Wert': validation_result.get('valid_rows', 0)},
-            {'Kategorie': 'Validierung', 'Metrik': 'Ungültiges Pattern', 'Wert': validation_result.get('invalid_pattern', 0)},
-            {'Kategorie': 'Validierung', 'Metrik': 'Kritische Konten', 'Wert': validation_result.get('critical_accounts', 0)},
-            {'Kategorie': '', 'Metrik': '', 'Wert': ''},
-            {'Kategorie': 'Ersetzung', 'Metrik': 'Gesamt verarbeitet', 'Wert': replacement_stats.get('total', 0)},
-            {'Kategorie': 'Ersetzung', 'Metrik': 'Erfolgreich', 'Wert': replacement_stats.get('success', 0)},
-            {'Kategorie': 'Ersetzung', 'Metrik': 'Fehlgeschlagen', 'Wert': replacement_stats.get('failed', 0)},
-            {'Kategorie': 'Ersetzung', 'Metrik': 'Übersprungen (kritische Konten)', 'Wert': replacement_stats.get('skipped_critical', 0)},
-            {'Kategorie': 'Ersetzung', 'Metrik': 'Übersprungen (ungültige OrderIDs)', 'Wert': replacement_stats.get('skipped_invalid', 0)},
-        ]
-        
-        # Prozentwerte berechnen
-        if total_validation > 0:
-            valid_pct = (validation_result.get('valid_rows', 0) / total_validation) * 100
-            stats.append({'Kategorie': '', 'Metrik': '', 'Wert': ''})
-            stats.append({'Kategorie': 'Erfolgsrate', 'Metrik': 'Validierung', 'Wert': f"{valid_pct:.1f}%"})
-        
-        if replacement_stats.get('total', 0) > 0:
-            success_pct = (replacement_stats.get('success', 0) / replacement_stats.get('total', 0)) * 100
-            stats.append({'Kategorie': 'Erfolgsrate', 'Metrik': 'Ersetzung', 'Wert': f"{success_pct:.1f}%"})
-        
-        return stats
-    
-    def generate_error_report(self, job_id: str, error_message: str, 
-                            input_file: Optional[str] = None) -> Optional[Path]:
-        """
-        Generiert Fehler-Report bei kritischen Fehlern.
-        
-        Args:
-            job_id: Job ID
-            error_message: Fehlermeldung
-            input_file: Name der Input-Datei (optional)
-            
-        Returns:
-            Path: Pfad zum generierten Report oder None bei Fehler
-        """
-        try:
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            report_filename = f"error_report_{job_id}_{timestamp}.xlsx"
-            report_path = self.reports_dir / report_filename
-            
-            error_data = [
-                {'Feld': 'Job ID', 'Wert': job_id},
-                {'Feld': 'Zeitstempel', 'Wert': datetime.now().strftime('%d.%m.%Y %H:%M:%S')},
-                {'Feld': 'Input-Datei', 'Wert': input_file or 'N/A'},
-                {'Feld': 'Status', 'Wert': 'FEHLER'},
-                {'Feld': '', 'Wert': ''},
-                {'Feld': 'Fehlermeldung', 'Wert': error_message}
-            ]
-            
-            df_error = pd.DataFrame(error_data)
-            
-            with pd.ExcelWriter(report_path, engine='openpyxl') as writer:
-                df_error.to_excel(writer, sheet_name='Fehler', index=False)
-            
-            log_service.log(job_id, "csv_report", "INFO", 
-                          f"✓ Fehler-Report erstellt: {report_filename}")
-            
-            return report_path
-            
-        except Exception as e:
-            log_service.log(job_id, "csv_report", "ERROR", 
-                          f"❌ Fehler bei Fehler-Report-Generierung: {str(e)}")
-            return None
-    
-    def list_reports(self, job_id: Optional[str] = None) -> List[Dict]:
-        """
-        Listet alle verfügbaren Reports auf.
-        
-        Args:
-            job_id: Optional - Filter nach Job ID
-            
-        Returns:
-            List[Dict]: Liste von Report-Informationen
+            Liste von Dicts mit Report-Informationen
         """
         reports = []
         
         try:
-            for report_file in self.reports_dir.glob("*.xlsx"):
-                # Parse Dateiname: report_{job_id}_{timestamp}.xlsx
-                name_parts = report_file.stem.split('_')
-                
-                # Job ID Filter
-                if job_id and len(name_parts) >= 2:
-                    file_job_id = name_parts[1]
-                    if file_job_id != job_id:
-                        continue
-                
-                # Dateiinfo sammeln
-                stat = report_file.stat()
+            for file in sorted(self.report_dir.glob("auswertung_*.xlsx"), reverse=True):
                 reports.append({
-                    'filename': report_file.name,
-                    'path': str(report_file),
-                    'size_bytes': stat.st_size,
-                    'size_kb': round(stat.st_size / 1024, 2),
-                    'created_at': datetime.fromtimestamp(stat.st_ctime).strftime('%d.%m.%Y %H:%M:%S'),
-                    'modified_at': datetime.fromtimestamp(stat.st_mtime).strftime('%d.%m.%Y %H:%M:%S')
+                    "filename": file.name,
+                    "path": str(file),
+                    "created_at": datetime.fromtimestamp(file.stat().st_mtime).isoformat(),
+                    "size": file.stat().st_size
                 })
-            
-            # Sortiere nach Erstellungsdatum (neueste zuerst)
-            reports.sort(key=lambda x: x['created_at'], reverse=True)
-            
         except Exception as e:
-            log_service.log("SYSTEM", "csv_report", "ERROR", 
-                          f"❌ Fehler beim Auflisten von Reports: {str(e)}")
+            log_service.log("report", "list_reports", "ERROR", 
+                          f"❌ Fehler beim Auflisten der Reports: {str(e)}")
         
         return reports
     
@@ -245,26 +229,25 @@ class ReportService:
         Löscht Reports älter als X Tage.
         
         Args:
-            days: Anzahl Tage (Standard: 30)
+            days: Anzahl Tage (Reports älter als dieser Wert werden gelöscht)
             
         Returns:
-            int: Anzahl gelöschter Reports
+            Anzahl gelöschter Reports
         """
-        deleted_count = 0
+        deleted = 0
         cutoff_time = datetime.now().timestamp() - (days * 24 * 60 * 60)
         
         try:
-            for report_file in self.reports_dir.glob("*.xlsx"):
-                if report_file.stat().st_mtime < cutoff_time:
-                    report_file.unlink()
-                    deleted_count += 1
+            for file in self.report_dir.glob("auswertung_*.xlsx"):
+                if file.stat().st_mtime < cutoff_time:
+                    file.unlink()
+                    deleted += 1
             
-            if deleted_count > 0:
-                log_service.log("SYSTEM", "csv_report", "INFO", 
-                              f"✓ {deleted_count} alte Reports gelöscht (älter als {days} Tage)")
-        
+            log_service.log("report", "cleanup_old_reports", "INFO", 
+                          f"✓ {deleted} alte Reports gelöscht (älter als {days} Tage)")
+            
         except Exception as e:
-            log_service.log("SYSTEM", "csv_report", "ERROR", 
-                          f"❌ Fehler beim Löschen alter Reports: {str(e)}")
+            log_service.log("report", "cleanup_old_reports", "ERROR", 
+                          f"❌ Fehler beim Cleanup: {str(e)}")
         
-        return deleted_count
+        return deleted

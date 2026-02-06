@@ -1,5 +1,13 @@
-"""CSV IO Service - Lesen und Schreiben von CSV/ZIP Dateien"""
+"""
+CSV I/O Service - Lesen und Schreiben von DATEV-kompatiblen CSV-Dateien
 
+KRITISCH: DATEV-CSV-Dateien haben eine Metazeile (erste Zeile) mit Header-Informationen,
+die separat behandelt werden muss!
+
+Basiert auf: tmp/csv_verarbeiter_original/src/verarbeitung_io.py
+"""
+
+import os
 import zipfile
 import shutil
 from pathlib import Path
@@ -7,11 +15,11 @@ from typing import List, Optional, Tuple
 import pandas as pd
 import chardet
 
-from modules.shared import log_service
+from modules.shared import log_service, app_logger
 
 
 class CsvIoService:
-    """Service für CSV/ZIP Datei-Operationen"""
+    """Service für CSV/ZIP Datei-Operationen mit DATEV-Metazeilen-Unterstützung"""
     
     def __init__(self, data_dir: Path):
         """
@@ -22,11 +30,11 @@ class CsvIoService:
         self.eingang_dir = data_dir / "eingang"
         self.ausgang_dir = data_dir / "ausgang"
         self.reports_dir = data_dir / "reports"
+        self.archive_dir = data_dir / "archive"
         
         # Erstelle Verzeichnisse falls nicht vorhanden
-        self.eingang_dir.mkdir(parents=True, exist_ok=True)
-        self.ausgang_dir.mkdir(parents=True, exist_ok=True)
-        self.reports_dir.mkdir(parents=True, exist_ok=True)
+        for directory in [self.eingang_dir, self.ausgang_dir, self.reports_dir, self.archive_dir]:
+            directory.mkdir(parents=True, exist_ok=True)
     
     def detect_encoding(self, file_path: Path) -> str:
         """
@@ -38,183 +46,224 @@ class CsvIoService:
         Returns:
             str: Erkanntes Encoding (z.B. 'utf-8', 'cp1252')
         """
-        with open(file_path, 'rb') as f:
-            raw_data = f.read()
-            result = chardet.detect(raw_data)
-            return result['encoding'] or 'utf-8'
+        try:
+            with open(file_path, 'rb') as f:
+                raw_data = f.read()
+                result = chardet.detect(raw_data)
+                detected = result['encoding'] or 'cp1252'
+                
+                log_service.log("csv_io", "detect_encoding", "INFO", 
+                              f"Encoding erkannt für {file_path.name}: {detected}")
+                
+                return detected
+        except Exception as e:
+            log_service.log("csv_io", "detect_encoding", "WARN", 
+                          f"Encoding-Erkennung fehlgeschlagen für {file_path.name}, verwende cp1252: {str(e)}")
+            return 'cp1252'
     
-    def read_csv(self, file_path: Path, job_id: str, 
-                 delimiter: str = ';', encoding: Optional[str] = None) -> Optional[pd.DataFrame]:
+    def lese_metazeile(self, file_path: Path, encoding: str = 'cp1252') -> Tuple[str, bool]:
         """
-        Liest CSV-Datei mit automatischer Encoding-Erkennung.
+        Liest die erste Zeile (DATEV-Metadaten) einer CSV-Datei.
+        
+        Diese Zeile enthält systemtechnische Informationen und muss beim Speichern
+        erhalten bleiben!
         
         Args:
             file_path: Pfad zur CSV-Datei
-            job_id: Job ID für Logging
-            delimiter: CSV-Trennzeichen (Standard: ';' für DATEV)
-            encoding: Optional - falls bekannt, sonst automatisch erkannt
+            encoding: Encoding (Standard: cp1252 für DATEV)
             
         Returns:
-            pd.DataFrame oder None bei Fehler
+            Tuple[metazeile_string, success_flag]
         """
         try:
-            if not file_path.exists():
-                log_service.log(job_id, "csv_io", "ERROR", f"❌ Datei nicht gefunden: {file_path}")
-                return None
+            with open(file_path, "r", encoding=encoding) as f:
+                erste_zeile = f.readline().strip()
             
-            # Encoding erkennen falls nicht angegeben
-            if encoding is None:
-                encoding = self.detect_encoding(file_path)
-                log_service.log(job_id, "csv_io", "INFO", f"→ Encoding erkannt: {encoding}")
+            log_service.log("csv_io", "lese_metazeile", "INFO", 
+                          f"✓ Metazeile gelesen: {file_path.name}")
             
-            # CSV lesen
-            df = pd.read_csv(file_path, delimiter=delimiter, encoding=encoding, dtype=str)
-            
-            log_service.log(job_id, "csv_io", "INFO", 
-                          f"✓ CSV gelesen: {len(df)} Zeilen, {len(df.columns)} Spalten")
-            
-            return df
+            return erste_zeile, True
             
         except Exception as e:
-            log_service.log(job_id, "csv_io", "ERROR", 
-                          f"❌ Fehler beim Lesen von {file_path.name}: {str(e)}")
-            return None
+            log_service.log("csv_io", "lese_metazeile", "ERROR", 
+                          f"❌ Fehler beim Lesen der Metazeile von {file_path.name}: {str(e)}")
+            return "", False
     
-    def write_csv(self, df: pd.DataFrame, file_name: str, job_id: str,
-                  delimiter: str = ';', encoding: str = 'cp1252') -> Optional[Path]:
+    def lade_csv_daten(self, file_path: Path, encoding: str = 'cp1252') -> Tuple[pd.DataFrame, bool]:
         """
-        Schreibt DataFrame als CSV in Ausgang-Ordner.
+        Liest CSV-Datei ab Zeile 2 (überspringt DATEV-Metazeile!).
+        
+        WICHTIG: Die erste Zeile wird übersprungen (skiprows=1), da sie die
+        DATEV-Metadaten enthält. Diese muss separat mit lese_metazeile() gelesen werden.
+        
+        Args:
+            file_path: Pfad zur CSV-Datei
+            encoding: Encoding (Standard: cp1252 für DATEV)
+            
+        Returns:
+            Tuple[DataFrame, success_flag]
+        """
+        try:
+            # KRITISCH: skiprows=1 überspringt die Metazeile!
+            df = pd.read_csv(
+                file_path,
+                sep=";",
+                dtype=str,
+                encoding=encoding,
+                skiprows=1  # Metazeile überspringen!
+            )
+            
+            if df.empty:
+                log_service.log("csv_io", "lade_csv_daten", "WARN", 
+                              f"⚠️ Datei enthält keine Datenzeilen: {file_path.name}")
+                return pd.DataFrame(), False
+            
+            log_service.log("csv_io", "lade_csv_daten", "INFO", 
+                          f"✓ CSV gelesen: {file_path.name} ({len(df)} Zeilen, ohne Metazeile)")
+            
+            return df, True
+            
+        except Exception as e:
+            log_service.log("csv_io", "lade_csv_daten", "ERROR", 
+                          f"❌ Fehler beim Lesen von {file_path.name}: {str(e)}")
+            return pd.DataFrame(), False
+    
+    def schreibe_csv_mit_metazeile(self, df: pd.DataFrame, metazeile: str, 
+                                   file_path: Path, encoding: str = 'cp1252') -> bool:
+        """
+        Schreibt DataFrame in CSV-Datei MIT DATEV-Metazeile.
+        
+        Vorgehen:
+        1. DataFrame wird temporär gespeichert (ohne Metazeile)
+        2. Finale Datei wird mit Metazeile + Inhalt erstellt
+        3. Temporäre Datei wird gelöscht
         
         Args:
             df: DataFrame zum Schreiben
-            file_name: Dateiname (ohne Pfad)
-            job_id: Job ID für Logging
-            delimiter: CSV-Trennzeichen (Standard: ';' für DATEV)
-            encoding: Encoding (Standard: 'cp1252' für DATEV)
+            metazeile: DATEV-Header-Zeile (erste Zeile)
+            file_path: Ziel-Pfad
+            encoding: Encoding (Standard: cp1252 für DATEV)
             
         Returns:
-            Path zur geschriebenen Datei oder None bei Fehler
+            success_flag
         """
         try:
-            output_path = self.ausgang_dir / file_name
+            # 1. Temporäre Datei ohne Metazeile erstellen
+            temp_path = file_path.parent / f"temp_{file_path.name}"
+            df.to_csv(
+                temp_path,
+                sep=";",
+                index=False,
+                encoding=encoding
+            )
             
-            # Schreibe CSV
-            df.to_csv(output_path, sep=delimiter, encoding=encoding, index=False)
+            # 2. Finale Datei mit Metazeile + Inhalt schreiben
+            with open(temp_path, "r", encoding=encoding) as temp_file:
+                inhalt = temp_file.read()
             
-            log_service.log(job_id, "csv_io", "INFO", 
-                          f"✓ CSV geschrieben: {output_path.name} ({len(df)} Zeilen)")
+            with open(file_path, "w", encoding=encoding) as final_file:
+                final_file.write(metazeile + "\n")
+                final_file.write(inhalt)
             
-            return output_path
+            # 3. Temporäre Datei löschen
+            if temp_path.exists():
+                temp_path.unlink()
+            
+            log_service.log("csv_io", "schreibe_csv_mit_metazeile", "INFO", 
+                          f"✓ CSV mit Metazeile geschrieben: {file_path.name} ({len(df)} Zeilen)")
+            
+            return True
             
         except Exception as e:
-            log_service.log(job_id, "csv_io", "ERROR", 
-                          f"❌ Fehler beim Schreiben von {file_name}: {str(e)}")
-            return None
+            log_service.log("csv_io", "schreibe_csv_mit_metazeile", "ERROR", 
+                          f"❌ Fehler beim Schreiben von {file_path.name}: {str(e)}")
+            return False
     
-    def extract_zip(self, zip_path: Path, job_id: str) -> List[Path]:
+    def archiviere_datei(self, file_path: Path) -> bool:
         """
-        Extrahiert ZIP-Datei in Eingang-Ordner.
+        Verschiebt verarbeitete Datei ins Archiv.
         
         Args:
-            zip_path: Pfad zur ZIP-Datei
-            job_id: Job ID für Logging
+            file_path: Pfad zur zu archivierenden Datei
+            
+        Returns:
+            success_flag
+        """
+        try:
+            if not file_path.exists():
+                return False
+            
+            archive_path = self.archive_dir / file_path.name
+            shutil.move(str(file_path), str(archive_path))
+            
+            log_service.log("csv_io", "archiviere_datei", "INFO", 
+                          f"✓ Datei archiviert: {file_path.name}")
+            
+            return True
+            
+        except Exception as e:
+            log_service.log("csv_io", "archiviere_datei", "ERROR", 
+                          f"❌ Fehler beim Archivieren von {file_path.name}: {str(e)}")
+            return False
+    
+    def extract_zip(self, zip_file: Path, target_dir: Optional[Path] = None) -> List[Path]:
+        """
+        Entpackt ZIP-Datei und gibt Liste der extrahierten CSV-Dateien zurück.
+        
+        Args:
+            zip_file: Pfad zur ZIP-Datei
+            target_dir: Zielverzeichnis (Standard: temporäres Verzeichnis)
             
         Returns:
             Liste der extrahierten CSV-Dateien
         """
-        csv_files = []
+        extracted_files = []
+        
+        if target_dir is None:
+            target_dir = self.data_dir / "tmp"
+            target_dir.mkdir(exist_ok=True)
         
         try:
-            if not zip_path.exists():
-                log_service.log(job_id, "csv_io", "ERROR", f"❌ ZIP nicht gefunden: {zip_path}")
-                return csv_files
+            with zipfile.ZipFile(zip_file, 'r') as zip_ref:
+                zip_ref.extractall(target_dir)
             
-            log_service.log(job_id, "csv_io", "INFO", f"→ Extrahiere ZIP: {zip_path.name}")
+            # Finde alle CSV-Dateien
+            for file in target_dir.rglob("*.csv"):
+                extracted_files.append(file)
             
-            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                # Erstelle temporäres Extraktionsverzeichnis
-                extract_dir = self.eingang_dir / f"extracted_{job_id}"
-                extract_dir.mkdir(exist_ok=True)
-                
-                # Extrahiere alle Dateien
-                zip_ref.extractall(extract_dir)
-                
-                # Finde alle CSV-Dateien
-                csv_files = list(extract_dir.glob("*.csv"))
-                csv_files.extend(list(extract_dir.glob("*.CSV")))
-                
-                log_service.log(job_id, "csv_io", "INFO", 
-                              f"✓ {len(csv_files)} CSV-Dateien extrahiert")
+            log_service.log("csv_io", "extract_zip", "INFO", 
+                          f"✓ ZIP entpackt: {zip_file.name} ({len(extracted_files)} CSV-Dateien)")
             
-            return csv_files
+            return extracted_files
             
         except Exception as e:
-            log_service.log(job_id, "csv_io", "ERROR", 
-                          f"❌ Fehler beim Extrahieren von {zip_path.name}: {str(e)}")
-            return csv_files
+            log_service.log("csv_io", "extract_zip", "ERROR", 
+                          f"❌ Fehler beim Entpacken von {zip_file.name}: {str(e)}")
+            return []
     
-    def create_zip(self, csv_files: List[Path], zip_name: str, job_id: str) -> Optional[Path]:
+    def create_zip(self, files: List[Path], zip_path: Path) -> bool:
         """
-        Erstellt ZIP-Datei aus CSV-Dateien im Ausgang-Ordner.
+        Erstellt ZIP-Archiv aus Liste von Dateien.
         
         Args:
-            csv_files: Liste der CSV-Dateien zum Zippen
-            zip_name: Name der ZIP-Datei (ohne Pfad)
-            job_id: Job ID für Logging
+            files: Liste der zu packenden Dateien
+            zip_path: Pfad für das ZIP-Archiv
             
         Returns:
-            Path zur ZIP-Datei oder None bei Fehler
+            success_flag
         """
         try:
-            zip_path = self.ausgang_dir / zip_name
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for file in files:
+                    if file.exists():
+                        zipf.write(file, file.name)
             
-            log_service.log(job_id, "csv_io", "INFO", 
-                          f"→ Erstelle ZIP: {zip_name} ({len(csv_files)} Dateien)")
+            log_service.log("csv_io", "create_zip", "INFO", 
+                          f"✓ ZIP erstellt: {zip_path.name} ({len(files)} Dateien)")
             
-            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zip_ref:
-                for csv_file in csv_files:
-                    if csv_file.exists():
-                        # Füge Datei mit relativem Namen hinzu
-                        zip_ref.write(csv_file, csv_file.name)
-            
-            log_service.log(job_id, "csv_io", "INFO", f"✓ ZIP erstellt: {zip_path.name}")
-            
-            return zip_path
+            return True
             
         except Exception as e:
-            log_service.log(job_id, "csv_io", "ERROR", 
-                          f"❌ Fehler beim Erstellen von ZIP {zip_name}: {str(e)}")
-            return None
-    
-    def cleanup_temp_files(self, job_id: str):
-        """
-        Löscht temporäre Extraktionsverzeichnisse.
-        
-        Args:
-            job_id: Job ID
-        """
-        try:
-            extract_dir = self.eingang_dir / f"extracted_{job_id}"
-            if extract_dir.exists():
-                shutil.rmtree(extract_dir)
-                log_service.log(job_id, "csv_io", "INFO", "✓ Temporäre Dateien gelöscht")
-        except Exception as e:
-            log_service.log(job_id, "csv_io", "WARNING", 
-                          f"⚠ Fehler beim Löschen temporärer Dateien: {str(e)}")
-    
-    def get_input_files(self, extensions: List[str] = [".csv", ".zip"]) -> List[Path]:
-        """
-        Findet alle Input-Dateien im Eingang-Ordner.
-        
-        Args:
-            extensions: Liste der Dateiendungen (Standard: ['.csv', '.zip'])
-            
-        Returns:
-            Liste der gefundenen Dateien
-        """
-        files = []
-        for ext in extensions:
-            files.extend(self.eingang_dir.glob(f"*{ext}"))
-            files.extend(self.eingang_dir.glob(f"*{ext.upper()}"))
-        
-        return sorted(files)
+            log_service.log("csv_io", "create_zip", "ERROR", 
+                          f"❌ Fehler beim Erstellen von {zip_path.name}: {str(e)}")
+            return False

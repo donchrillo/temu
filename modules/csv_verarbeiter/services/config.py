@@ -14,6 +14,7 @@ CSV_DATA_DIR = DATA_DIR / 'csv_verarbeiter'
 CSV_EINGANG_DIR = CSV_DATA_DIR / 'eingang'
 CSV_AUSGANG_DIR = CSV_DATA_DIR / 'ausgang'
 CSV_REPORTS_DIR = CSV_DATA_DIR / 'reports'
+CSV_ARCHIVE_DIR = CSV_DATA_DIR / 'archive'  # Archiv für verarbeitete Dateien
 
 # CSV Processing Configuration
 CSV_DELIMITER = os.getenv('CSV_DELIMITER', ';')  # DATEV Standard: Semikolon
@@ -38,6 +39,7 @@ def ensure_directories():
     CSV_EINGANG_DIR.mkdir(parents=True, exist_ok=True)
     CSV_AUSGANG_DIR.mkdir(parents=True, exist_ok=True)
     CSV_REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    CSV_ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # Ensure directories on import
