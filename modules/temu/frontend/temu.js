@@ -233,7 +233,12 @@ async function triggerInventorySync() {
             throw new Error('Inventory Sync Job nicht gefunden');
         }
 
-        const res = await fetch(`${API_BASE}/jobs/${invJob.job_id}/run-now?mode=${params.mode}`, {
+        // Build URL with parameters
+        const url = `${API_BASE}/jobs/${invJob.job_id}/run-now?` +
+            `mode=${params.mode}&` +
+            `verbose=${params.verbose}`;
+
+        const res = await fetch(url, {
             method: 'POST'
         });
 
@@ -470,6 +475,13 @@ function showInventorySyncParameterDialog() {
                                 </p>
                             </div>
                         </div>
+
+                        <div>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="param-verbose" style="width: 18px; height: 18px; cursor: pointer;">
+                                <span>🔍 Verbose Mode</span>
+                            </label>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -488,7 +500,8 @@ function showInventorySyncParameterDialog() {
 
         document.getElementById('submit-btn').onclick = () => {
             const params = {
-                mode: document.getElementById('param-mode').value
+                mode: document.getElementById('param-mode').value,
+                verbose: document.getElementById('param-verbose').checked
             };
             dialog.remove();
             resolve(params);
