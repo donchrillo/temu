@@ -35,6 +35,7 @@ from modules.shared import log_service, app_logger
 # Module imports
 from modules.pdf_reader import get_router as get_pdf_router
 from modules.temu import get_router as get_temu_router, register_jobs as register_temu_jobs
+from modules.csv_verarbeiter.router import router as csv_router
 
 # ═══════════════════════════════════════════════════════════════
 # Scheduler
@@ -105,6 +106,13 @@ app.include_router(
     get_temu_router(),
     prefix="/api/temu",
     tags=["TEMU Integration"]
+)
+
+# CSV Verarbeiter Modul
+app.include_router(
+    csv_router,
+    prefix="/api/csv",
+    tags=["CSV Verarbeiter"]
 )
 
 # ═══════════════════════════════════════════════════════════════
