@@ -21,16 +21,17 @@ Die umfangreiche Monorepo-Migration wurde erfolgreich abgeschlossen. Alle Module
 
 ## 2. CSV-Verarbeiter Migration (IN BEARBEITUNG 🔄)
 
-Die Migration des JTL2DATEV CSV-Verarbeiters von einer Standalone-Anwendung in das TOCI Tools Monorepo hat **Phase 2 von 7 abgeschlossen**. Der Fokus liegt auf der Integration der Kernfunktionalitäten in das FastAPI-Modul.
+Die Migration des CSV-Verarbeiters von einer Standalone-Anwendung in das TOCI Tools Monorepo hat **Phase 2 von 7 abgeschlossen**. Der Fokus liegt auf der Integration der Kernfunktionalitäten in das FastAPI-Modul.
 
 ### Aktueller Status:
 *   **Phase 1: Setup & Planung (ABGESCHLOSSEN ✅):** Original-Codebasis geklont, umfassender Migrationsplan erstellt, Anforderungen analysiert und Verzeichnisstruktur (`modules/csv_verarbeiter/`, `data/csv_verarbeiter/`, `logs/csv_verarbeiter/`) eingerichtet.
-*   **Phase 2: Core Services (ABGESCHLOSSEN ✅):** Alle vier Kern-Services implementiert:
-    *   `csv_io_service.py` - CSV/ZIP Lesen & Schreiben mit automatischer Encoding-Erkennung
-    *   `validation_service.py` - OrderID Pattern-Validierung & Konten-Prüfung (0-20)
-    *   `replacement_service.py` - OrderID → JTL-Kundennummer Ersetzung via DB
+*   **Phase 2: Core Services (ABGESCHLOSSEN ✅):** Alle vier Kern-Services implementiert und auf **Amazon DATEV Exporte** optimiert:
+    *   `csv_io_service.py` - CSV/ZIP Lesen & Schreiben mit automatischer Encoding-Erkennung (cp1252)
+    *   `validation_service.py` - **Amazon OrderID Pattern-Validierung** (XXX-XXXXXXX-XXXXXXX) & Konten-Prüfung (0-20)
+    *   `replacement_service.py` - **Amazon OrderID → JTL-Kundennummer** Ersetzung via DB (tAuftrag.cExterneAuftragsnummer)
     *   `report_service.py` - Excel-Report-Generierung mit Statistiken
-    *   `config.py` - Pfad- und Konstantenkonfiguration
+    *   `config.py` - Pfad- und **DATEV-Spalten-Konfiguration**
+    *   **JTL Repository:** `get_customer_number_by_order_id()` hinzugefügt für Amazon OrderID Lookups
 *   **Arbeits-Branch:** `feature/csv-verarbeiter-migration` (basiert auf `main`).
 
 ---
