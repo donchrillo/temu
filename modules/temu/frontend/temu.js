@@ -14,7 +14,6 @@ let currentProgress = 0;
 // ═══════════════════════════════════════════════════════════
 
 document.addEventListener('DOMContentLoaded', () => {
-    loadStats();
     loadJobs();
     loadLogs();
 
@@ -70,28 +69,6 @@ function hideProgress() {
     const overlay = document.getElementById('progress-overlay');
     overlay.classList.remove('active');
     currentProgress = 0;
-}
-
-// ═══════════════════════════════════════════════════════════
-// Statistics
-// ═══════════════════════════════════════════════════════════
-
-async function loadStats() {
-    try {
-        const [statsRes, jobsRes] = await Promise.all([
-            fetch(`${TEMU_API}/stats`),
-            fetch(`${API_BASE}/jobs`)
-        ]);
-
-        const stats = await statsRes.json();
-        const jobs = await jobsRes.json();
-
-        document.getElementById('stat-orders').textContent = stats.orders?.total || 0;
-        document.getElementById('stat-inventory').textContent = stats.inventory?.total_skus || 0;
-        document.getElementById('stat-jobs').textContent = jobs?.length || 0;
-    } catch (err) {
-        console.error('Failed to load stats:', err);
-    }
 }
 
 // ═══════════════════════════════════════════════════════════
