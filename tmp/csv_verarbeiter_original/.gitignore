@@ -1,0 +1,26 @@
+# 🗑️ Virtuelle Umgebungen
+/.venv
+#/.env
+/.envrc
+
+# 🗑️ Python Cache
+/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 🗂️ Daten und Verzeichnisse
+daten/
+daten/ausgang/
+daten/eingang/
+daten/log/
+daten//tmp/
+daten/archive/
+
+
+/*.db
+/*.sqlite3
+/*.log
+/*.zip
+/*.xlsx
+/*.csv
