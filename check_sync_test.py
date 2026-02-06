@@ -3,6 +3,8 @@ from modules.shared import db_connect
 from sqlalchemy import text
 from modules.shared.config.settings import DB_TOCI
 
+#test
+
 def check_sync():
     with db_connect(DB_TOCI) as conn:
         sql = text("""
