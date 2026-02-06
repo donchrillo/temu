@@ -1,0 +1,31 @@
+# 🗑️ Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 🗑️ Virtuelle Umgebungen
+.venv/
+.env
+.envrc
+
+# 🗑️ Build-Artefakte und Logs
+*.db
+*.sqlite3
+*.log
+*.zip
+*.xlsx
+*.csv
+
+# 🗂️ Dokumentation und temporäre Dateien
+Dokumentation/
+Sicherung/
+archive/
+ausgang/
+eingang/
+log/
+tmp/
+
+# 🗂️ Git-Ordner
+.git/
+.gitignore
