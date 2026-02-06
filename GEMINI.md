@@ -45,7 +45,7 @@ The project follows a **Monorepo** structure with strict separation of concerns.
 *   **Scheduling:** APScheduler
 *   **Data Processing:** Pandas, PDFPlumber, OpenPyXL
 *   **Process Management:** PM2 (Node.js)
-*   **Frontend:** Vanilla JS, CSS (Apple-style), HTML5
+*   **Frontend:** Vanilla JS, CSS (Apple-style, zentralisiert in master.css), HTML5, PWA
 
 ## 4. Building and Running
 
@@ -86,6 +86,8 @@ pm2 logs temu-api
     *   **Business Logic:** Use `modules.shared.log_service` (writes to SQL DB for Frontend display).
     *   **Technical Errors:** Use `modules.shared.app_logger` (writes to `logs/` files for debugging).
 *   **Configuration:** All config via `.env` files loaded in `modules/shared/config/settings.py`.
+*   **Frontend CSS:** Use `master.css` for shared styles, module-specific CSS only for unique components.
+*   **Central Navigation:** All pages use `nav-loader.js` for dynamic menu loading.
 
 ### Documentation Rules
 *   **Live Docs:** Documentation in `docs/` is treated as code. Update it immediately upon changing logic.
@@ -100,5 +102,6 @@ pm2 logs temu-api
 *   **Batch Operations:** Use batch inserts/updates for large datasets (TEMU orders/inventory).
 
 ## 6. Current Status (Feb 2026)
-*   **Stable:** TEMU Order/Inventory Sync, PDF Reader.
+*   **Stable:** TEMU Order/Inventory Sync, PDF Reader, Frontend Architecture (CSS Consolidation, Central Navigation).
 *   **In Progress:** Migration of CSV Verarbeiter (JTL2DATEV) to the monorepo structure (`feature/csv-verarbeiter-migration`).
+*   **Recent:** CSS Consolidation eliminierte 1,537 Zeilen Duplikate (44% Reduktion), Zentrale Navigation für alle Module.

@@ -10,26 +10,13 @@
     <title>Toci JTL Tools</title>
     <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
-    <link rel="stylesheet" href="/static/dashboard.css">
+    <link rel="stylesheet" href="/static/master.css?v=20260206">
+    <link rel="stylesheet" href="/static/dashboard.css?v=20260206">
 </head>
 <body>
-    <!-- Burger Menu Navigation -->
-    <nav class="mobile-nav">
-        <div class="mobile-nav-header">
-            <h2>🛠️ Toci JTL Tools</h2>
-            <button class="burger-toggle" onclick="toggleMenu()">
-                <span></span>
-                <span></span>
-                <span></span>
-            </button>
-        </div>
-        <div class="mobile-menu" id="mobile-menu">
-            <a href="/" class="menu-item active">🏠 Dashboard</a>
-            <a href="/temu" class="menu-item">🚀 TEMU Integration</a>
-            <a href="/pdf" class="menu-item">📁 PDF Reader</a>
-            <a href="/docs" class="menu-item">📚 API Docs</a>
-        </div>
-    </nav>
+    <!-- Navigation wird dynamisch geladen -->
+    <script src="/components/nav-loader.js"></script>
+    <script>loadNavigation('home', '🛠️ Toci JTL Tools');</script>
 
     <div class="container">
         <!-- Header -->
@@ -72,6 +59,21 @@
                     <div class="module-arrow">→</div>
                 </a>
 
+                <!-- CSV Verarbeiter Module -->
+                <a href="/csv" class="module-card csv-card">
+                    <div class="module-icon">📊</div>
+                    <div class="module-content">
+                        <h2>CSV Verarbeiter</h2>
+                        <p class="module-desc">Amazon DATEV Export & JTL Mapping</p>
+                        <div class="module-features">
+                            <span class="feature-tag">OrderID Mapping</span>
+                            <span class="feature-tag">DATEV Export</span>
+                            <span class="feature-tag">Excel Reports</span>
+                        </div>
+                    </div>
+                    <div class="module-arrow">→</div>
+                </a>
+
                 <!-- API Docs Module -->
                 <a href="/docs" class="module-card docs-card">
                     <div class="module-icon">📚</div>
@@ -86,19 +88,6 @@
                     </div>
                     <div class="module-arrow">→</div>
                 </a>
-
-                <!-- Coming Soon Module -->
-                <div class="module-card coming-soon-card disabled">
-                    <div class="module-icon">📦</div>
-                    <div class="module-content">
-                        <h2>XML Export</h2>
-                        <p class="module-desc">Exporttools und Integrationen</p>
-                        <div class="module-features">
-                            <span class="feature-tag disabled">In Vorbereitung</span>
-                        </div>
-                    </div>
-                    <div class="module-arrow">→</div>
-                </div>
             </section>
 
             <!-- System Status -->

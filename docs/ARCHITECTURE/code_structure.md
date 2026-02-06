@@ -394,7 +394,6 @@ class WorkerService:
     Jobs:
     - temu_orders_sync → OrderWorkflowService.execute()
     - temu_inventory_sync → InventoryWorkflowService.execute()
-    - fetch_invoices → Placeholder
 ```
 
 **APScheduler Integration:**

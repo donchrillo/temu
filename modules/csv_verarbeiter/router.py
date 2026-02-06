@@ -13,7 +13,9 @@ import uuid
 import time
 from pathlib import Path
 from typing import List, Dict, Optional
-from fastapi import APIRouter, UploadFile, File, HTTPException, Query
+import os
+import pandas as pd
+from fastapi import APIRouter, UploadFile, File, HTTPException, Query, Body
 from fastapi.responses import FileResponse
 
 from modules.shared import log_service, app_logger
@@ -194,16 +196,19 @@ async def process_csv(
     """
     Starte Verarbeitung der hochgeladenen CSV Dateien.
     
-    Workflow:
-    1. Load CSV files
-    2. Validate structure & OrderID patterns
-    3. Check for critical accounts
-    4. Replace OrderIDs with JTL customer numbers
-    5. Generate report with statistics
+    Workflow (file-by-file wie Original):
+    1. Für jede Datei (inkl. ZIP-Extraktion):
+       - Metazeile lesen
+       - CSV laden (skiprows=1)
+       - Zusatzfelder initialisieren
+       - OrderIDs ersetzen
+       - Mit Metazeile speichern (optional "#_" Präfix)
+       - Datei archivieren
+    2. Excel-Report mit 4 Sheets erstellen
     
     Query Params:
     - job_id: Job ID from upload
-    - skip_critical: Skip accounts 0-20 (default: true)
+    - skip_critical: Skip files with accounts 0-20 (default: true)
     """
     
     # Hole Job Info
@@ -218,86 +223,135 @@ async def process_csv(
         _update_job(job_id, status="processing")
         log_service.log(job_id, "csv_process", "INFO", "→ Starte Verarbeitung...")
         
-        # 1. Load CSV files
-        combined_df = None
-        for file_path in job["files"]:
-            file_path = Path(file_path)
+        # ReportCollector für alle Dateien
+        from modules.csv_verarbeiter.services.report_service import ReportCollector
+        report_collector = ReportCollector()
+        
+        # ReplacementService initialisieren
+        from modules.csv_verarbeiter.services.replacement_service import ReplacementService
+        replacer = ReplacementService()
+        
+        verarbeitete_dateien = []
+        
+        # Sammle alle zu verarbeitenden CSV-Dateien
+        csv_dateien = []
+        for file_path_str in job["files"]:
+            file_path = Path(file_path_str)
             
             # Handle ZIP
             if file_path.suffix.lower() == '.zip':
-                csv_files = csv_io.extract_zip(file_path, job_id)
-                for csv_file in csv_files:
-                    df = csv_io.read_csv(csv_file, job_id)
-                    if df is not None:
-                        combined_df = df if combined_df is None else combined_df.append(df, ignore_index=True)
-            else:
-                df = csv_io.read_csv(file_path, job_id)
-                if df is not None:
-                    combined_df = df if combined_df is None else combined_df.append(df, ignore_index=True)
+                log_service.log(job_id, "csv_process", "INFO", f"📦 Extrahiere ZIP: {file_path.name}")
+                extracted = csv_io.extract_zip(file_path)
+                csv_dateien.extend([f for f in extracted if f.suffix.lower() == '.csv'])
+            elif file_path.suffix.lower() == '.csv':
+                csv_dateien.append(file_path)
         
-        if combined_df is None or combined_df.empty:
+        if not csv_dateien:
             raise ValueError("No valid CSV data loaded")
         
-        # 2. Validate structure
-        valid, missing = validator.validate_csv_structure(combined_df, job_id)
-        if not valid:
-            raise ValueError(f"Missing columns: {', '.join(missing)}")
+        log_service.log(job_id, "csv_process", "INFO", f"📄 {len(csv_dateien)} CSV-Dateien gefunden")
         
-        # 3. Validate data
-        validation_result = validator.validate_dataframe(combined_df, job_id)
-        if not validation_result['success'] and validation_result['errors']:
-            log_service.log(job_id, "csv_process", "ERROR", 
-                           f"❌ Validation errors: {len(validation_result['errors'])}")
+        # Verarbeite jede CSV-Datei einzeln
+        for csv_file in csv_dateien:
+            try:
+                dateiname = csv_file.name
+                log_service.log(job_id, "csv_process", "INFO", f"→ Verarbeite: {dateiname}")
+                
+                # 1. Metazeile lesen (DATEV-Header)
+                metazeile, meta_ok = csv_io.lese_metazeile(csv_file)
+                if not meta_ok:
+                    report_collector.log_fehler(dateiname, "Metazeile konnte nicht gelesen werden")
+                    continue
+                
+                # 2. CSV laden (ohne Metazeile)
+                df, load_ok = csv_io.lade_csv_daten(csv_file)
+                if not load_ok or df.empty:
+                    report_collector.log_fehler(dateiname, "CSV-Daten konnten nicht geladen werden")
+                    continue
+                
+                # 3. Zusatzfelder initialisieren
+                df = replacer.initialisiere_zusatzfelder(df)
+                
+                # 4. OrderIDs ersetzen
+                result = replacer.ersetze_amazon_order_ids(df, dateiname, skip_critical_accounts=False)
+                
+                # ReportCollector füllen
+                for aenderung in result.get('aenderungen', []):
+                    report_collector.log_aenderung(
+                        dateiname, 
+                        aenderung['zeile'],
+                        aenderung['alt'],
+                        aenderung['neu']
+                    )
+                
+                for nicht_gefunden in result.get('nicht_gefunden', []):
+                    report_collector.log_nicht_gefunden(
+                        dateiname,
+                        nicht_gefunden['zeile'],
+                        nicht_gefunden['order_id']
+                    )
+                
+                # 5. Kritisches Konto prüfen
+                hat_kritisches_konto = result['hat_kritisches_konto']
+                
+                if skip_critical and hat_kritisches_konto:
+                    log_service.log(job_id, "csv_process", "WARN", 
+                                  f"⚠️ Überspringe {dateiname} - Kritisches Gegenkonto")
+                    report_collector.log_fehler(dateiname, "Kritisches Gegenkonto (0-20) - übersprungen")
+                    continue
+                
+                # 6. Dateiname mit Präfix (falls kritisch)
+                ausgabe_dateiname = replacer.get_dateiname_mit_praefix(dateiname, hat_kritisches_konto)
+                ausgabe_pfad = csv_io.ausgang_dir / ausgabe_dateiname
+                
+                # 7. CSV mit Metazeile speichern
+                erfolg = csv_io.schreibe_csv_mit_metazeile(df, metazeile, ausgabe_pfad)
+                
+                if erfolg:
+                    verarbeitete_dateien.append(str(ausgabe_pfad))
+                    
+                    # 8. Ursprungsdatei archivieren
+                    csv_io.archiviere_datei(csv_file)
+                    
+                    # 9. Mini-Report Eintrag
+                    report_collector.log_report(
+                        dateiname=dateiname,
+                        ersetzt=result['ersetzt'],
+                        offen=result['offen'],
+                        hat_kritisches_konto=hat_kritisches_konto,
+                        pruefmarke_gesetzt=(result['ersetzt'] > 0)
+                    )
+                    
+                    log_service.log(job_id, "csv_process", "INFO", 
+                                  f"✓ {dateiname}: {result['ersetzt']} ersetzt, {result['offen']} offen")
+                else:
+                    report_collector.log_fehler(dateiname, "Fehler beim Speichern")
+                    
+            except Exception as e:
+                err_msg = f"Fehler bei {csv_file.name}: {str(e)}"
+                log_service.log(job_id, "csv_process", "ERROR", f"❌ {err_msg}")
+                report_collector.log_fehler(csv_file.name, str(e))
         
-        # 4. Replace OrderIDs
-        from modules.shared.database.repositories.jtl_common.jtl_repository import JtlRepository
-        jtl_repo = JtlRepository()
-        replacer = ReplacementService(jtl_repo)
-        
-        combined_df = replacer.replace_amazon_order_ids(
-            combined_df,
-            job_id,
-            skip_critical_accounts=skip_critical
-        )
-        replacement_stats = replacer.get_replacement_stats()
-        
-        # 5. Save processed CSV
-        output_file = f"processed_{job_id}.csv"
-        output_path = csv_io.write_csv(combined_df, output_file, job_id)
-        
-        if output_path is None:
-            raise ValueError("Failed to write output CSV")
-        
-        # 6. Generate report
-        report_path = reporter.generate_processing_report(
-            job_id,
-            validation_result,
-            replacement_stats,
-            input_file=", ".join([Path(f).name for f in job["files"]]),
-            output_file=output_file
-        )
-        
-        # Cleanup
-        csv_io.cleanup_temp_files(job_id)
+        # 10. Excel-Report erstellen
+        report_pfad = report_collector.speichere(csv_io.reports_dir)
         
         # Update job
         result = {
-            "output_csv": str(output_path),
-            "output_file": output_file,
-            "report": str(report_path) if report_path else None,
-            "validation": validation_result,
-            "replacement": replacement_stats
+            "processed_files": verarbeitete_dateien,
+            "report": str(report_pfad) if report_pfad else None,
+            "files_count": len(csv_dateien),
+            "successful_count": len(verarbeitete_dateien)
         }
         
         _update_job(job_id, status="completed", result=result)
         
-        log_service.log(job_id, "csv_process", "INFO", "✓ Verarbeitung abgeschlossen")
+        log_service.log(job_id, "csv_process", "INFO", 
+                       f"✓ Verarbeitung abgeschlossen: {len(verarbeitete_dateien)}/{len(csv_dateien)} Dateien")
         
         return {
             "job_id": job_id,
             "status": "completed",
             "result": result,
-            "download_csv": f"/api/csv/download/{job_id}?type=csv",
             "download_report": f"/api/csv/download/{job_id}?type=report"
         }
         
@@ -444,6 +498,308 @@ async def cleanup_old_reports(days: int = Query(30, description="Delete reports 
 
 
 # ═══════════════════════════════════════════════════════════════
+# REPORT DETAILS (wie Streamlit gui_utils.py)
+# ═══════════════════════════════════════════════════════════════
+
+@router.get("/report/latest")
+async def get_latest_report():
+    """
+    Liefert den neuesten Excel-Report inkl. aller Sheets als JSON.
+    
+    Rückgabe:
+    {
+        "filename": "auswertung_YYYY-MM-DD_HHMM.xlsx",
+        "created_at": "...",
+        "sheets": {
+            "Mini-Report": [...],
+            "Änderungen": [...],
+            "Fehler": [...],
+            "Nicht gefunden": [...]
+        }
+    }
+    """
+    try:
+        reports = reporter.list_reports()
+        if not reports:
+            return {"filename": None, "created_at": None, "sheets": {}}
+        
+        latest = sorted(reports, key=lambda x: x.get("created_at", ""), reverse=True)[0]
+        report_path = Path(latest["path"])
+        
+        if not report_path.exists():
+            raise HTTPException(status_code=404, detail="Report file not found")
+        
+        sheets_df = pd.read_excel(report_path, sheet_name=None)
+        sheets = {}
+        
+        for name, df in sheets_df.items():
+            if df is None:
+                sheets[name] = []
+            else:
+                df_clean = df.where(pd.notnull(df), None)
+                sheets[name] = df_clean.to_dict(orient="records")
+        
+        return {
+            "filename": latest["filename"],
+            "created_at": latest["created_at"],
+            "sheets": sheets
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_service.log("SYSTEM", "report_latest", "ERROR", f"❌ {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ═══════════════════════════════════════════════════════════════
+# LOGS (wie Streamlit Letztes Logfile)
+# ═══════════════════════════════════════════════════════════════
+
+@router.get("/logs/latest")
+async def get_latest_log():
+    """
+    Liefert das zuletzt geänderte Logfile (Inhalt + Dateiname).
+    """
+    try:
+        project_root = Path(__file__).parent.parent.parent
+        log_dirs = [
+            project_root / "logs" / "app",
+            project_root / "logs"
+        ]
+        
+        log_files = []
+        for log_dir in log_dirs:
+            if log_dir.exists():
+                for file in log_dir.glob("*.log"):
+                    log_files.append(file)
+                for file in log_dir.glob("log_*.txt"):
+                    log_files.append(file)
+        
+        if not log_files:
+            return {"filename": None, "content": ""}
+        
+        latest = sorted(log_files, key=lambda x: x.stat().st_mtime, reverse=True)[0]
+        
+        with open(latest, "r", encoding="utf-8", errors="replace") as f:
+            content = f.read()
+        
+        # Begrenze Ausgabe, falls sehr groß
+        max_chars = 20000
+        if len(content) > max_chars:
+            content = content[-max_chars:]
+        
+        return {
+            "filename": latest.name,
+            "content": content
+        }
+        
+    except Exception as e:
+        log_service.log("SYSTEM", "logs_latest", "ERROR", f"❌ {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/logs/db")
+async def get_db_logs(prefix: str = Query("csv", description="Prefix fuer job_id oder job_type"),
+                      limit: int = Query(200, description="Maximale Anzahl Eintraege")):
+    """
+    Liefert Logs aus der Datenbank, gefiltert nach Prefix (job_id/job_type).
+    """
+    try:
+        logs = log_service.get_logs_by_prefix(prefix, limit=limit, offset=0)
+        return {
+            "prefix": prefix,
+            "total": len(logs),
+            "logs": logs
+        }
+    except Exception as e:
+        log_service.log("SYSTEM", "logs_db", "ERROR", f"❌ {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ═══════════════════════════════════════════════════════════════
+# CLEANUP ALL (wie Streamlit leere_verzeichnisse)
+# ═══════════════════════════════════════════════════════════════
+
+@router.post("/cleanup-all")
+async def cleanup_all_dirs():
+    """
+    Leert alle relevanten Verzeichnisse (eingang, ausgang, reports, tmp, archive).
+    """
+    def _clear_dir(dir_path: Path, errors: List[Dict]) -> int:
+        deleted = 0
+        if not dir_path.exists():
+            return deleted
+        for entry in dir_path.iterdir():
+            if entry.is_file():
+                try:
+                    entry.unlink()
+                    deleted += 1
+                except Exception as e:
+                    errors.append({"path": str(entry), "error": str(e)})
+        return deleted
+    
+    try:
+        errors = []
+        deleted = 0
+        
+        dirs_to_clean = [
+            csv_io.eingang_dir,
+            csv_io.ausgang_dir,
+            csv_io.reports_dir,
+            csv_io.archive_dir,
+            csv_io.data_dir / "tmp",
+            csv_io.data_dir / "ausgang_archive"
+        ]
+        
+        for d in dirs_to_clean:
+            deleted += _clear_dir(d, errors)
+        
+        return {
+            "deleted": deleted,
+            "errors": errors
+        }
+    
+    except Exception as e:
+        log_service.log("SYSTEM", "cleanup_all", "ERROR", f"❌ {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ═══════════════════════════════════════════════════════════════
+# EXPORT WORKFLOW ENDPOINTS (wie Original Streamlit)
+# ═══════════════════════════════════════════════════════════════
+
+@router.get("/list-processed-files")
+async def list_processed_files():
+    """
+    Liste alle verarbeiteten CSV-Dateien im Ausgangsordner.
+    
+    Diese Dateien können für Export-ZIP ausgewählt werden.
+    """
+    try:
+        csv_files = sorted([
+            f.name for f in csv_io.ausgang_dir.glob("*.csv")
+        ])
+        
+        return {
+            "total": len(csv_files),
+            "files": csv_files
+        }
+        
+    except Exception as e:
+        log_service.log("SYSTEM", "list_processed", "ERROR", f"❌ {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/create-export-zip")
+async def create_export_zip(
+    csv_files: List[str] = Body(..., description="Liste von CSV-Dateinamen"),
+    zip_name: str = Body(..., description="Name für ZIP (ohne .zip)"),
+    include_report: bool = Body(False, description="Report beilegen?"),
+    include_log: bool = Body(False, description="Logfile beilegen?")
+):
+    """
+    Erstellt Export-ZIP mit ausgewählten CSV-Dateien und optionalen Beilagen.
+    
+    Workflow wie Original Streamlit:
+    1. Erstelle ZIP mit CSV-Dateien aus ausgang/
+    2. Optional: Füge letzten Report hinzu
+    3. Optional: Füge Logfile hinzu
+    4. Verschiebe CSV-Dateien nach ausgang_archive/
+    5. ZIP bleibt in ausgang/ für Download
+    
+    Body:
+    ```json
+    {
+        "csv_files": ["datei1.csv", "datei2.csv"],
+        "zip_name": "export_DE_2024",
+        "include_report": true,
+        "include_log": true
+    }
+    ```
+    """
+    try:
+        if not csv_files:
+            raise HTTPException(status_code=400, detail="Keine CSV-Dateien ausgewählt")
+        
+        if not zip_name.strip():
+            raise HTTPException(status_code=400, detail="ZIP-Name fehlt")
+        
+        log_service.log("SYSTEM", "create_export_zip", "INFO", 
+                       f"→ Erstelle Export-ZIP: {zip_name} mit {len(csv_files)} Dateien")
+        
+        # Finde letzten Report
+        latest_report = None
+        if include_report:
+            reports = reporter.list_reports()
+            if reports:
+                # Sortiere nach Datum (neuestes zuerst)
+                reports_sorted = sorted(reports, key=lambda x: x.get('created', ''), reverse=True)
+                latest_report = csv_io.reports_dir / reports_sorted[0]['filename']
+        
+        # ZIP erstellen
+        success, result = csv_io.create_export_zip(
+            csv_files=csv_files,
+            zip_name=zip_name,
+            include_report=include_report,
+            include_log=include_log,
+            latest_report_path=latest_report
+        )
+        
+        if success:
+            log_service.log("SYSTEM", "create_export_zip", "INFO", 
+                           f"✓ Export-ZIP erstellt: {result}")
+            
+            return {
+                "success": True,
+                "zip_filename": result,
+                "download_url": f"/api/csv/download-zip/{result}",
+                "archived_files": csv_files
+            }
+        else:
+            raise HTTPException(status_code=500, detail=result)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        err_msg = str(e)
+        log_service.log("SYSTEM", "create_export_zip", "ERROR", f"❌ {err_msg}")
+        raise HTTPException(status_code=500, detail=err_msg)
+
+
+@router.get("/download-zip/{filename}")
+async def download_zip(filename: str):
+    """
+    Download Export-ZIP-Datei aus Ausgangsordner.
+    
+    Path Param:
+    - filename: Name der ZIP-Datei (inkl. .zip)
+    """
+    try:
+        zip_path = csv_io.ausgang_dir / filename
+        
+        if not zip_path.exists():
+            raise HTTPException(status_code=404, detail=f"ZIP-Datei nicht gefunden: {filename}")
+        
+        if not filename.endswith('.zip'):
+            raise HTTPException(status_code=400, detail="Nur ZIP-Dateien können heruntergeladen werden")
+        
+        log_service.log("SYSTEM", "download_zip", "INFO", f"→ Download: {filename}")
+        
+        return FileResponse(
+            path=zip_path,
+            filename=filename,
+            media_type="application/zip"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_service.log("SYSTEM", "download_zip", "ERROR", f"❌ {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ═══════════════════════════════════════════════════════════════
 # FRONTEND ENDPOINTS
 # ═══════════════════════════════════════════════════════════════
 
@@ -451,7 +807,7 @@ async def cleanup_old_reports(days: int = Query(30, description="Delete reports 
 async def serve_frontend_index():
     """Serve frontend HTML interface"""
     frontend_dir = Path(__file__).parent / "frontend"
-    index_file = frontend_dir / "index.html"
+    index_file = frontend_dir / "csv.html"
     
     if not index_file.exists():
         raise HTTPException(status_code=404, detail="Frontend not found")
@@ -461,19 +817,7 @@ async def serve_frontend_index():
         media_type="text/html"
     )
 
-@router.get("/style.css", tags=["Frontend"])
-async def serve_frontend_css():
-    """Serve frontend CSS"""
-    frontend_dir = Path(__file__).parent / "frontend"
-    css_file = frontend_dir / "style.css"
-    
-    if not css_file.exists():
-        raise HTTPException(status_code=404, detail="CSS not found")
-    
-    return FileResponse(
-        css_file,
-        media_type="text/css"
-    )
+# CSS and JS served via /static/ routes in main.py
 
 @router.get("/script.js", tags=["Frontend"])
 async def serve_frontend_js():

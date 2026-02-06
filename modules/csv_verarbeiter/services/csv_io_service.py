@@ -31,9 +31,18 @@ class CsvIoService:
         self.ausgang_dir = data_dir / "ausgang"
         self.reports_dir = data_dir / "reports"
         self.archive_dir = data_dir / "archive"
+        self.tmp_dir = data_dir / "tmp"
+        self.ausgang_archive_dir = data_dir / "ausgang_archive"
         
         # Erstelle Verzeichnisse falls nicht vorhanden
-        for directory in [self.eingang_dir, self.ausgang_dir, self.reports_dir, self.archive_dir]:
+        for directory in [
+            self.eingang_dir,
+            self.ausgang_dir,
+            self.reports_dir,
+            self.archive_dir,
+            self.tmp_dir,
+            self.ausgang_archive_dir
+        ]:
             directory.mkdir(parents=True, exist_ok=True)
     
     def detect_encoding(self, file_path: Path) -> str:
@@ -267,3 +276,107 @@ class CsvIoService:
             log_service.log("csv_io", "create_zip", "ERROR", 
                           f"❌ Fehler beim Erstellen von {zip_path.name}: {str(e)}")
             return False
+    
+    def create_export_zip(
+        self, 
+        csv_files: List[str], 
+        zip_name: str,
+        include_report: bool = False,
+        include_log: bool = False,
+        latest_report_path: Optional[Path] = None
+    ) -> Tuple[bool, str]:
+        """
+        Erstellt Export-ZIP mit ausgewählten CSV-Dateien und optionalen Beilagen.
+        
+        Workflow wie Original:
+        1. Erstelle ZIP mit CSV-Dateien aus ausgang/
+        2. Optional: Füge Report (Excel) hinzu
+        3. Optional: Füge Logfile hinzu
+        4. Verschiebe CSV-Dateien nach ausgang/archive/
+        5. ZIP bleibt in ausgang/ für Download
+        
+        Args:
+            csv_files: Liste von Dateinamen (nur Namen, keine Pfade)
+            zip_name: Name für ZIP (ohne .zip)
+            include_report: Report beilegen?
+            include_log: Logfile beilegen?
+            latest_report_path: Pfad zum aktuellen Report
+            
+        Returns:
+            Tuple[success, zip_filename oder error_message]
+        """
+        try:
+            # Prüfe Archive-Verzeichnis
+            ausgang_archiv = self.data_dir / "ausgang_archive"
+            ausgang_archiv.mkdir(exist_ok=True)
+            
+            # ZIP-Pfad
+            zip_filename = f"{zip_name.strip()}.zip"
+            zip_path = self.ausgang_dir / zip_filename
+            
+            # Zusatzdateien sammeln
+            zusatz_pfade = []
+            
+            if include_report and latest_report_path and latest_report_path.exists():
+                zusatz_pfade.append(latest_report_path)
+                log_service.log("csv_io", "create_export_zip", "INFO", 
+                              f"📑 Report hinzugefügt: {latest_report_path.name}")
+            
+            if include_log:
+                # Finde letztes Logfile aus logs/app/ Verzeichnis
+                # Go up: modules/csv_verarbeiter/services/ -> modules/csv_verarbeiter/ -> modules/ -> root/
+                project_root = Path(__file__).parent.parent.parent.parent
+                log_dir = project_root / "logs" / "app"
+                
+                if log_dir.exists():
+                    # Prüfe alle .log Dateien, sortiere nach Änderungsdatum
+                    log_files = sorted(
+                        [f for f in log_dir.glob("*.log")],
+                        key=lambda x: x.stat().st_mtime,
+                        reverse=True
+                    )
+                    if log_files:
+                        zusatz_pfade.append(log_files[0])
+                        log_service.log("csv_io", "create_export_zip", "INFO", 
+                                      f"📝 Logfile hinzugefügt: {log_files[0].name}")
+            
+            # ZIP erstellen
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                # CSV-Dateien hinzufügen
+                for csv_name in csv_files:
+                    csv_path = self.ausgang_dir / csv_name
+                    if csv_path.exists():
+                        zipf.write(csv_path, arcname=csv_name)
+                        log_service.log("csv_io", "create_export_zip", "INFO", 
+                                      f"➕ CSV hinzugefügt: {csv_name}")
+                    else:
+                        log_service.log("csv_io", "create_export_zip", "WARN", 
+                                      f"⚠️ CSV nicht gefunden: {csv_name}")
+                
+                # Zusatzdateien hinzufügen
+                for zusatz in zusatz_pfade:
+                    if zusatz.exists():
+                        zipf.write(zusatz, arcname=zusatz.name)
+            
+            log_service.log("csv_io", "create_export_zip", "INFO", 
+                          f"📦 ZIP erstellt: {zip_filename}")
+            
+            # CSV-Dateien archivieren (verschieben)
+            for csv_name in csv_files:
+                csv_path = self.ausgang_dir / csv_name
+                if csv_path.exists():
+                    try:
+                        archiv_pfad = ausgang_archiv / csv_name
+                        shutil.move(str(csv_path), str(archiv_pfad))
+                        log_service.log("csv_io", "create_export_zip", "INFO", 
+                                      f"📁 Archiviert: {csv_name}")
+                    except Exception as e:
+                        log_service.log("csv_io", "create_export_zip", "WARN", 
+                                      f"⚠️ Konnte {csv_name} nicht archivieren: {str(e)}")
+            
+            return True, zip_filename
+            
+        except Exception as e:
+            err_msg = f"Fehler beim Erstellen des Export-ZIP: {str(e)}"
+            log_service.log("csv_io", "create_export_zip", "ERROR", f"❌ {err_msg}")
+            return False, err_msg

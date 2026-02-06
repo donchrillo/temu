@@ -57,6 +57,21 @@ Die Migration des CSV-Verarbeiters von einer Standalone-Anwendung in das TOCI To
 
 ## 5. Abgeschlossene Tasks (seit Monorepo-Migration)
 
+*   **Frontend CSS Consolidation (6. Feb 2026):**
+    *   master.css erstellt mit 700 Zeilen gemeinsamer Styles
+    *   1,537 Zeilen Duplikate aus allen Modul-CSS-Dateien eliminiert (44% Reduktion)
+    *   Alle HTML-Dateien aktualisiert für master.css Integration
+    *   Dokumentiert in `docs/FRONTEND/architecture.md` und `docs/CSS_CONSOLIDATION_COMPLETE.md`
+*   **Central Navigation System (6. Feb 2026):**
+    *   Zentrale Navigation-Komponente implementiert (frontend/components/)
+    *   Burger-Menü auf allen Geräten (Desktop + Mobile)
+    *   Progress Helper für animierte Loading-Anzeigen
+    *   Dokumentiert in `docs/FRONTEND/architecture.md` und `docs/NAVIGATION_SYSTEM.md`
+*   **CSV UI Modernisierung (6. Feb 2026):**
+    *   Card-basierte Struktur implementiert (einheitlich mit PDF/TEMU)
+    *   Button-System vereinheitlicht (alle Hover-Effekte, disabled States)
+    *   Dateinamenskonvention: csv.html, csv.css, csv.script.js
+    *   Einheitliches Look & Feel über alle Module
 *   **Frontend Cache Fix:** Behebung eines Multi-Layer-Caching-Problems für PDF Reader und TEMU Frontend. Details in `docs/FIXES/OVERVIEW.md`.
 *   **PDF Reader Fixes:** Behebung von Dateinamen-Mapping, Import-Fehlern und Dezimaltrennzeichen-Problemen für Werbungsrechnungen. Details in `docs/FIXES/OVERVIEW.md`.
 *   **Transaction Isolation Bug Fix:** Behebung eines kritischen Datenintegritäts-Bugs durch Anpassung der SQL-Transaktionsgrenzen. Details in `docs/FIXES/OVERVIEW.md`.

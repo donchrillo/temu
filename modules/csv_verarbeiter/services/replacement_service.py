@@ -8,6 +8,7 @@ WICHTIG: Bei erfolgreicher Ersetzung werden Zusatzfelder gesetzt:
 - "Zusatzinformation- Inhalt 1" = "AmazonOrderID-Check durchgeführt am DATUM"
 """
 
+import re
 import pandas as pd
 from datetime import date
 from typing import Dict, List, Tuple
@@ -15,6 +16,45 @@ from functools import lru_cache
 
 from modules.shared import log_service, app_logger
 from modules.shared.database.repositories.jtl_common.jtl_repository import JtlRepository
+
+
+# ═══════════════════════════════════════════════════════════════
+# VALIDATION FUNCTIONS (aus Original verarbeitung_validation.py)
+# ═══════════════════════════════════════════════════════════════
+
+def ist_amazon_bestellnummer(wert: str) -> bool:
+    """
+    Überprüft, ob ein String eine gültige Amazon-Bestellnummer ist.
+    
+    Format: 306-1234567-8910111 (3 Ziffern - 7 Ziffern - 7 Ziffern)
+    
+    Args:
+        wert: Zu prüfender String
+        
+    Returns:
+        True wenn gültige Amazon OrderID
+    """
+    if isinstance(wert, str):
+        muster = r"\d{3}-\d{7}-\d{7}$"
+        return re.match(muster, wert.strip()) is not None
+    return False
+
+
+def ist_kritisches_gegenkonto(wert) -> bool:
+    """
+    Bestimmt, ob ein Gegenkonto "kritisch" ist (Bereich 0-20).
+    
+    Args:
+        wert: Kontowert (int oder str)
+        
+    Returns:
+        True wenn Konto zwischen 0 und 20
+    """
+    try:
+        val = int(wert)
+        return 0 <= val <= 20
+    except (ValueError, TypeError):
+        return False
 
 
 class ReplacementService:
@@ -79,26 +119,28 @@ class ReplacementService:
         Args:
             df: DataFrame mit CSV-Daten
             dateiname: Name der Datei (für Logging)
-            skip_critical_accounts: Konten 0-20 überspringen
+            skip_critical_accounts: Konten 0-20 überspringen (aktuell nicht verwendet in Logik)
             
         Returns:
             Dict mit Statistiken:
             {
-                "ersetzt": int,           # Erfolgreich ersetzt
-                "nicht_gefunden": int,     # OrderID nicht in DB
-                "gesamt": int,             # Gesamt verarbeitet
-                "aenderungen": List[Dict], # Details der Änderungen
-                "nicht_gefunden_liste": List[Dict]  # Details nicht gefundener IDs
+                "ersetzt": int,                     # Erfolgreich ersetzt
+                "offen": int,                       # Nicht gefunden (=nicht_gefunden)
+                "gesamt": int,                      # Gesamt verarbeitet
+                "hat_kritisches_konto": bool,       # Mindestens ein kritisches Konto?
+                "aenderungen": List[Dict],          # Details der Änderungen (alt, neu, zeile)
+                "nicht_gefunden": List[Dict]        # Details nicht gefundener IDs
             }
         """
         heute = date.today().isoformat()
         
         result = {
             "ersetzt": 0,
-            "nicht_gefunden": 0,
+            "offen": 0,  # = nicht_gefunden
             "gesamt": 0,
+            "hat_kritisches_konto": False,
             "aenderungen": [],
-            "nicht_gefunden_liste": []
+            "nicht_gefunden": []  # Liste der nicht gefundenen
         }
         
         # Sicherstellen, dass Zusatzfelder existieren
@@ -110,16 +152,15 @@ class ReplacementService:
                           f"❌ Spalte 'Belegfeld 1' nicht gefunden in {dateiname}")
             return result
         
-       # Import der Validierung
-        from .validation_service import ValidationService
-        validator = ValidationService()
+        # Prüfe kritische Gegenkonten
+        result["hat_kritisches_konto"] = self.pruefe_kritische_gegenkonten(df)
         
         # Iteriere über alle Zeilen mit Amazon OrderID
         for idx, row in df.iterrows():
             beleg = str(row["Belegfeld 1"]).strip()
             
             # Prüfe ob es eine Amazon OrderID ist
-            if not validator.ist_amazon_bestellnummer(beleg):
+            if not ist_amazon_bestellnummer(beleg):
                 continue
             
             result["gesamt"] += 1
@@ -136,10 +177,9 @@ class ReplacementService:
                     
                     result["ersetzt"] += 1
                     result["aenderungen"].append({
-                        "datei": dateiname,
                         "zeile": idx + 3,  # +3 wegen Metazeile + Header + 0-basiert
-                        "alte_order_id": beleg,
-                        "neue_kundennummer": kundennr
+                        "alt": beleg,
+                        "neu": kundennr
                     })
                     
                     log_service.log("replacement", "ersetze_amazon_order_ids", "INFO", 
@@ -147,9 +187,8 @@ class ReplacementService:
                 
                 else:
                     # ❌ Nicht gefunden
-                    result["nicht_gefunden"] += 1
-                    result["nicht_gefunden_liste"].append({
-                        "datei": dateiname,
+                    result["offen"] += 1
+                    result["nicht_gefunden"].append({
                         "zeile": idx + 3,
                         "order_id": beleg
                     })
@@ -164,10 +203,32 @@ class ReplacementService:
         # Zusammenfassung
         log_service.log("replacement", "ersetze_amazon_order_ids", "INFO", 
                       f"📊 {dateiname}: {result['ersetzt']} ersetzt, " +
-                      f"{result['nicht_gefunden']} nicht gefunden, " +
-                      f"{result['gesamt']} gesamt")
+                      f"{result['offen']} nicht gefunden, " +
+                      f"{result['gesamt']} gesamt, " +
+                      f"kritisches Konto: {result['hat_kritisches_konto']}")
         
         return result
+    
+    def pruefe_kritische_gegenkonten(self, df: pd.DataFrame) -> bool:
+        """
+        Prüft ob DataFrame kritische Gegenkonten (0-20) enthält.
+        
+        Args:
+            df: DataFrame mit CSV-Daten
+            
+        Returns:
+            True wenn mindestens ein kritisches Gegenkonto vorhanden
+        """
+        if "Gegenkonto (ohne BU-Schlüssel)" not in df.columns:
+            return False
+        
+        # Prüfe jede Zeile
+        for idx, row in df.iterrows():
+            gegenkonto = row.get("Gegenkonto (ohne BU-Schlüssel)", "")
+            if ist_kritisches_gegenkonto(gegenkonto):
+                return True
+        
+        return False
     
     def get_dateiname_mit_praefix(self, dateiname: str, hat_kritisches_konto: bool) -> str:
         """

@@ -4,7 +4,6 @@ TEMU Jobs für APScheduler
 Registriert TEMU-spezifische Background-Jobs:
 - sync_orders: 5-Step Order Workflow
 - sync_inventory: 4-Step Inventory Workflow
-- fetch_invoices: Invoice Download (future)
 """
 
 from workers.job_models import JobType
@@ -41,15 +40,6 @@ def register_jobs(scheduler_service):
     )
     job_ids.append(job_id)
 
-    # Job 3: Invoice Fetch (future implementation)
-    job_id = scheduler_service.add_job(
-        job_type=JobType.FETCH_INVOICES,
-        interval_minutes=1440,  # Default: täglich
-        description="TEMU Invoice Download (future implementation)",
-        enabled=False  # Disabled bis implementiert
-    )
-    job_ids.append(job_id)
-
     return job_ids
 
 
@@ -82,16 +72,6 @@ def get_job_info():
                 "2. Fetch stock levels from JTL database",
                 "3. Compare and mark deltas in temu_inventory",
                 "4. Push updates to TEMU API"
-            ]
-        },
-        JobType.FETCH_INVOICES: {
-            "name": "Invoice Fetch",
-            "description": "Download invoices from TEMU (future implementation)",
-            "default_interval": 1440,
-            "steps": [
-                "1. Fetch invoice list from TEMU API",
-                "2. Download PDFs",
-                "3. Store in database"
             ]
         }
     }

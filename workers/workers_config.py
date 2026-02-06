@@ -62,12 +62,6 @@ class WorkersConfig:
                 'interval_minutes': 5,
                 'enabled': True,
                 'description': 'Aktualisiere Bestandszahlen'
-            },
-            {
-                'job_type': 'fetch_invoices',
-                'interval_minutes': 60,
-                'enabled': True,
-                'description': 'Hole Rechnungen von TEMU'
             }
         ]
     

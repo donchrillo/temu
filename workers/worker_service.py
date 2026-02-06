@@ -126,9 +126,6 @@ class SchedulerService:
                     verbose=verbose
                 )
                 log_service.log(job_id, job_type.value, "INFO", f"Inventory Sync abgeschlossen (mode={mode})")
-
-            elif job_type == JobType.FETCH_INVOICES:
-                log_service.log(job_id, job_type.value, "INFO", "Rechnungs-Fetch noch nicht implementiert")
             
             # Erfolg
             duration = (datetime.now() - start_time).total_seconds()

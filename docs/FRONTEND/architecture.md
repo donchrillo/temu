@@ -548,3 +548,144 @@ Einfach neue Optionen in `filterOptions` Array (frontend/app.js) hinzufügen:
 ---
 
 **Summe:** PWA funktioniert über HTTPS mit WebSocket, Icons, und ist auf Android/iOS installierbar. Service Worker für Offline-Support. Debugging-Tools für schnelle Fehlersuche.
+
+---
+
+## 14. CSS Architecture & Consolidation
+
+### Übersicht
+Das Projekt verwendet ein **zentralisiertes CSS-System** mit `master.css` für gemeinsame Styles und modulspezifischen CSS-Dateien für individuelle Komponenten.
+
+### Master CSS (`frontend/master.css`)
+**700 Zeilen gemeinsame Styles** - eliminiert 1,537 Zeilen Duplikate
+
+**Enthält:**
+- **CSS Variables** (:root) - Farben, Spacing, Radius, Fonts
+- **Base Reset** - *, body, container, header
+- **Shared Components** - Cards, Buttons, Tabs, Upload Zones  
+- **Burger Menu** - Komplette mobile Navigation
+- **Toast Notifications** - Erfolgs-/Fehlermeldungen
+- **Progress Overlay** - Loading-Anzeige mit Animationen
+- **Common Animations** - keyframes (slideIn, spin, pulse)
+
+### Module CSS Files
+Jedes Modul hat nur noch **modul-spezifische** Styles:
+
+- **dashboard.css** (155 Zeilen) - Module grid, module cards, status overview
+- **pdf.css** (161 Zeilen) - File lists, log display, cleanup section
+- **temu.css** (272 Zeilen) - Status grid, trigger grid, jobs list, modal dialogs
+- **csv.css** (545 Zeilen) - Metrics, reports, export section, CSV-specific components
+
+### Integration
+Alle HTML-Dateien laden master.css **VOR** ihrem modul-spezifischen CSS:
+
+```html
+<link rel="stylesheet" href="/static/master.css?v=20260206b">
+<link rel="stylesheet" href="/static/module.css?v=20260206">
+```
+
+### Code-Reduktion
+- **Vorher:** ~3,500 Zeilen CSS (über alle Module)
+- **Nachher:** 700 (master.css) + ~1,163 (Module) = 1,863 Zeilen
+- **Gespart:** 1,537 Zeilen eliminierter Duplikate (44% Reduktion)
+
+### Wartbarkeit
+✅ **Zentral:** Änderungen an Buttons/Navigation nur an 1 Stelle  
+✅ **Konsistent:** Gleiches Look & Feel über alle Module  
+✅ **Skalierbar:** Neue Module erben automatisch alle Basis-Styles  
+✅ **Performant:** Weniger CSS-Downloads, besseres Caching
+
+---
+
+## 15. Central Navigation System
+
+### Übersicht
+Alle Seiten nutzen eine **zentrale Navigation-Komponente** mit Burger-Menü, die dynamisch geladen wird.
+
+### Komponenten
+
+#### 1. Navigation HTML
+**Datei:** `frontend/components/navigation.html`
+- Zentrale Definition aller Menüpunkte
+- Burger-Menü mit Links zu allen Modulen
+- Einmalige Pflege für alle Seiten
+
+#### 2. Navigation Loader
+**Datei:** `frontend/components/nav-loader.js`
+- Lädt Navigation dynamisch via Fetch
+- **Funktionen:**
+  - `loadNavigation(pageKey, title)` - Navigation laden & initialisieren
+  - `toggleMenu()` - Menü öffnen/schließen
+  - `setActiveMenuItem(pageKey)` - Aktives Menü markieren
+  - `setNavTitle(title)` - Header-Titel setzen
+
+#### 3. Progress Helper
+**Datei:** `frontend/components/progress-helper.js`
+- Animierte Progress-Anzeige für lange Operationen
+- **Funktionen:**
+  - `showProgress(text, percent)` - Progress-Overlay anzeigen
+  - `updateProgress(percent)` - Prozent aktualisieren (0-100)
+  - `updateProgressText(text)` - Text aktualisieren
+  - `hideProgress()` - Overlay verstecken
+
+### Integration in neue Seiten
+
+```html
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Meine Seite</title>
+    <link rel="stylesheet" href="/static/master.css">
+    <link rel="stylesheet" href="/static/meine-seite.css">
+</head>
+<body>
+    <!-- Navigation wird automatisch geladen -->
+    <script src="/components/nav-loader.js"></script>
+    <script>loadNavigation('page-key', '🎯 Titel der Seite');</script>
+
+    <div class="container">
+        <!-- Dein Content -->
+    </div>
+
+    <script src="/components/progress-helper.js"></script>
+    <script src="/static/meine-seite.js"></script>
+</body>
+</html>
+```
+
+### Neue Seite zum Menü hinzufügen
+
+1. **Navigation HTML bearbeiten** (`frontend/components/navigation.html`):
+   ```html
+   <a href="/neue-seite" class="menu-item" data-page="neue-seite">
+       🎯 Neue Seite
+   </a>
+   ```
+
+2. **Route in main.py:**
+   ```python
+   @app.get("/neue-seite")
+   async def neue_seite_ui():
+       html = Path(__file__).parent / "modules" / "neue_seite" / "frontend" / "index.html"
+       return FileResponse(str(html))
+   ```
+
+3. **HTML Integration:**
+   ```html
+   <script>loadNavigation('neue-seite', '🎯 Neue Seite');</script>
+   ```
+
+### Vorteile
+
+✅ **Zentral:** Ein Menü für alle Seiten  
+✅ **Einfach:** Neue Seiten in 1 Datei hinzufügen  
+✅ **Konsistent:** Gleiches Look & Feel überall  
+✅ **Wartbar:** Änderungen nur an einer Stelle  
+✅ **Modern:** Burger-Menü auf allen Geräten  
+✅ **Animiert:** Progress-Overlay für bessere UX
+
+---
+
+**Zuletzt aktualisiert:** 6. Februar 2026  
+**Status:** ✅ Voll funktionsfähig (PWA, WebSocket, HTTPS, CSS Consolidation, Central Navigation)

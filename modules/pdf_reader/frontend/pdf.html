@@ -4,26 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PDF Processor</title>
-    <link rel="stylesheet" href="/static/pdf.css?v=20260203">
+    <link rel="stylesheet" href="/static/master.css?v=20260206b">
+    <link rel="stylesheet" href="/static/pdf.css?v=20260206">
 </head>
 <body>
-    <!-- Burger Menu Navigation -->
-    <nav class="mobile-nav">
-        <div class="mobile-nav-header">
-            <h2>📄 PDF Processor</h2>
-            <button class="burger-toggle" onclick="toggleMenu()">
-                <span></span>
-                <span></span>
-                <span></span>
-            </button>
-        </div>
-        <div class="mobile-menu" id="mobile-menu">
-            <a href="/" class="menu-item">🏠 Dashboard</a>
-            <a href="/temu" class="menu-item">🚀 TEMU Integration</a>
-            <a href="/pdf" class="menu-item active">📁 PDF Processor</a>
-            <a href="/docs" class="menu-item">📚 API Docs</a>
-        </div>
-    </nav>
+    <!-- Navigation wird dynamisch geladen -->
+    <script src="/components/nav-loader.js"></script>
+    <script>loadNavigation('pdf', '📄 PDF Processor');</script>
 
     <div class="container">
         <!-- Header -->

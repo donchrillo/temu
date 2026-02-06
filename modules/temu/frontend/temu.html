@@ -4,26 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TEMU Integration</title>
-    <link rel="stylesheet" href="/static/temu.css?v=20260203">
+    <link rel="stylesheet" href="/static/master.css?v=20260206b">
+    <link rel="stylesheet" href="/static/temu.css?v=20260206">
 </head>
 <body>
-    <!-- Burger Menu Navigation -->
-    <nav class="mobile-nav">
-        <div class="mobile-nav-header">
-            <h2>📦 TEMU Integration</h2>
-            <button class="burger-toggle" onclick="toggleMenu()">
-                <span></span>
-                <span></span>
-                <span></span>
-            </button>
-        </div>
-        <div class="mobile-menu" id="mobile-menu">
-            <a href="/" class="menu-item">🏠 Dashboard</a>
-            <a href="/temu" class="menu-item active">🚀 TEMU Integration</a>
-            <a href="/pdf" class="menu-item">📁 PDF Processor</a>
-            <a href="/docs" class="menu-item">📚 API Docs</a>
-        </div>
-    </nav>
+    <!-- Navigation wird dynamisch geladen -->
+    <script src="/components/nav-loader.js"></script>
+    <script>loadNavigation('temu', '📦 TEMU Integration');</script>
 
     <div class="container">
         <!-- Header -->
@@ -128,27 +115,6 @@
         </div>
     </div>
 
-    <script>
-        // Burger Menu Toggle
-        function toggleMenu() {
-            const menu = document.getElementById('mobile-menu');
-            const toggle = document.querySelector('.burger-toggle');
-            menu.classList.toggle('active');
-            toggle.classList.toggle('active');
-        }
-
-        // Close menu when clicking outside
-        document.addEventListener('click', (e) => {
-            const nav = document.querySelector('.mobile-nav');
-            const menu = document.getElementById('mobile-menu');
-            const toggle = document.querySelector('.burger-toggle');
-
-            if (!nav.contains(e.target) && menu && menu.classList.contains('active')) {
-                menu.classList.remove('active');
-                toggle.classList.remove('active');
-            }
-        });
-    </script>
     <script src="/static/temu.js?v=20260203"></script>
 </body>
 </html>

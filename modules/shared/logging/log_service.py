@@ -25,16 +25,15 @@ class LogService:
     def log(self, job_id: str, job_type: str, level: str, message: str,
             status: str = None, duration: float = None, error_text: str = None):
         """Speichere Log-Eintrag in DB und Fehler-Datei"""
+
+        if not job_id or not job_type:
+            raise ValueError("job_id und job_type muessen gesetzt sein")
         
         # In Memory Buffer
         self.log_buffer.append(message)
         
-        # In SQL Server
-        # TEMU-Jobs + SYSTEM_ERROR → DB-Logging
-        is_temu_job = job_type and any(t in job_type.lower() for t in ["order", "inventory", "stock", "tracking", "temu", "pdf"])
-        is_system_error = job_id == "SYSTEM_ERROR"
-        
-        if is_temu_job or is_system_error:
+        # In SQL Server: immer loggen (Integration in zentrale Umgebung)
+        try:
             self.repo.insert_log(
                 job_id=job_id,
                 job_type=job_type,
@@ -44,6 +43,9 @@ class LogService:
                 duration_seconds=duration,
                 error_text=error_text
             )
+        except Exception as e:
+            # Falls DB-Logging fehlschlaegt, nur in app.log schreiben
+            app_logger.error(f"DB-Logging fehlgeschlagen: {str(e)} | {message}")
         
         # ERROR-Level immer in zentrale app.log schreiben
         if level == "ERROR":
@@ -74,6 +76,10 @@ class LogService:
                  limit: int = 100, offset: int = 0) -> List[Dict]:
         """Hole Logs mit Filtern"""
         return self.repo.get_logs(job_id, level, limit, offset)
+
+    def get_logs_by_prefix(self, prefix: str, limit: int = 200, offset: int = 0) -> List[Dict]:
+        """Hole Logs nach Prefix in job_id oder job_type."""
+        return self.repo.get_logs_by_prefix(prefix, limit, offset)
     
     def cleanup_old_logs(self, days: int = 30) -> int:
         """Lösche alte Logs"""
