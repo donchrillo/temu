@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSV Verarbeiter - Amazon DATEV Export Processor</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="header-content">
+                <h1>📊 CSV Verarbeiter</h1>
+                <p class="subtitle">Amazon DATEV Export Processing System</p>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <!-- Upload Section -->
+            <section class="section upload-section">
+                <h2>📁 Step 1: Upload DATEV CSV/ZIP</h2>
+                
+                <div class="upload-area" id="uploadArea">
+                    <svg class="upload-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                    </svg>
+                    <p class="drag-text">Draggen Sie hier eine CSV- oder ZIP-Datei rein</p>
+                    <p class="drag-subtext">oder</p>
+                    <input type="file" id="fileInput" hidden accept=".csv,.zip">
+                    <button class="btn-primary" id="selectFileBtn">Datei auswählen</button>
+                </div>
+
+                <div class="upload-status" id="uploadStatus" style="display: none;">
+                    <div class="file-info">
+                        <span class="file-name" id="fileNameDisplay"></span>
+                        <span class="file-size" id="fileSizeDisplay"></span>
+                    </div>
+                    <button class="btn-secondary" id="clearFileBtn">✕ Löschen</button>
+                </div>
+            </section>
+
+            <!-- Process Section -->
+            <section class="section process-section">
+                <h2>⚙️ Step 2: Processing ausführen</h2>
+                
+                <div class="process-options">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="skipCriticalAccounts" checked>
+                        <span>Kritische Konten überspringen (0-20)</span>
+                    </label>
+                </div>
+
+                <button class="btn-large" id="processBtn" disabled>
+                    <span class="btn-text">Processing starten</span>
+                    <span class="spinner" id="spinner" style="display: none;"></span>
+                </button>
+
+                <div class="process-status" id="processStatus" style="display: none;">
+                    <div class="status-header">
+                        <span class="status-badge" id="statusBadge">⏳ Processing...</span>
+                        <span class="job-id" id="jobIdDisplay"></span>
+                    </div>
+                    <div class="progress-container">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                        <span class="progress-text" id="progressText">0%</span>
+                    </div>
+                    <div class="status-details" id="statusDetails"></div>
+                </div>
+            </section>
+
+            <!-- Results Section -->
+            <section class="section results-section" id="resultsSection" style="display: none;">
+                <h2>✅ Step 3: Ergebnisse</h2>
+
+                <div class="results-summary" id="resultsSummary"></div>
+
+                <div class="results-actions">
+                    <button class="btn-download" id="downloadCSVBtn">
+                        <span>📥 CSV herunterladen</span>
+                    </button>
+                    <button class="btn-download" id="downloadReportBtn">
+                        <span>📊 Excel-Report herunterladen</span>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Reports Section -->
+            <section class="section reports-section">
+                <h2>📋 Frühere Reports</h2>
+                
+                <div id="reportsList" class="reports-list">
+                    <p class="empty-message">Keine Reports vorhanden</p>
+                </div>
+            </section>
+
+            <!-- History Section -->
+            <section class="section history-section">
+                <h2>📜 Processing Historie</h2>
+                
+                <div id="historyList" class="history-list">
+                    <p class="empty-message">Keine Historie vorhanden</p>
+                </div>
+                
+                <button class="btn-secondary" id="clearHistoryBtn">Historie löschen</button>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <p>CSV Verarbeiter v1.0 | Amazon DATEV Export Processor</p>
+            <p class="footer-info">API: <span id="apiStatus" class="status-online">●</span> <span id="apiStatusText">Online</span></p>
+        </footer>
+    </div>
+
+    <!-- Modal for Errors -->
+    <div class="modal" id="errorModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>❌ Fehler</h3>
+                <button class="modal-close" id="closeErrorBtn">&times;</button>
+            </div>
+            <div class="modal-body" id="errorMessage"></div>
+            <div class="modal-footer">
+                <button class="btn-primary" id="closeErrorModalBtn">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Success -->
+    <div class="modal" id="successModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>✅ Erfolgreich</h3>
+                <button class="modal-close" id="closeSuccessBtn">&times;</button>
+            </div>
+            <div class="modal-body" id="successMessage"></div>
+            <div class="modal-footer">
+                <button class="btn-primary" id="closeSuccessModalBtn">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
