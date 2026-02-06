@@ -23,11 +23,12 @@ class InventoryRepository(BaseRepository):
                           :jtl_stock AS jtl_stock) AS s
             ON t.product_id = s.product_id
             WHEN MATCHED THEN UPDATE SET 
-                jtl_article_id = s.jtl_article_id, jtl_stock = s.jtl_stock,
-                needs_sync = CASE WHEN s.jtl_stock > 0 THEN 1 ELSE 0 END, 
+                jtl_article_id = s.jtl_article_id, 
+                jtl_stock = s.jtl_stock,
+                needs_sync = CASE WHEN s.jtl_stock <> t.temu_stock THEN 1 ELSE 0 END, 
                 updated_at = GETDATE()
             WHEN NOT MATCHED THEN INSERT (product_id, jtl_article_id, jtl_stock, temu_stock, needs_sync)
-                VALUES (s.product_id, s.jtl_article_id, s.jtl_stock, s.jtl_stock, 0);
+                VALUES (s.product_id, s.jtl_article_id, s.jtl_stock, 0, 1);
         """)
 
         try:

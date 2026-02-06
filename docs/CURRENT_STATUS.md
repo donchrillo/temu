@@ -61,6 +61,7 @@ Die Migration des JTL2DATEV CSV-Verarbeiters von einer Standalone-Anwendung in d
 *   **XML Export Connection Fix:** Behebung eines Problems, bei dem der XML-Export aufgrund geschlossener DB-Verbindungen fehlschlug.
 *   **WebSocket Disconnect Cleanup:** Ignorieren von normalen WebSocket-Disconnects in den Logs.
 *   **BaseRepository Pattern:** Implementierung eines einheitlichen Repository Patterns.
+*   **Inventory Sync Optimization:** Korrektur der `needs_sync`-Logik (Endlosschleifen-Fix), Schutz von JTL-Mappings (`COALESCE`), Transaction Splitting (Import/JTL/API) und robustes Error-Handling für API-Updates.
 *   **Stock Sync Logic Fix:** Korrektur der Logik für die Lagerbestandssynchronisation.
 *   **OrderWorkflowService Transaction Splitting:** Aufteilung von Transaktionen für verbesserte Stabilität.
 *   **Datenstruktur:** Fixierung der Datenpfade in `data/temu` und `data/pdf_reader`.

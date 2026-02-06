@@ -26,9 +26,11 @@ class ProductRepository(BaseRepository):
                           :is_active AS is_active) AS src
             ON target.sku = src.sku
             WHEN MATCHED THEN UPDATE SET 
-                goods_id = src.goods_id, sku_id = src.sku_id, 
+                goods_id = src.goods_id, 
+                sku_id = src.sku_id, 
                 goods_name = src.goods_name,
-                jtl_article_id = src.jtl_article_id, is_active = src.is_active, 
+                jtl_article_id = COALESCE(src.jtl_article_id, target.jtl_article_id),
+                is_active = src.is_active, 
                 updated_at = GETDATE()
             WHEN NOT MATCHED THEN INSERT (sku, goods_id, sku_id, goods_name, jtl_article_id, is_active)
                 VALUES (src.sku, src.goods_id, src.sku_id, src.goods_name, src.jtl_article_id, src.is_active);

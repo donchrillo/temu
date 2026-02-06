@@ -459,50 +459,55 @@ def _schedule_retry(self, job_id: str, params: Dict[str, Any]):
 
 ## 6. Workflow Orchestrierung – Praktische Beispiele
 
-### Inventory Workflow (4 Schritte)
+### Inventory Workflow (4 Schritte, 3 Blöcke)
 ```python
 from modules.temu.services.inventory_workflow_service import InventoryWorkflowService
 
 class InventoryWorkflow:
-    """4-Schritt Orchestrierung"""
+    """4-Schritt Orchestrierung (Transaction Splitting)"""
     
     def run_complete_workflow(self, mode: str = "quick") -> bool:
         """
-        Vollständiger Bestandabgleich:
+        Vollständiger Bestandabgleich (in Blöcke unterteilt für Stabilität):
+        
+        Block 1: Import (Optional)
         1. TEMU API → JSON (Fetch SKU-Liste)
-        2. JSON → TOCI (Import in Datenbank)
-        3. JTL Bestand → TOCI (Lookup JTL-Stock)
-        4. TOCI → TEMU API (Update Stock)
+        2. JSON → TOCI (Import in Datenbank, Commit)
+        
+        Block 2: JTL Update
+        3. JTL Bestand → TOCI (Lookup JTL-Stock, Commit)
+        
+        Block 3: API Sync
+        4. TOCI → TEMU API (Update Stock, Commit nach jedem Batch)
         """
         
+        # --- BLOCK 1: IMPORT ---
+        if mode == "full":
+            logger.info("[1/4] Fetching SKU list from TEMU API...")
+            api_data = self._step_1_fetch_api()
+            
+            with db_connect(DB_TOCI) as toci_conn:
+                logger.info("[2/4] Importing SKUs into TOCI...")
+                result = self._step_2_json_to_db(toci_conn)
+                logger.info(f"✓ Inserted: {result['inserted']}, Updated: {result['updated']}")
+            # Commit Block 1
+        
+        # --- BLOCK 2: JTL UPDATE ---
         with db_connect(DB_TOCI) as toci_conn:
             with db_connect(DB_JTL) as jtl_conn:
-                
-                # Step 1: API Fetch
-                if mode == "full":
-                    logger.info("[1/4] Fetching SKU list from TEMU API...")
-                    api_data = self._step_1_fetch_api()
-                    if not api_data:
-                        raise Exception("API Fetch failed")
-                    logger.info(f"✓ Got {len(api_data)} SKUs")
-                
-                # Step 2: JSON → DB
-                if mode == "full":
-                    logger.info("[2/4] Importing SKUs into TOCI...")
-                    result = self._step_2_json_to_db(toci_conn)
-                    logger.info(f"✓ Inserted: {result['inserted']}, Updated: {result['updated']}")
-                
-                # Step 3: JTL Stock Lookup
                 logger.info("[3/4] Fetching stock from JTL...")
-                stock_map = self._step_3_jtl_to_inventory(jtl_conn, toci_conn)
-                logger.info(f"✓ Updated {len(stock_map)} items")
-                
-                # Step 4: Push to TEMU
-                logger.info("[4/4] Pushing stock to TEMU API...")
-                updated = self._step_4_update_temu_api(stock_map)
-                logger.info(f"✓ Updated {updated} items on TEMU")
-                
-                return True
+                self._step_3_jtl_to_inventory(jtl_conn, toci_conn)
+        # Commit Block 2
+
+        # --- BLOCK 3: API SYNC ---
+        with db_connect(DB_TOCI) as toci_conn:
+            logger.info("[4/4] Pushing stock to TEMU API...")
+            # Intern: Loop über GoodsID, API Call, dann sofortiges DB-Update
+            updated = self._step_4_update_temu_api(toci_conn)
+            logger.info(f"✓ Sync Process finished")
+        # Commit Block 3
+        
+        return True
 ```
 
 ### Order Workflow
