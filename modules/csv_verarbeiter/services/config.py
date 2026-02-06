@@ -21,10 +21,9 @@ CSV_INPUT_ENCODING = os.getenv('CSV_INPUT_ENCODING', 'auto')  # auto = chardet d
 CSV_OUTPUT_ENCODING = os.getenv('CSV_OUTPUT_ENCODING', 'cp1252')  # DATEV Standard: Windows-1252
 
 # DATEV CSV Column Names (Standard-Spaltennamen)
-DATEV_COLUMN_KONTO = 'Konto'
-DATEV_COLUMN_GEGENKONTO = 'Gegenkonto'
-DATEV_COLUMN_BELEG = 'Beleg'  # OrderID Spalte
-DATEV_COLUMN_EMAIL = None  # Optional: E-Mail-Spalte (falls vorhanden)
+DATEV_COLUMN_BELEG = 'Belegfeld 1'  # Amazon OrderID Spalte
+DATEV_COLUMN_GEGENKONTO = 'Gegenkonto (ohne BU-Schlüssel)'  # Konten-Prüfung (0-20)
+DATEV_COLUMN_KONTO = 'Konto'  # Optional: Haupt-Kontonummer
 
 # Processing Options
 SKIP_CRITICAL_ACCOUNTS = os.getenv('SKIP_CRITICAL_ACCOUNTS', 'true').lower() == 'true'

@@ -8,11 +8,11 @@ from modules.shared import log_service
 
 
 class ValidationService:
-    """Service für CSV-Datenvalidierung"""
+    """Service für CSV-Datenvalidierung (Amazon DATEV Exporte)"""
     
-    # Pattern für TEMU OrderIDs (z.B. PO-076-00176873718391408)
-    # Format: PO-XXX-XXXXXXXXXXXXXXXX (3 Buchstaben + 3 Ziffern + 17 Ziffern)
-    ORDER_ID_PATTERN = re.compile(r'^[A-Z]{2}-\d{3}-\d{17}$')
+    # Pattern für Amazon OrderIDs (z.B. 306-1234567-8910111)
+    # Format: XXX-XXXXXXX-XXXXXXX (3 Ziffern - 7 Ziffern - 7 Ziffern)
+    ORDER_ID_PATTERN = re.compile(r'^\d{3}-\d{7}-\d{7}$')
     
     # Kritische Konten (0-20) die NICHT ersetzt werden dürfen
     CRITICAL_ACCOUNTS = set(range(0, 21))
@@ -29,7 +29,8 @@ class ValidationService:
     
     def validate_order_id_pattern(self, order_id: str) -> bool:
         """
-        Prüft ob OrderID dem erwarteten TEMU-Pattern entspricht.
+        Prüft ob OrderID dem erwarteten Amazon-Pattern entspricht.
+        Amazon Format: XXX-XXXXXXX-XXXXXXX (z.B. 306-1234567-8910111)
         
         Args:
             order_id: OrderID String
@@ -61,7 +62,7 @@ class ValidationService:
     def validate_csv_structure(self, df: pd.DataFrame, job_id: str,
                               required_columns: List[str] = None) -> Tuple[bool, List[str]]:
         """
-        Validiert CSV-Struktur (erforderliche Spalten).
+        Validiert CSV-Struktur (erforderliche Spalten für DATEV Export).
         
         Args:
             df: DataFrame zu validieren
@@ -72,8 +73,11 @@ class ValidationService:
             Tuple[bool, List[str]]: (Erfolg, Liste fehlender Spalten)
         """
         if required_columns is None:
-            # Standard für DATEV Export (typische JTL-Spalten)
-            required_columns = ['Konto', 'Gegenkonto', 'Beleg']
+            # DATEV Standard-Spalten für Amazon Export
+            required_columns = [
+                'Belegfeld 1',  # Amazon OrderID
+                'Gegenkonto (ohne BU-Schlüssel)'  # Kritische Konten-Prüfung
+            ]
         
         missing_columns = [col for col in required_columns if col not in df.columns]
         
@@ -92,20 +96,21 @@ class ValidationService:
         return True, []
     
     def validate_dataframe(self, df: pd.DataFrame, job_id: str, 
-                          order_id_column: str = 'Beleg') -> Dict:
+                          beleg_column: str = 'Belegfeld 1',
+                          gegenkonto_column: str = 'Gegenkonto (ohne BU-Schlüssel)') -> Dict:
         """
         Führt umfassende Validierung eines DataFrames durch.
         
         Args:
             df: DataFrame zu validieren
-            job_id: Job ID für Logging
-            order_id_column: Name der OrderID-Spalte (Standard: 'Beleg')
+            beleg_column: Name der OrderID-Spalte (Standard: 'Belegfeld 1' für DATEV)
+            gegenkonto_column: Name der Gegenkonto-Spalte
             
         Returns:
             Dict mit Validierungsergebnissen:
                 - valid_rows: Anzahl valider Zeilen
                 - invalid_pattern: Anzahl ungültiger OrderID-Patterns
-                - critical_accounts: Anzahl kritischer Konten
+                - critical_accounts: Anzahl kritischer Gegenkonten
                 - errors: Liste von Fehlern
                 - warnings: Liste von Warnungen
         """
@@ -119,51 +124,40 @@ class ValidationService:
         critical_account_count = 0
         
         # Prüfe ob erforderliche Spalten vorhanden sind
-        if order_id_column not in df.columns:
+        if beleg_column not in df.columns:
             self.validation_errors.append({
                 'type': 'MISSING_COLUMN',
-                'column': order_id_column,
-                'message': f"OrderID-Spalte '{order_id_column}' nicht gefunden"
+                'column': beleg_column,
+                'message': f"OrderID-Spalte '{beleg_column}' nicht gefunden"
             })
             log_service.log(job_id, "csv_validation", "ERROR", 
-                          f"❌ OrderID-Spalte '{order_id_column}' nicht gefunden")
+                          f"❌ OrderID-Spalte '{beleg_column}' nicht gefunden")
             return self._build_validation_result(0, 0, 0)
         
         # Validiere jede Zeile
         for idx, row in df.iterrows():
-            order_id = str(row.get(order_id_column, '')).strip()
-            konto = str(row.get('Konto', '')).strip()
-            gegenkonto = str(row.get('Gegenkonto', '')).strip()
+            order_id = str(row.get(beleg_column, '')).strip()
+            gegenkonto = str(row.get(gegenkonto_column, '')).strip() if gegenkonto_column in df.columns else ''
             
             # OrderID Pattern Validierung
             if not self.validate_order_id_pattern(order_id):
                 invalid_pattern_count += 1
                 self.validation_warnings.append({
                     'type': 'INVALID_PATTERN',
-                    'row': idx + 2,  # +2 wegen 0-Index und Header
+                    'row': idx + 2,  # +2 wegen 0-Index, Header und Metazeile
                     'order_id': order_id,
-                    'message': f"Zeile {idx + 2}: Ungültiges OrderID Pattern: '{order_id}'"
+                    'message': f"Zeile {idx + 2}: Ungültiges Amazon OrderID Pattern: '{order_id}'"
                 })
                 continue
             
-            # Kritische Konten Prüfung
-            if self.is_critical_account(konto):
-                critical_account_count += 1
-                self.validation_warnings.append({
-                    'type': 'CRITICAL_ACCOUNT',
-                    'row': idx + 2,
-                    'account': konto,
-                    'message': f"Zeile {idx + 2}: Kritisches Konto '{konto}' wird übersprungen"
-                })
-                continue
-            
-            if self.is_critical_account(gegenkonto):
+            # Kritische Gegenkonten Prüfung
+            if gegenkonto and self.is_critical_account(gegenkonto):
                 critical_account_count += 1
                 self.validation_warnings.append({
                     'type': 'CRITICAL_ACCOUNT',
                     'row': idx + 2,
                     'account': gegenkonto,
-                    'message': f"Zeile {idx + 2}: Kritisches Gegenkonto '{gegenkonto}' wird übersprungen"
+                    'message': f"Zeile {idx + 2}: Kritisches Gegenkonto '{gegenkonto}' (0-20)"
                 })
                 continue
             
@@ -177,11 +171,11 @@ class ValidationService:
         
         if invalid_pattern_count > 0:
             log_service.log(job_id, "csv_validation", "WARNING", 
-                           f"  ⚠ {invalid_pattern_count} ungültige OrderID-Patterns")
+                           f"  ⚠ {invalid_pattern_count} ungültige Amazon OrderID Patterns")
         
         if critical_account_count > 0:
             log_service.log(job_id, "csv_validation", "WARNING", 
-                           f"  ⚠ {critical_account_count} kritische Konten (0-20)")
+                           f"  ⚠ {critical_account_count} kritische Gegenkonten (0-20)")
         
         return self._build_validation_result(valid_rows, invalid_pattern_count, critical_account_count)
     
@@ -206,6 +200,7 @@ class ValidationService:
     def check_data_integrity(self, df: pd.DataFrame, job_id: str) -> bool:
         """
         Prüft grundlegende Datenintegrität (Keine Null-Werte in Schlüsselspalten).
+        DATEV Standard: Belegfeld 1 & Gegenkonto dürfen nicht leer sein.
         
         Args:
             df: DataFrame zu prüfen
@@ -214,7 +209,7 @@ class ValidationService:
         Returns:
             bool: True wenn Datenintegrität OK
         """
-        key_columns = ['Konto', 'Gegenkonto', 'Beleg']
+        key_columns = ['Belegfeld 1', 'Gegenkonto (ohne BU-Schlüssel)']
         
         integrity_ok = True
         
