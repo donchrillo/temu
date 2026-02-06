@@ -436,3 +436,50 @@ async def cleanup_old_reports(days: int = Query(30, description="Delete reports 
     except Exception as e:
         log_service.log("ADMIN", "csv_cleanup", "ERROR", f"❌ Cleanup Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ═══════════════════════════════════════════════════════════════
+# FRONTEND ENDPOINTS
+# ═══════════════════════════════════════════════════════════════
+
+@router.get("/", tags=["Frontend"])
+async def serve_frontend_index():
+    """Serve frontend HTML interface"""
+    frontend_dir = Path(__file__).parent / "frontend"
+    index_file = frontend_dir / "index.html"
+    
+    if not index_file.exists():
+        raise HTTPException(status_code=404, detail="Frontend not found")
+    
+    return FileResponse(
+        index_file,
+        media_type="text/html"
+    )
+
+@router.get("/style.css", tags=["Frontend"])
+async def serve_frontend_css():
+    """Serve frontend CSS"""
+    frontend_dir = Path(__file__).parent / "frontend"
+    css_file = frontend_dir / "style.css"
+    
+    if not css_file.exists():
+        raise HTTPException(status_code=404, detail="CSS not found")
+    
+    return FileResponse(
+        css_file,
+        media_type="text/css"
+    )
+
+@router.get("/script.js", tags=["Frontend"])
+async def serve_frontend_js():
+    """Serve frontend JavaScript"""
+    frontend_dir = Path(__file__).parent / "frontend"
+    js_file = frontend_dir / "script.js"
+    
+    if not js_file.exists():
+        raise HTTPException(status_code=404, detail="JavaScript not found")
+    
+    return FileResponse(
+        js_file,
+        media_type="application/javascript"
+    )
