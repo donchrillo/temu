@@ -137,11 +137,10 @@ async def trigger_job(
     parent_order_status: int = 2,
     days_back: int = 7,
     verbose: bool = False,
-    log_to_db: bool = True,
     mode: str = "quick"
 ):
     """Job sofort triggern"""
-    scheduler.trigger_job_now(job_id, parent_order_status, days_back, verbose, log_to_db, mode)
+    scheduler.trigger_job_now(job_id, parent_order_status, days_back, verbose, mode)
     return {
         "status": "triggered",
         "job_id": job_id,
@@ -149,7 +148,6 @@ async def trigger_job(
             "parent_order_status": parent_order_status,
             "days_back": days_back,
             "verbose": verbose,
-            "log_to_db": log_to_db,
             "mode": mode
         }
     }

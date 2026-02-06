@@ -187,8 +187,7 @@ async function triggerOrderSync() {
         const url = `${API_BASE}/jobs/${orderJob.job_id}/run-now?` +
             `parent_order_status=${params.status}&` +
             `days_back=${params.days}&` +
-            `verbose=${params.verbose}&` +
-            `log_to_db=${params.log_to_db}`;
+            `verbose=${params.verbose}`;
 
         const res = await fetch(url, {
             method: 'POST'
@@ -401,15 +400,10 @@ function showOrderSyncParameterDialog() {
                             </p>
                         </div>
 
-                        <div style="display: flex; gap: 15px;">
+                        <div>
                             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                                 <input type="checkbox" id="param-verbose" style="width: 18px; height: 18px; cursor: pointer;">
                                 <span>🔍 Verbose Mode</span>
-                            </label>
-
-                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                <input type="checkbox" id="param-log-to-db" checked style="width: 18px; height: 18px; cursor: pointer;">
-                                <span>💾 Log to Database</span>
                             </label>
                         </div>
                     </div>
@@ -432,8 +426,7 @@ function showOrderSyncParameterDialog() {
             const params = {
                 status: parseInt(document.getElementById('param-status').value),
                 days: parseInt(document.getElementById('param-days').value),
-                verbose: document.getElementById('param-verbose').checked,
-                log_to_db: document.getElementById('param-log-to-db').checked
+                verbose: document.getElementById('param-verbose').checked
             };
             dialog.remove();
             resolve(params);

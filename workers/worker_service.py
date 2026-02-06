@@ -67,7 +67,7 @@ class SchedulerService:
             self._run_job,
             trigger=IntervalTrigger(minutes=interval_minutes),
             id=job_id,
-            args=[job_id, 2, 7, False, True, "quick"],  # ← Standard-Parameter + mode!
+            args=[job_id, 2, 7, False, "quick"],  # ← Standard-Parameter: parent_order_status, days_back, verbose, mode
             next_run_time=datetime.now() if enabled else None,
             misfire_grace_time=None,  # ✅ Ignoriere verpasste Zyklen komplett
             coalesce=True,  # ✅ Springe verpasste Ausführungen
@@ -86,9 +86,9 @@ class SchedulerService:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, lambda: sync_func(*args, **kwargs))
     
-    async def _run_job(self, job_id: str, parent_order_status: int = 2, 
-                       days_back: int = 7, verbose: bool = False, 
-                       log_to_db: bool = True, mode: str = "quick"):
+    async def _run_job(self, job_id: str, parent_order_status: int = 2,
+                       days_back: int = 7, verbose: bool = False,
+                       mode: str = "quick"):
         """✅ Mit strukturiertem Logging in SQL Server"""
         
         start_time = datetime.now()
@@ -188,25 +188,25 @@ class SchedulerService:
         """Gib alle Jobs zurück"""
         return [self.get_job_status(job_id) for job_id in self.jobs.keys()]
     
-    def trigger_job_now(self, job_id: str, parent_order_status: int = 2, 
-                        days_back: int = 7, verbose: bool = False, 
-                        log_to_db: bool = True, mode: str = "quick"):
+    def trigger_job_now(self, job_id: str, parent_order_status: int = 2,
+                        days_back: int = 7, verbose: bool = False,
+                        mode: str = "quick"):
         """Triggere Job SOFORT mit optionalen Parametern"""
         job = self.scheduler.get_job(job_id)
         if job:
             # Speichere alte Konfiguration
             trigger = job.trigger
             func = job.func
-            
+
             # Entferne alten Job
             self.scheduler.remove_job(job_id)
-            
+
             # Füge neu hinzu mit sofortigem Start UND neuen Parametern!
             self.scheduler.add_job(
                 func,
                 trigger=trigger,
                 id=job_id,
-                args=[job_id, parent_order_status, days_back, verbose, log_to_db, mode],  # ← NEU: mode hinzugefügt!
+                args=[job_id, parent_order_status, days_back, verbose, mode],
                 next_run_time=datetime.now()
             )
     
