@@ -4,7 +4,7 @@ PWA (Progressive Web App) für Worker Dashboard mit WebSocket Live-Updates, HTTP
 
 ---
 
-**Datum:** 5. Februar 2026
+**Datum:** 6. Februar 2026
 
 ---
 

@@ -1,6 +1,6 @@
 # Current Project Status
 
-**Datum:** 5. Februar 2026
+**Datum:** 6. Februar 2026
 **Zweck:** Übersicht über den aktuellen Status des TEMU-Integrationsprojekts.
 
 ---
@@ -65,6 +65,10 @@ Die Migration des JTL2DATEV CSV-Verarbeiters von einer Standalone-Anwendung in d
 *   **Stock Sync Logic Fix:** Korrektur der Logik für die Lagerbestandssynchronisation.
 *   **OrderWorkflowService Transaction Splitting:** Aufteilung von Transaktionen für verbesserte Stabilität.
 *   **Datenstruktur:** Fixierung der Datenpfade in `data/temu` und `data/pdf_reader`.
+*   **TEMU Frontend UI Improvements (6. Feb 2026):**
+    *   Verbose Mode Option für Inventory Sync Dialog hinzugefügt (Parität mit Order Sync)
+    *   Obsoleter `log_to_db` Parameter entfernt (Frontend, API, Worker) - Logging erfolgt immer über `log_service`
+    *   Unnötige Statistik-Boxen (Orders, Inventory, Jobs) aus dem Frontend entfernt für bessere Übersichtlichkeit
 
 ---
 
