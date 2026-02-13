@@ -148,7 +148,7 @@ Nach Refactoring:
 3. ✅ **EINTRAG IN `docs/AGENT_CHANGES.md` ERSTELLT**
 
 ## Change-Log Template
-```markdown
+
 ---
 ### [DATUM] - Frontend Refactoring Agent
 **Modul/Datei:** `frontend/modules/temu/temu.js`
@@ -166,4 +166,3 @@ Nach Refactoring:
 **Impact:** Low
 **Breaking Changes:** No
 ---
-```

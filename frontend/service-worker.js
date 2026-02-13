@@ -1,46 +1,69 @@
-const CACHE_NAME = 'toci-tools-cache-v2026020318'; // Removed old files
-const ASSETS = [
+const CACHE_NAME = 'toci-tools-cache-v2026021303';
+const PRECACHE_ASSETS = [
   '/',
   '/temu',
   '/pdf',
+  '/csv',
   '/manifest.json',
-  '/static/dashboard.css',
-  '/static/pdf.css?v=20260203',
-  '/static/pdf.js?v=20260203',
-  '/static/temu.css?v=20260203',
-  '/static/temu.js?v=20260203'
+  '/static/dashboard.js',
+  '/components/navigation.html',
+  '/components/nav-loader.js',
+  '/components/progress-helper.js',
+  '/components/ui-helpers.js',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png'
 ];
 
-self.addEventListener('install', (event) => {
-  // FORCE UNREGISTER OLD SERVICE WORKERS
-  event.waitUntil(
-    caches.keys().then((keys) => {
-      // Delete ALL old caches
-      return Promise.all(keys.map((key) => caches.delete(key)));
-    }).then(() => {
-      // Then install new cache
-      return caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS));
+// ═══ Caching Strategies ═══
+
+/**
+ * Stale-While-Revalidate: Return cached version immediately,
+ * fetch fresh version in background for next request
+ */
+async function staleWhileRevalidate(request) {
+  const cached = await caches.match(request);
+  const fetchPromise = fetch(request)
+    .then(async (response) => {
+      const cache = await caches.open(CACHE_NAME);
+      cache.put(request, response.clone());
+      return response;
     })
+    .catch(() => null);
+
+  return cached || fetchPromise || caches.match('/');
+}
+
+/**
+ * Delete all caches except the current version
+ */
+async function cleanOldCaches() {
+  const keys = await caches.keys();
+  const deletions = keys
+    .filter((k) => k !== CACHE_NAME)
+    .map((k) => {
+      console.log('Deleting old cache:', k);
+      return caches.delete(k);
+    });
+  await Promise.all(deletions);
+  console.log('Service Worker activated with cache:', CACHE_NAME);
+}
+
+// ═══ Lifecycle Events ═══
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_ASSETS))
   );
-  self.skipWaiting(); // Force immediate activation
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => {
-      // Delete ALL caches except current
-      return Promise.all(
-        keys.filter((k) => k !== CACHE_NAME).map((k) => {
-          console.log('Deleting old cache:', k);
-          return caches.delete(k);
-        })
-      );
-    }).then(() => {
-      console.log('Service Worker activated with cache:', CACHE_NAME);
-      return self.clients.claim(); // Take control immediately
-    })
+    cleanOldCaches().then(() => self.clients.claim())
   );
 });
+
+// ═══ Fetch Strategy Router ═══
 
 self.addEventListener('fetch', (event) => {
   const { request } = event;
@@ -48,21 +71,9 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
 
-  // ALL API calls: Network Only (NEVER cache)
-  // Reason: Live data must always be fresh
-  if (url.pathname.startsWith('/api/')) {
-    return; // Let browser handle API calls normally (no service worker intervention)
-  }
-  
-  // HTML/CSS/JS: Stale-while-revalidate
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      const fetchPromise = fetch(request).then((resp) => {
-        const respClone = resp.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(request, respClone));
-        return resp;
-      });
-      return cached || fetchPromise;
-    }).catch(() => caches.match('/'))
-  );
+  // API calls → Network Only (live data must always be fresh)
+  if (url.pathname.startsWith('/api/')) return;
+
+  // Static Assets → Stale-While-Revalidate
+  event.respondWith(staleWhileRevalidate(request));
 });

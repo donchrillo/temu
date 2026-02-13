@@ -31,17 +31,20 @@ Quick Reference für die TEMU-Integration Codebase.
 │       └── export/
 ├── docs/                          # Project Documentation
 ├── frontend/                      # Main PWA Frontend
-│   ├── dashboard.css
+│   ├── dashboard.css              # CSS für Root Dashboard
+│   ├── dashboard.js               # Dashboard JS (Refactored ✅)
 │   ├── docs.html                  # Docs Viewer
 │   ├── index-new.html             # Main HTML (PWA Entry)
-│   ├── master.css                 # Zentralisierte Shared Styles
+│   ├── master.css                 # Zentralisierte Shared Styles (700 Zeilen)
 │   ├── manifest.json
-│   ├── service-worker.js
-│   ├── components/
-│   │   ├── nav-loader.js          # Zentrale Navigation (dynamisch)
+│   ├── service-worker.js          # Service Worker (async/await Refactored ✅)
+│   ├── components/                # Shared UI Components (Refactored ✅)
+│   │   ├── nav-loader.js          # Zentrale Navigation (DRY optimiert ✅)
 │   │   ├── navigation.html        # Navigation Template
-│   │   └── progress-helper.js     # Animierte Loading-Anzeigen
-│   └── icons/
+│   │   ├── progress-helper.js     # Progress-Overlay (Dual-Mode: Auto/Manual ✅)
+│   │   ├── ui-helpers.js          # Toast + Log Formatting (NEW ✅)
+│   │   └── README.md              # Components Dokumentation
+│   └── icons/                     # PWA Icons (192x192, 512x512)
 ├── logs/                          # Runtime Logs by Module
 │   ├── app/
 │   ├── csv_verarbeiter/

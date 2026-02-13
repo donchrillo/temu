@@ -3,60 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-src 'self';">
     <title>API Documentation - Toci Tools</title>
-    <link rel="stylesheet" href="/static/master.css">
-    <link rel="stylesheet" href="/static/dashboard.css">
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-        }
-        
-        .swagger-container {
-            flex: 1;
-            width: 100%;
-            overflow: hidden;
-        }
-        
-        .swagger-container iframe {
-            width: 100%;
-            height: 100%;
-            border: none;
-        }
-    </style>
+    <link rel="stylesheet" href="/static/master.css?v=20260213">
+    <link rel="stylesheet" href="/static/dashboard.css?v=20260213">
 </head>
-<body>
+<body class="docs-page">
     <!-- Navigation wird dynamisch geladen -->
     <script src="/components/nav-loader.js"></script>
     <script>loadNavigation('docs');</script>
 
     <div class="swagger-container">
-        <iframe src="/api/docs" title="API Documentation"></iframe>
+        <iframe src="/api/docs" title="API Documentation" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
     </div>
-
-    <script>
-        // Burger Menu Toggle
-        function toggleMenu() {
-            const menu = document.getElementById('mobile-menu');
-            const toggle = document.querySelector('.burger-toggle');
-            menu.classList.toggle('active');
-            toggle.classList.toggle('active');
-        }
-
-        // Close menu when clicking outside
-        document.addEventListener('click', (e) => {
-            const nav = document.querySelector('.mobile-nav');
-            const menu = document.getElementById('mobile-menu');
-            const toggle = document.querySelector('.burger-toggle');
-
-            if (!nav.contains(e.target) && menu && menu.classList.contains('active')) {
-                menu.classList.remove('active');
-                toggle.classList.remove('active');
-            }
-        });
-    </script>
 </body>
 </html>

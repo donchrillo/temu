@@ -2,13 +2,29 @@
 // PDF Processor - JavaScript
 // ═══════════════════════════════════════════════════════════
 
-// API Base URL
-const API_BASE = '/api/pdf';
-const LOGS_API = '/api/logs';
+// ═══ Constants ═══
 
-// State
-let werbungFiles = [];
-let rechnungenFiles = [];
+const PDF_CONFIG = {
+    ENDPOINTS: {
+        STATUS: '/api/pdf/status',
+        WERBUNG: '/api/pdf/werbung',
+        RECHNUNGEN: '/api/pdf/rechnungen',
+        CLEANUP: '/api/pdf/cleanup',
+        LOGS: '/api/logs'
+    },
+    SELECTORS: {
+        STATUS_INFO: 'status-info',
+        LOG_CONTENT: 'log-content',
+        LOG_FILTER: 'log-filter'
+    }
+};
+
+// ═══ File State (Map statt separate Arrays) ═══
+
+const fileState = {
+    werbung: [],
+    rechnungen: []
+};
 
 // ═══════════════════════════════════════════════════════════
 // Initialization
@@ -86,33 +102,44 @@ function setupUploadZone(type) {
 }
 
 function handleFiles(type, files) {
-    if (type === 'werbung') {
-        werbungFiles = werbungFiles.concat(files);
-        renderFileList('werbung', werbungFiles);
-    } else {
-        rechnungenFiles = rechnungenFiles.concat(files);
-        renderFileList('rechnungen', rechnungenFiles);
-    }
+    fileState[type] = fileState[type].concat(files);
+    renderFileList(type);
 }
 
-function renderFileList(type, files) {
+/**
+ * Render file list with DOM creation (XSS-safe, no innerHTML with user data)
+ */
+function renderFileList(type) {
     const container = document.getElementById(`${type}-files`);
-    container.innerHTML = files.map((file, index) => `
-        <div class="file-item">
-            <span>📄 ${file.name} (${formatFileSize(file.size)})</span>
-            <button class="file-remove" onclick="removeFile('${type}', ${index})">✕</button>
-        </div>
-    `).join('');
+    container.innerHTML = '';
+
+    const fragment = document.createDocumentFragment();
+    fileState[type].forEach((file, index) => {
+        fragment.appendChild(createFileItem(file, type, index));
+    });
+    container.appendChild(fragment);
+}
+
+function createFileItem(file, type, index) {
+    const div = document.createElement('div');
+    div.className = 'file-item';
+
+    const span = document.createElement('span');
+    span.textContent = `📄 ${file.name} (${formatFileSize(file.size)})`; // XSS-safe
+
+    const btn = document.createElement('button');
+    btn.className = 'file-remove';
+    btn.textContent = '✕';
+    btn.addEventListener('click', () => removeFile(type, index));
+
+    div.appendChild(span);
+    div.appendChild(btn);
+    return div;
 }
 
 function removeFile(type, index) {
-    if (type === 'werbung') {
-        werbungFiles.splice(index, 1);
-        renderFileList('werbung', werbungFiles);
-    } else {
-        rechnungenFiles.splice(index, 1);
-        renderFileList('rechnungen', rechnungenFiles);
-    }
+    fileState[type].splice(index, 1);
+    renderFileList(type);
 }
 
 function formatFileSize(bytes) {
@@ -127,25 +154,75 @@ function formatFileSize(bytes) {
 
 async function loadStatus() {
     try {
-        const res = await fetch(`${API_BASE}/status`);
+        const res = await fetch(PDF_CONFIG.ENDPOINTS.STATUS);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
 
-        const html = `
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 12px;">
-                <div>
-                    <strong>Werbung:</strong> ${data.werbung.count} Dateien
-                </div>
-                <div>
-                    <strong>Rechnungen:</strong> ${data.rechnungen.count} Dateien
-                </div>
-                <div>
-                    <strong>TMP:</strong> ${data.tmp.count} Dateien
-                </div>
-            </div>
-        `;
-        document.getElementById('status-info').innerHTML = html;
+        const statusEl = document.getElementById(PDF_CONFIG.SELECTORS.STATUS_INFO);
+        statusEl.innerHTML = '';
+
+        const grid = document.createElement('div');
+        grid.className = 'status-info-grid';
+
+        const items = [
+            { label: 'Werbung', value: `${data.werbung.count} Dateien` },
+            { label: 'Rechnungen', value: `${data.rechnungen.count} Dateien` },
+            { label: 'TMP', value: `${data.tmp.count} Dateien` }
+        ];
+
+        items.forEach(({ label, value }) => {
+            const div = document.createElement('div');
+            const strong = document.createElement('strong');
+            strong.textContent = `${label}: `;
+            div.appendChild(strong);
+            div.appendChild(document.createTextNode(value));
+            grid.appendChild(div);
+        });
+
+        statusEl.appendChild(grid);
     } catch (err) {
         console.error('Status laden fehlgeschlagen:', err);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
+// Generic Action Helper (DRY für alle API-Aufrufe)
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Führt eine API-Aktion mit Progress-Overlay und Toast-Feedback aus
+ * @param {Object} opts
+ * @param {string} opts.progressText - Text im Progress-Overlay
+ * @param {string} opts.url - API endpoint
+ * @param {string} [opts.method='POST'] - HTTP method
+ * @param {FormData|null} [opts.body=null] - Request body
+ * @param {Function} opts.onSuccess - Callback bei data.status === 'ok'
+ * @param {string} opts.failureText - Toast-Text bei Fehler
+ */
+async function performAction({ progressText, url, method = 'POST', body = null, onSuccess, failureText }) {
+    try {
+        showProgress(progressText);
+
+        const options = { method };
+        if (body) options.body = body;
+
+        const res = await fetch(url, options);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        updateProgress(100, 'Fertig!');
+
+        setTimeout(() => {
+            hideProgress();
+            if (data.status === 'ok') {
+                onSuccess(data);
+                showLog();
+            } else {
+                showToast(failureText, 'error');
+            }
+        }, 500);
+    } catch (err) {
+        hideProgress();
+        showToast(`Fehler: ${err.message}`, 'error');
     }
 }
 
@@ -154,92 +231,53 @@ async function loadStatus() {
 // ═══════════════════════════════════════════════════════════
 
 async function uploadWerbung() {
-    if (werbungFiles.length === 0) {
+    if (fileState.werbung.length === 0) {
         showToast('Bitte wähle Dateien aus', 'error');
         return;
     }
 
     const formData = new FormData();
-    werbungFiles.forEach(file => formData.append('files', file));
+    fileState.werbung.forEach(file => formData.append('files', file));
 
-    try {
-        showProgress(`Lade ${werbungFiles.length} Dateien hoch...`);
-
-        const res = await fetch(`${API_BASE}/werbung/upload`, {
-            method: 'POST',
-            body: formData
-        });
-
-        const data = await res.json();
-        updateProgress(100, 'Fertig!');
-
-        setTimeout(() => {
-            hideProgress();
-            if (data.status === 'ok') {
-                showToast(`${data.saved.length} Dateien hochgeladen`, 'success');
-                werbungFiles = [];
-                renderFileList('werbung', []);
-                loadStatus();
-                showLog(); // Refresh logs
-            } else {
-                showToast('Upload fehlgeschlagen', 'error');
-            }
-        }, 500);
-    } catch (err) {
-        hideProgress();
-        showToast(`Fehler: ${err.message}`, 'error');
-    }
+    await performAction({
+        progressText: `Lade ${fileState.werbung.length} Dateien hoch...`,
+        url: `${PDF_CONFIG.ENDPOINTS.WERBUNG}/upload`,
+        body: formData,
+        failureText: 'Upload fehlgeschlagen',
+        onSuccess: (data) => {
+            showToast(`${data.saved.length} Dateien hochgeladen`, 'success');
+            fileState.werbung = [];
+            renderFileList('werbung');
+            loadStatus();
+        }
+    });
 }
 
 async function extractWerbung() {
-    try {
-        showProgress('Extrahiere erste Seiten...');
-
-        const res = await fetch(`${API_BASE}/werbung/extract`, { method: 'POST' });
-        const data = await res.json();
-        updateProgress(100, 'Fertig!');
-
-        setTimeout(() => {
-            hideProgress();
-            if (data.status === 'ok') {
-                showToast(`${data.extracted.length} Seiten extrahiert`, 'success');
-                loadStatus();
-                showLog(); // Refresh logs
-            } else {
-                showToast('Extraktion fehlgeschlagen', 'error');
-            }
-        }, 500);
-    } catch (err) {
-        hideProgress();
-        showToast(`Fehler: ${err.message}`, 'error');
-    }
+    await performAction({
+        progressText: 'Extrahiere erste Seiten...',
+        url: `${PDF_CONFIG.ENDPOINTS.WERBUNG}/extract`,
+        failureText: 'Extraktion fehlgeschlagen',
+        onSuccess: (data) => {
+            showToast(`${data.extracted.length} Seiten extrahiert`, 'success');
+            loadStatus();
+        }
+    });
 }
 
 async function processWerbung() {
-    try {
-        showProgress('Verarbeite PDFs...');
-
-        const res = await fetch(`${API_BASE}/werbung/process`, { method: 'POST' });
-        const data = await res.json();
-        updateProgress(100, 'Fertig!');
-
-        setTimeout(() => {
-            hideProgress();
-            if (data.status === 'ok') {
-                showToast(`${data.count} Einträge verarbeitet`, 'success');
-                showLog(); // Refresh logs
-            } else {
-                showToast('Verarbeitung fehlgeschlagen', 'error');
-            }
-        }, 500);
-    } catch (err) {
-        hideProgress();
-        showToast(`Fehler: ${err.message}`, 'error');
-    }
+    await performAction({
+        progressText: 'Verarbeite PDFs...',
+        url: `${PDF_CONFIG.ENDPOINTS.WERBUNG}/process`,
+        failureText: 'Verarbeitung fehlgeschlagen',
+        onSuccess: (data) => {
+            showToast(`${data.count} Einträge verarbeitet`, 'success');
+        }
+    });
 }
 
 function downloadWerbung() {
-    window.location.href = `${API_BASE}/werbung/result`;
+    window.location.href = `${PDF_CONFIG.ENDPOINTS.WERBUNG}/result`;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -247,68 +285,41 @@ function downloadWerbung() {
 // ═══════════════════════════════════════════════════════════
 
 async function uploadRechnungen() {
-    if (rechnungenFiles.length === 0) {
+    if (fileState.rechnungen.length === 0) {
         showToast('Bitte wähle Dateien aus', 'error');
         return;
     }
 
     const formData = new FormData();
-    rechnungenFiles.forEach(file => formData.append('files', file));
+    fileState.rechnungen.forEach(file => formData.append('files', file));
 
-    try {
-        showProgress(`Lade ${rechnungenFiles.length} Dateien hoch...`);
-
-        const res = await fetch(`${API_BASE}/rechnungen/upload`, {
-            method: 'POST',
-            body: formData
-        });
-
-        const data = await res.json();
-        updateProgress(100, 'Fertig!');
-
-        setTimeout(() => {
-            hideProgress();
-            if (data.status === 'ok') {
-                showToast(`${data.saved.length} Dateien hochgeladen`, 'success');
-                rechnungenFiles = [];
-                renderFileList('rechnungen', []);
-                loadStatus();
-                showLog(); // Refresh logs
-            } else {
-                showToast('Upload fehlgeschlagen', 'error');
-            }
-        }, 500);
-    } catch (err) {
-        hideProgress();
-        showToast(`Fehler: ${err.message}`, 'error');
-    }
+    await performAction({
+        progressText: `Lade ${fileState.rechnungen.length} Dateien hoch...`,
+        url: `${PDF_CONFIG.ENDPOINTS.RECHNUNGEN}/upload`,
+        body: formData,
+        failureText: 'Upload fehlgeschlagen',
+        onSuccess: (data) => {
+            showToast(`${data.saved.length} Dateien hochgeladen`, 'success');
+            fileState.rechnungen = [];
+            renderFileList('rechnungen');
+            loadStatus();
+        }
+    });
 }
 
 async function processRechnungen() {
-    try {
-        showProgress('Verarbeite Rechnungen...');
-
-        const res = await fetch(`${API_BASE}/rechnungen/process`, { method: 'POST' });
-        const data = await res.json();
-        updateProgress(100, 'Fertig!');
-
-        setTimeout(() => {
-            hideProgress();
-            if (data.status === 'ok') {
-                showToast(`${data.count} Einträge verarbeitet`, 'success');
-                showLog(); // Refresh logs
-            } else {
-                showToast('Verarbeitung fehlgeschlagen', 'error');
-            }
-        }, 500);
-    } catch (err) {
-        hideProgress();
-        showToast(`Fehler: ${err.message}`, 'error');
-    }
+    await performAction({
+        progressText: 'Verarbeite Rechnungen...',
+        url: `${PDF_CONFIG.ENDPOINTS.RECHNUNGEN}/process`,
+        failureText: 'Verarbeitung fehlgeschlagen',
+        onSuccess: (data) => {
+            showToast(`${data.count} Einträge verarbeitet`, 'success');
+        }
+    });
 }
 
 function downloadRechnungen() {
-    window.location.href = `${API_BASE}/rechnungen/result`;
+    window.location.href = `${PDF_CONFIG.ENDPOINTS.RECHNUNGEN}/result`;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -316,20 +327,16 @@ function downloadRechnungen() {
 // ═══════════════════════════════════════════════════════════
 
 async function showLog() {
-    const logContent = document.getElementById('log-content');
+    const logContent = document.getElementById(PDF_CONFIG.SELECTORS.LOG_CONTENT);
     
     try {
-        const filter = document.getElementById('log-filter').value || 'pdf';
-        // Fetch logs from central API
-        const res = await fetch(`${LOGS_API}?job_id=${filter}&limit=100`);
+        const filter = document.getElementById(PDF_CONFIG.SELECTORS.LOG_FILTER).value || 'pdf';
+        const res = await fetch(`${PDF_CONFIG.ENDPOINTS.LOGS}?job_id=${filter}&limit=100`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const logs = await res.json();
 
         if (logs && logs.length > 0) {
-             // Format logs nicely
-            logContent.textContent = logs.map(log => {
-                const time = new Date(log.timestamp).toLocaleString('de-DE');
-                return `[${time}] [${log.job_type}] [${log.level}] ${log.message}`;
-            }).join('\n');
+            logContent.textContent = logs.map(formatLogEntry).join('\n');
         } else {
             logContent.textContent = 'Keine Logs gefunden.';
         }
@@ -347,100 +354,17 @@ async function cleanup() {
         return;
     }
 
-    try {
-        showProgress('Räume auf...');
-
-        const res = await fetch(`${API_BASE}/cleanup`, { method: 'POST' });
-        const data = await res.json();
-        updateProgress(100, 'Fertig!');
-
-        setTimeout(() => {
-            hideProgress();
-            if (data.status === 'ok') {
-                const total = Object.values(data.cleared).reduce((sum, val) => sum + val, 0);
-                showToast(`${total} Dateien gelöscht`, 'success');
-                loadStatus();
-                // Clear log view
-                document.getElementById('log-content').textContent = "Logs bereinigt.";
-                showLog();
-            } else {
-                showToast('Cleanup fehlgeschlagen', 'error');
-            }
-        }, 500);
-    } catch (err) {
-        hideProgress();
-        showToast(`Fehler: ${err.message}`, 'error');
-    }
-}
-
-// ═══════════════════════════════════════════════════════════
-// Progress Bar (mit simuliertem Fortschritt)
-// ═══════════════════════════════════════════════════════════
-
-let progressInterval = null;
-let currentProgress = 0;
-
-function showProgress(text = 'Verarbeite...') {
-    const overlay = document.getElementById('progress-overlay');
-    const textEl = document.getElementById('progress-text');
-    const fillEl = document.getElementById('progress-fill');
-    const percentEl = document.getElementById('progress-percent');
-
-    currentProgress = 0;
-    textEl.textContent = text;
-    fillEl.style.width = '0%';
-    percentEl.textContent = '0%';
-    overlay.classList.add('active');
-
-    // Simuliere Fortschritt bis 90%
-    if (progressInterval) clearInterval(progressInterval);
-    progressInterval = setInterval(() => {
-        if (currentProgress < 90) {
-            currentProgress += Math.random() * 10; // Zufällige Schritte
-            if (currentProgress > 90) currentProgress = 90;
-            fillEl.style.width = currentProgress + '%';
-            percentEl.textContent = Math.round(currentProgress) + '%';
+    await performAction({
+        progressText: 'Räume auf...',
+        url: PDF_CONFIG.ENDPOINTS.CLEANUP,
+        failureText: 'Cleanup fehlgeschlagen',
+        onSuccess: (data) => {
+            const total = Object.values(data.cleared).reduce((sum, val) => sum + val, 0);
+            showToast(`${total} Dateien gelöscht`, 'success');
+            loadStatus();
         }
-    }, 200);
+    });
 }
 
-function updateProgress(percent, text = null) {
-    const fillEl = document.getElementById('progress-fill');
-    const percentEl = document.getElementById('progress-percent');
-    const textEl = document.getElementById('progress-text');
-
-    currentProgress = percent;
-    fillEl.style.width = percent + '%';
-    percentEl.textContent = Math.round(percent) + '%';
-    if (text) {
-        textEl.textContent = text;
-    }
-}
-
-function hideProgress() {
-    if (progressInterval) {
-        clearInterval(progressInterval);
-        progressInterval = null;
-    }
-    const overlay = document.getElementById('progress-overlay');
-    overlay.classList.remove('active');
-    currentProgress = 0;
-}
-
-// ═══════════════════════════════════════════════════════════
-// Toast Notifications
-// ═══════════════════════════════════════════════════════════
-
-function showToast(message, type = 'info') {
-    const container = document.getElementById('toast-container');
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.textContent = message;
-
-    container.appendChild(toast);
-
-    setTimeout(() => {
-        toast.style.opacity = '0';
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
-}
+// Progress Bar + Toast + formatLogEntry aus shared components:
+// /components/progress-helper.js, /components/ui-helpers.js

@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#0f172a">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self';">
+    <meta name="theme-color" content="#007AFF">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -115,50 +116,6 @@
         </main>
     </div>
 
-    <script>
-        // Burger Menu Toggle
-        function toggleMenu() {
-            const menu = document.getElementById('mobile-menu');
-            const toggle = document.querySelector('.burger-toggle');
-            menu.classList.toggle('active');
-            toggle.classList.toggle('active');
-        }
-
-        // Close menu when clicking outside
-        document.addEventListener('click', (e) => {
-            const nav = document.querySelector('.mobile-nav');
-            const menu = document.getElementById('mobile-menu');
-            const toggle = document.querySelector('.burger-toggle');
-
-            if (!nav.contains(e.target) && menu && menu.classList.contains('active')) {
-                menu.classList.remove('active');
-                toggle.classList.remove('active');
-            }
-        });
-
-        // Load system status
-        async function loadStatus() {
-            try {
-                const res = await fetch('/api/health');
-                const data = await res.json();
-
-                document.getElementById('modules-count').textContent = data.modules?.length || 0;
-                document.getElementById('version').textContent = data.version || 'N/A';
-            } catch (err) {
-                console.error('Failed to load status:', err);
-                document.getElementById('gateway-status').innerHTML = '<span class="status-indicator offline"></span> Offline';
-            }
-        }
-
-        // Service Worker
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js').catch(console.error);
-            });
-        }
-
-        // Load status on page load
-        loadStatus();
-    </script>
+    <script src="/static/dashboard.js?v=20260213"></script>
 </body>
 </html>

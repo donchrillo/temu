@@ -2,12 +2,20 @@
 // TEMU Integration - JavaScript
 // ═══════════════════════════════════════════════════════════
 
-const API_BASE = '/api';
-const TEMU_API = '/api/temu';
+// ═══ Constants ═══
 
-// Progress Bar State
-let progressInterval = null;
-let currentProgress = 0;
+const TEMU_CONFIG = {
+    ENDPOINTS: {
+        JOBS: '/api/jobs',
+        LOGS: '/api/logs'
+    },
+    SELECTORS: {
+        JOBS_CONTAINER: 'jobs-container',
+        LOGS_CONTENT: 'logs-content',
+        LOG_FILTER: 'log-filter'
+    },
+    JOB_REFRESH_INTERVAL: 5000
+};
 
 // ═══════════════════════════════════════════════════════════
 // Initialization
@@ -18,83 +26,42 @@ document.addEventListener('DOMContentLoaded', () => {
     loadLogs();
 
     // Auto-refresh every 5 seconds
-    setInterval(loadJobs, 5000);
+    setInterval(loadJobs, TEMU_CONFIG.JOB_REFRESH_INTERVAL);
 });
 
-// ═══════════════════════════════════════════════════════════
-// Progress Bar (same as PDF module)
-// ═══════════════════════════════════════════════════════════
-
-function showProgress(text = 'Verarbeite...') {
-    const overlay = document.getElementById('progress-overlay');
-    const textEl = document.getElementById('progress-text');
-    const fillEl = document.getElementById('progress-fill');
-    const percentEl = document.getElementById('progress-percent');
-
-    currentProgress = 0;
-    textEl.textContent = text;
-    fillEl.style.width = '0%';
-    percentEl.textContent = '0%';
-    overlay.classList.add('active');
-
-    if (progressInterval) clearInterval(progressInterval);
-    progressInterval = setInterval(() => {
-        if (currentProgress < 90) {
-            currentProgress += Math.random() * 10;
-            if (currentProgress > 90) currentProgress = 90;
-            fillEl.style.width = currentProgress + '%';
-            percentEl.textContent = Math.round(currentProgress) + '%';
-        }
-    }, 200);
-}
-
-function updateProgress(percent, text = null) {
-    const fillEl = document.getElementById('progress-fill');
-    const percentEl = document.getElementById('progress-percent');
-    const textEl = document.getElementById('progress-text');
-
-    currentProgress = percent;
-    fillEl.style.width = percent + '%';
-    percentEl.textContent = Math.round(percent) + '%';
-    if (text) {
-        textEl.textContent = text;
-    }
-}
-
-function hideProgress() {
-    if (progressInterval) {
-        clearInterval(progressInterval);
-        progressInterval = null;
-    }
-    const overlay = document.getElementById('progress-overlay');
-    overlay.classList.remove('active');
-    currentProgress = 0;
-}
+// Progress Bar + Toast + formatLogEntry aus shared components:
+// /components/progress-helper.js, /components/ui-helpers.js
 
 // ═══════════════════════════════════════════════════════════
 // Jobs Management
 // ═══════════════════════════════════════════════════════════
 
 async function loadJobs() {
-    try {
-        const res = await fetch(`${API_BASE}/jobs`);
-        const jobs = await res.json();
+    const container = document.getElementById(TEMU_CONFIG.SELECTORS.JOBS_CONTAINER);
 
-        const container = document.getElementById('jobs-container');
+    try {
+        const res = await fetch(TEMU_CONFIG.ENDPOINTS.JOBS);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const jobs = await res.json();
 
         if (!jobs || jobs.length === 0) {
             container.innerHTML = '<div class="loading">Keine Jobs gefunden</div>';
             return;
         }
 
-        container.innerHTML = jobs.map(job => renderJob(job)).join('');
+        container.innerHTML = '';
+        const fragment = document.createDocumentFragment();
+        jobs.forEach(job => fragment.appendChild(renderJob(job)));
+        container.appendChild(fragment);
     } catch (err) {
         console.error('Failed to load jobs:', err);
-        document.getElementById('jobs-container').innerHTML =
-            '<div class="loading">Fehler beim Laden der Jobs</div>';
+        container.innerHTML = '<div class="loading">Fehler beim Laden der Jobs</div>';
     }
 }
 
+/**
+ * Create a job item DOM element (XSS-safe, no innerHTML with API data)
+ */
 function renderJob(job) {
     const config = job.config || {};
     const status = job.status || {};
@@ -105,30 +72,52 @@ function renderJob(job) {
     const lastRun = status.last_run ? new Date(status.last_run).toLocaleString('de-DE') : 'Nie';
     const nextRun = status.next_run ? new Date(status.next_run).toLocaleString('de-DE') : '-';
     const statusClass = status.status?.toLowerCase() || 'idle';
-    const enabledIcon = enabled ? '✅' : '⏸️';
-    const toggleClass = enabled ? 'btn-success' : 'btn-secondary';
-    const toggleText = enabled ? '✓' : '✗';
 
-    return `
-        <div class="job-item">
-            <div class="job-info">
-                <div class="job-name">${enabledIcon} ${jobType}</div>
-                <div class="job-meta">
-                    ${description}<br>
-                    Intervall: ${interval}min | Letzter Lauf: ${lastRun} | Nächster Lauf: ${nextRun}
-                </div>
-            </div>
-            <div style="display: flex; gap: 8px; align-items: center;">
-                <span class="job-status ${statusClass}">${status.status || 'IDLE'}</span>
-                <button class="btn btn-secondary btn-sm" onclick="openIntervalDialog('${job.job_id}', ${interval})" title="Intervall ändern">
-                    ⏱️
-                </button>
-                <button class="btn ${toggleClass} btn-sm" onclick="toggleJob('${job.job_id}', ${!enabled})" title="${enabled ? 'Deaktivieren' : 'Aktivieren'}">
-                    ${toggleText}
-                </button>
-            </div>
-        </div>
-    `;
+    const item = document.createElement('div');
+    item.className = 'job-item';
+
+    // Job info
+    const info = document.createElement('div');
+    info.className = 'job-info';
+
+    const name = document.createElement('div');
+    name.className = 'job-name';
+    name.textContent = `${enabled ? '✅' : '⏸️'} ${jobType}`;
+
+    const meta = document.createElement('div');
+    meta.className = 'job-meta';
+    meta.textContent = `${description} — Intervall: ${interval}min | Letzter Lauf: ${lastRun} | Nächster Lauf: ${nextRun}`;
+
+    info.appendChild(name);
+    info.appendChild(meta);
+
+    // Actions
+    const actions = document.createElement('div');
+    actions.className = 'job-actions';
+
+    const statusBadge = document.createElement('span');
+    statusBadge.className = `job-status ${statusClass}`;
+    statusBadge.textContent = status.status || 'IDLE';
+
+    const intervalBtn = document.createElement('button');
+    intervalBtn.className = 'btn btn-secondary btn-sm';
+    intervalBtn.textContent = '⏱️';
+    intervalBtn.title = 'Intervall ändern';
+    intervalBtn.addEventListener('click', () => openIntervalDialog(job.job_id, interval));
+
+    const toggleBtn = document.createElement('button');
+    toggleBtn.className = `btn ${enabled ? 'btn-success' : 'btn-secondary'} btn-sm`;
+    toggleBtn.textContent = enabled ? '✓' : '✗';
+    toggleBtn.title = enabled ? 'Deaktivieren' : 'Aktivieren';
+    toggleBtn.addEventListener('click', () => toggleJob(job.job_id, !enabled));
+
+    actions.appendChild(statusBadge);
+    actions.appendChild(intervalBtn);
+    actions.appendChild(toggleBtn);
+
+    item.appendChild(info);
+    item.appendChild(actions);
+    return item;
 }
 
 function refreshJobs() {
@@ -140,43 +129,38 @@ function refreshJobs() {
 // Manual Triggers
 // ═══════════════════════════════════════════════════════════
 
-async function triggerOrderSync() {
+/**
+ * Find a job by type and trigger it with parameters
+ * @param {string} jobType - e.g. 'sync_orders', 'sync_inventory'
+ * @param {string} queryString - URL query params
+ * @param {string} progressText - Text for progress overlay
+ * @param {string} successText - Toast text on success
+ */
+async function triggerJob(jobType, queryString, progressText, successText) {
     try {
-        // Show parameter dialog first
-        const params = await showOrderSyncParameterDialog();
+        showProgress(progressText);
 
-        if (params === null) {
-            return; // User cancelled
-        }
-
-        showProgress('Starte Order Sync Workflow...');
-
-        // Find sync_orders job
-        const jobsRes = await fetch(`${API_BASE}/jobs`);
+        const jobsRes = await fetch(TEMU_CONFIG.ENDPOINTS.JOBS);
+        if (!jobsRes.ok) throw new Error(`HTTP ${jobsRes.status}`);
         const jobs = await jobsRes.json();
-        const orderJob = jobs.find(j => j.config?.job_type === 'sync_orders');
+        const job = jobs.find(j => j.config?.job_type === jobType);
 
-        if (!orderJob) {
-            throw new Error('Order Sync Job nicht gefunden');
+        if (!job) {
+            throw new Error(`${jobType} Job nicht gefunden`);
         }
 
-        // Build URL with parameters
-        const url = `${API_BASE}/jobs/${orderJob.job_id}/run-now?` +
-            `parent_order_status=${params.status}&` +
-            `days_back=${params.days}&` +
-            `verbose=${params.verbose}`;
-
-        const res = await fetch(url, {
-            method: 'POST'
-        });
-
+        const res = await fetch(
+            `${TEMU_CONFIG.ENDPOINTS.JOBS}/${job.job_id}/run-now?${queryString}`,
+            { method: 'POST' }
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         updateProgress(100, 'Gestartet!');
 
         setTimeout(() => {
             hideProgress();
             if (data.status === 'triggered') {
-                showToast(`Order Sync gestartet (Status: ${params.status}, Tage: ${params.days})`, 'success');
+                showToast(successText, 'success');
                 loadJobs();
             } else {
                 showToast('Fehler beim Starten', 'error');
@@ -188,53 +172,31 @@ async function triggerOrderSync() {
     }
 }
 
+async function triggerOrderSync() {
+    const params = await showOrderSyncParameterDialog();
+    if (params === null) return;
+
+    const query = `parent_order_status=${params.status}&days_back=${params.days}&verbose=${params.verbose}`;
+    await triggerJob(
+        'sync_orders',
+        query,
+        'Starte Order Sync Workflow...',
+        `Order Sync gestartet (Status: ${params.status}, Tage: ${params.days})`
+    );
+}
+
 async function triggerInventorySync() {
-    try {
-        // Show parameter dialog first
-        const params = await showInventorySyncParameterDialog();
+    const params = await showInventorySyncParameterDialog();
+    if (params === null) return;
 
-        if (params === null) {
-            return; // User cancelled
-        }
-
-        const modeText = params.mode === 'full' ? 'Vollständiger Sync' : 'Quick Sync';
-        showProgress(`Starte ${modeText}...`);
-
-        // Find sync_inventory job
-        const jobsRes = await fetch(`${API_BASE}/jobs`);
-        const jobs = await jobsRes.json();
-        const invJob = jobs.find(j => j.config?.job_type === 'sync_inventory');
-
-        if (!invJob) {
-            throw new Error('Inventory Sync Job nicht gefunden');
-        }
-
-        // Build URL with parameters
-        const url = `${API_BASE}/jobs/${invJob.job_id}/run-now?` +
-            `mode=${params.mode}&` +
-            `verbose=${params.verbose}`;
-
-        const res = await fetch(url, {
-            method: 'POST'
-        });
-
-        const data = await res.json();
-        updateProgress(100, 'Gestartet!');
-
-        setTimeout(() => {
-            hideProgress();
-            if (data.status === 'triggered') {
-                const modeText = params.mode === 'full' ? 'Vollständig (Steps 1-4)' : 'Quick Sync (Steps 3+4)';
-                showToast(`Inventory Sync gestartet (${modeText})`, 'success');
-                loadJobs();
-            } else {
-                showToast('Fehler beim Starten', 'error');
-            }
-        }, 500);
-    } catch (err) {
-        hideProgress();
-        showToast(`Fehler: ${err.message}`, 'error');
-    }
+    const modeText = params.mode === 'full' ? 'Vollständig (Steps 1-4)' : 'Quick Sync (Steps 3+4)';
+    const query = `mode=${params.mode}&verbose=${params.verbose}`;
+    await triggerJob(
+        'sync_inventory',
+        query,
+        `Starte ${modeText}...`,
+        `Inventory Sync gestartet (${modeText})`
+    );
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -243,23 +205,19 @@ async function triggerInventorySync() {
 
 async function loadLogs() {
     try {
-        const filter = document.getElementById('log-filter').value || 'temu';
-        const url = `${API_BASE}/logs?job_id=${filter}&limit=200`;
-
-        const res = await fetch(url);
+        const filter = document.getElementById(TEMU_CONFIG.SELECTORS.LOG_FILTER).value || 'temu';
+        const res = await fetch(`${TEMU_CONFIG.ENDPOINTS.LOGS}?job_id=${filter}&limit=200`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const logs = await res.json();
 
-        const container = document.getElementById('logs-content');
+        const container = document.getElementById(TEMU_CONFIG.SELECTORS.LOGS_CONTENT);
 
         if (!logs || logs.length === 0) {
             container.textContent = 'Keine Logs verfügbar';
             return;
         }
 
-        container.textContent = logs.map(log => {
-            const time = new Date(log.timestamp).toLocaleString('de-DE');
-            return `[${time}] [${log.job_type}] [${log.level}] ${log.message}`;
-        }).join('\n');
+        container.textContent = logs.map(formatLogEntry).join('\n');
     } catch (err) {
         console.error('Failed to load logs:', err);
     }
@@ -275,33 +233,13 @@ function refreshLogs() {
 }
 
 // ═══════════════════════════════════════════════════════════
-// Toast Notifications
-// ═══════════════════════════════════════════════════════════
-
-function showToast(message, type = 'info') {
-    const container = document.getElementById('toast-container');
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.textContent = message;
-
-    container.appendChild(toast);
-
-    setTimeout(() => {
-        toast.style.opacity = '0';
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
-}
-
-// ═══════════════════════════════════════════════════════════
 // Job Settings
 // ═══════════════════════════════════════════════════════════
 
 async function openIntervalDialog(jobId, currentInterval) {
     const newInterval = prompt(`Neues Intervall in Minuten (aktuell: ${currentInterval} Min):`, currentInterval);
 
-    if (newInterval === null || newInterval === '') {
-        return; // User cancelled
-    }
+    if (newInterval === null || newInterval === '') return;
 
     const interval = parseInt(newInterval);
     if (isNaN(interval) || interval < 1) {
@@ -310,13 +248,14 @@ async function openIntervalDialog(jobId, currentInterval) {
     }
 
     try {
-        const res = await fetch(`${API_BASE}/jobs/${jobId}/schedule?interval_minutes=${interval}`, {
-            method: 'POST'
-        });
+        const res = await fetch(
+            `${TEMU_CONFIG.ENDPOINTS.JOBS}/${jobId}/schedule?interval_minutes=${interval}`,
+            { method: 'POST' }
+        );
 
         if (res.ok) {
             showToast(`Intervall geändert auf ${interval} Minuten`, 'success');
-            loadJobs(); // Refresh job list
+            loadJobs();
         } else {
             showToast('Fehler beim Ändern des Intervalls', 'error');
         }
@@ -328,14 +267,14 @@ async function openIntervalDialog(jobId, currentInterval) {
 
 async function toggleJob(jobId, enabled) {
     try {
-        const res = await fetch(`${API_BASE}/jobs/${jobId}/toggle?enabled=${enabled}`, {
-            method: 'POST'
-        });
+        const res = await fetch(
+            `${TEMU_CONFIG.ENDPOINTS.JOBS}/${jobId}/toggle?enabled=${enabled}`,
+            { method: 'POST' }
+        );
 
         if (res.ok) {
-            const action = enabled ? 'aktiviert' : 'deaktiviert';
-            showToast(`Job ${action}`, 'success');
-            loadJobs(); // Refresh job list
+            showToast(`Job ${enabled ? 'aktiviert' : 'deaktiviert'}`, 'success');
+            loadJobs();
         } else {
             showToast('Fehler beim Ändern des Job-Status', 'error');
         }
@@ -346,143 +285,222 @@ async function toggleJob(jobId, enabled) {
 }
 
 // ═══════════════════════════════════════════════════════════
+// Modal Dialog Helper
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Create and show a modal dialog, returns a Promise that resolves when submitted or null on cancel
+ * @param {Object} opts
+ * @param {string} opts.title - Modal header text
+ * @param {string} opts.submitBtnClass - CSS class for submit button (e.g. 'btn-primary')
+ * @param {Function} opts.buildBody - Function that creates the modal body DOM content
+ * @param {Function} opts.getParams - Function that reads form values and returns params object
+ */
+function showModal({ title, submitBtnClass = 'btn-primary', buildBody, getParams }) {
+    return new Promise((resolve) => {
+        const dialog = document.createElement('div');
+        dialog.className = 'modal active';
+
+        const content = document.createElement('div');
+        content.className = 'modal-content';
+
+        // Header
+        const header = document.createElement('div');
+        header.className = 'modal-header';
+        header.textContent = title;
+
+        // Body
+        const body = document.createElement('div');
+        body.className = 'modal-body';
+        body.appendChild(buildBody());
+
+        // Footer
+        const footer = document.createElement('div');
+        footer.className = 'modal-footer';
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'btn btn-secondary';
+        cancelBtn.textContent = 'Abbrechen';
+
+        const submitBtn = document.createElement('button');
+        submitBtn.className = `btn ${submitBtnClass}`;
+        submitBtn.textContent = '▶️ Starten';
+
+        footer.appendChild(cancelBtn);
+        footer.appendChild(submitBtn);
+
+        content.appendChild(header);
+        content.appendChild(body);
+        content.appendChild(footer);
+        dialog.appendChild(content);
+        document.body.appendChild(dialog);
+
+        function close(result) {
+            dialog.remove();
+            resolve(result);
+        }
+
+        cancelBtn.addEventListener('click', () => close(null));
+        submitBtn.addEventListener('click', () => close(getParams()));
+        dialog.addEventListener('click', (e) => {
+            if (e.target === dialog) close(null);
+        });
+    });
+}
+
+// ═══════════════════════════════════════════════════════════
 // Parameter Dialogs
 // ═══════════════════════════════════════════════════════════
 
 function showOrderSyncParameterDialog() {
-    return new Promise((resolve) => {
-        const dialog = document.createElement('div');
-        dialog.className = 'modal active';
-        dialog.innerHTML = `
-            <div class="modal-content">
-                <div class="modal-header">⚙️ Order Sync Parameter</div>
-                <div class="modal-body">
-                    <div style="display: grid; gap: 15px;">
-                        <div>
-                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">📊 Status:</label>
-                            <select id="param-status" style="width: 100%; padding: 10px; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 6px; font-size: 14px;">
-                                <option value="2">2 - UN_SHIPPING (nicht versendet)</option>
-                                <option value="3">3 - CANCELLED (storniert)</option>
-                                <option value="4">4 - SHIPPED (versendet)</option>
-                                <option value="5">5 - RECEIPTED (Order received)</option>
-                            </select>
-                        </div>
+    return showModal({
+        title: '⚙️ Order Sync Parameter',
+        submitBtnClass: 'btn-primary',
+        buildBody() {
+            const grid = document.createElement('div');
+            grid.className = 'modal-form-grid';
 
-                        <div>
-                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">📅 Tage zurück:</label>
-                            <input type="number" id="param-days" value="7" min="1" max="365"
-                                   style="width: 100%; padding: 10px; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 6px; font-size: 14px;">
-                            <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
-                                Wie viele Tage in die Vergangenheit sollen Orders gesucht werden?
-                            </p>
-                        </div>
+            // Status select
+            const statusField = document.createElement('div');
+            const statusLabel = document.createElement('label');
+            statusLabel.textContent = '📊 Status:';
+            const statusSelect = document.createElement('select');
+            statusSelect.id = 'param-status';
+            [
+                { value: '2', text: '2 - UN_SHIPPING (nicht versendet)' },
+                { value: '3', text: '3 - CANCELLED (storniert)' },
+                { value: '4', text: '4 - SHIPPED (versendet)' },
+                { value: '5', text: '5 - RECEIPTED (Order received)' }
+            ].forEach(({ value, text }) => {
+                const opt = document.createElement('option');
+                opt.value = value;
+                opt.textContent = text;
+                statusSelect.appendChild(opt);
+            });
+            statusField.appendChild(statusLabel);
+            statusField.appendChild(statusSelect);
 
-                        <div>
-                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                <input type="checkbox" id="param-verbose" style="width: 18px; height: 18px; cursor: pointer;">
-                                <span>🔍 Verbose Mode</span>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button class="btn btn-secondary" id="cancel-btn">Abbrechen</button>
-                    <button class="btn btn-primary" id="submit-btn">▶️ Starten</button>
-                </div>
-            </div>
-        `;
+            // Days input
+            const daysField = document.createElement('div');
+            const daysLabel = document.createElement('label');
+            daysLabel.textContent = '📅 Tage zurück:';
+            const daysInput = document.createElement('input');
+            daysInput.type = 'number';
+            daysInput.id = 'param-days';
+            daysInput.value = '7';
+            daysInput.min = '1';
+            daysInput.max = '365';
+            const daysHint = document.createElement('p');
+            daysHint.className = 'modal-field-hint';
+            daysHint.textContent = 'Wie viele Tage in die Vergangenheit sollen Orders gesucht werden?';
+            daysField.appendChild(daysLabel);
+            daysField.appendChild(daysInput);
+            daysField.appendChild(daysHint);
 
-        document.body.appendChild(dialog);
+            // Verbose checkbox
+            const verboseField = createVerboseCheckbox();
 
-        document.getElementById('cancel-btn').onclick = () => {
-            dialog.remove();
-            resolve(null);
-        };
-
-        document.getElementById('submit-btn').onclick = () => {
-            const params = {
+            grid.appendChild(statusField);
+            grid.appendChild(daysField);
+            grid.appendChild(verboseField);
+            return grid;
+        },
+        getParams() {
+            return {
                 status: parseInt(document.getElementById('param-status').value),
                 days: parseInt(document.getElementById('param-days').value),
                 verbose: document.getElementById('param-verbose').checked
             };
-            dialog.remove();
-            resolve(params);
-        };
-
-        // Close on outside click
-        dialog.onclick = (e) => {
-            if (e.target === dialog) {
-                dialog.remove();
-                resolve(null);
-            }
-        };
+        }
     });
 }
 
 function showInventorySyncParameterDialog() {
-    return new Promise((resolve) => {
-        const dialog = document.createElement('div');
-        dialog.className = 'modal active';
-        dialog.innerHTML = `
-            <div class="modal-content">
-                <div class="modal-header">⚙️ Inventory Sync Parameter</div>
-                <div class="modal-body">
-                    <div style="display: grid; gap: 15px;">
-                        <div>
-                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">🔄 Sync-Modus:</label>
-                            <select id="param-mode" style="width: 100%; padding: 10px; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 6px; font-size: 14px;">
-                                <option value="quick">Quick Sync (Steps 3+4) - Nur Bestandsabgleich</option>
-                                <option value="full">Vollständig (Steps 1-4) - Inkl. SKU-Import</option>
-                            </select>
-                            <div style="margin-top: 12px; padding: 12px; background: var(--bg-secondary); border-radius: 6px; font-size: 13px; line-height: 1.6;">
-                                <p style="margin: 0 0 8px 0; font-weight: 600; color: var(--primary);">Quick Sync (Empfohlen):</p>
-                                <p style="margin: 0 0 12px 0; color: var(--text-secondary);">
-                                    Aktualisiert nur JTL-Bestände und sendet Updates an TEMU. Schneller und für regelmäßige Synchronisation geeignet.
-                                </p>
-                                <p style="margin: 0 0 8px 0; font-weight: 600; color: var(--warning);">Vollständig:</p>
-                                <p style="margin: 0; color: var(--text-secondary);">
-                                    Lädt alle SKUs von TEMU, importiert sie in die Datenbank, dann Bestandsabgleich. Langsamer, nur nötig wenn neue SKUs hinzugekommen sind.
-                                </p>
-                            </div>
-                        </div>
+    return showModal({
+        title: '⚙️ Inventory Sync Parameter',
+        submitBtnClass: 'btn-success',
+        buildBody() {
+            const grid = document.createElement('div');
+            grid.className = 'modal-form-grid';
 
-                        <div>
-                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                <input type="checkbox" id="param-verbose" style="width: 18px; height: 18px; cursor: pointer;">
-                                <span>🔍 Verbose Mode</span>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button class="btn btn-secondary" id="cancel-btn">Abbrechen</button>
-                    <button class="btn btn-success" id="submit-btn">▶️ Starten</button>
-                </div>
-            </div>
-        `;
+            // Mode select
+            const modeField = document.createElement('div');
+            const modeLabel = document.createElement('label');
+            modeLabel.textContent = '🔄 Sync-Modus:';
+            const modeSelect = document.createElement('select');
+            modeSelect.id = 'param-mode';
+            [
+                { value: 'quick', text: 'Quick Sync (Steps 3+4) - Nur Bestandsabgleich' },
+                { value: 'full', text: 'Vollständig (Steps 1-4) - Inkl. SKU-Import' }
+            ].forEach(({ value, text }) => {
+                const opt = document.createElement('option');
+                opt.value = value;
+                opt.textContent = text;
+                modeSelect.appendChild(opt);
+            });
 
-        document.body.appendChild(dialog);
+            // Help box
+            const helpBox = document.createElement('div');
+            helpBox.className = 'modal-help-box';
 
-        document.getElementById('cancel-btn').onclick = () => {
-            dialog.remove();
-            resolve(null);
-        };
+            const quickTitle = document.createElement('p');
+            quickTitle.className = 'help-title recommended';
+            quickTitle.textContent = 'Quick Sync (Empfohlen):';
 
-        document.getElementById('submit-btn').onclick = () => {
-            const params = {
+            const quickText = document.createElement('p');
+            quickText.className = 'help-text';
+            quickText.textContent = 'Aktualisiert nur JTL-Bestände und sendet Updates an TEMU. Schneller und für regelmäßige Synchronisation geeignet.';
+
+            const fullTitle = document.createElement('p');
+            fullTitle.className = 'help-title alternative';
+            fullTitle.textContent = 'Vollständig:';
+
+            const fullText = document.createElement('p');
+            fullText.className = 'help-text';
+            fullText.textContent = 'Lädt alle SKUs von TEMU, importiert sie in die Datenbank, dann Bestandsabgleich. Langsamer, nur nötig wenn neue SKUs hinzugekommen sind.';
+
+            helpBox.appendChild(quickTitle);
+            helpBox.appendChild(quickText);
+            helpBox.appendChild(fullTitle);
+            helpBox.appendChild(fullText);
+
+            modeField.appendChild(modeLabel);
+            modeField.appendChild(modeSelect);
+            modeField.appendChild(helpBox);
+
+            // Verbose checkbox
+            const verboseField = createVerboseCheckbox();
+
+            grid.appendChild(modeField);
+            grid.appendChild(verboseField);
+            return grid;
+        },
+        getParams() {
+            return {
                 mode: document.getElementById('param-mode').value,
                 verbose: document.getElementById('param-verbose').checked
             };
-            dialog.remove();
-            resolve(params);
-        };
-
-        // Close on outside click
-        dialog.onclick = (e) => {
-            if (e.target === dialog) {
-                dialog.remove();
-                resolve(null);
-            }
-        };
+        }
     });
+}
+
+/**
+ * Create a standard verbose mode checkbox field
+ */
+function createVerboseCheckbox() {
+    const field = document.createElement('div');
+    const label = document.createElement('label');
+    label.className = 'checkbox-label';
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.id = 'param-verbose';
+
+    const text = document.createElement('span');
+    text.textContent = '🔍 Verbose Mode';
+
+    label.appendChild(checkbox);
+    label.appendChild(text);
+    field.appendChild(label);
+    return field;
 }

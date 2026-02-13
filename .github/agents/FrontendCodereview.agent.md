@@ -1,7 +1,7 @@
 ---
 name: Frontend Review
 description: Prüft Vanilla JavaScript, HTML, CSS und PWA-Code auf Sicherheit, Performance und Best Practices
-argument-hint: "Review frontend/master.css" oder "Review modules/temu/frontend/temu.js"
+argument-hint: "Review frontend/master.css oder Review modules/temu/frontend/temu.js"
 tools: ['vscode', 'execute', 'read', 'edit', 'search']
 ---
 

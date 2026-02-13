@@ -24,9 +24,107 @@ Jeder Agent dokumentiert seine Änderungen in folgendem Format:
 
 ## Pending Changes (Noch nicht dokumentiert)
 
-_Keine ausstehenden Änderungen._
+*(Keine ausstehenden Changes)*
+
+---
 
 ## Processed Changes (Bereits dokumentiert)
+
+---
+### 2026-02-13 - Frontend Refactoring Agent (Verarbeitet: 13. Feb 2026)
+**Modul/Datei:** `frontend/components/progress-helper.js`, `frontend/components/ui-helpers.js`, `modules/temu/frontend/temu.js`, `modules/pdf_reader/frontend/pdf.js`
+**Art der Änderung:** Refactoring - Duplikate ausgelagert
+**Beschreibung:** Dreifach duplizierte Progress Bar, Toast Notifications und Log-Formatting in shared Components zusammengeführt
+**Details:**
+- `progress-helper.js` erweitert: Auto-Increment-Modus (temu/pdf) + Simple-Modus (csv) in einer API
+- Neues `ui-helpers.js`: showToast() + formatLogEntry() als shared Component
+- ~130 Zeilen duplizierter Code aus temu.js (~55 Zeilen) und pdf.js (~75 Zeilen) entfernt
+- Config-Objekte bereinigt (TOAST_CONTAINER, PROGRESS_*, TOAST_DURATION entfernt)
+- temu.html + pdf.html: Shared Component Script-Tags ergänzt
+- service-worker.js: ui-helpers.js in PRECACHE_ASSETS + Cache-Version Bump
+**Betroffene Dokumentation:**
+- [x] docs/FRONTEND/architecture.md aktualisieren (progress-helper.js API-Änderung + ui-helpers.js)
+- [x] docs/ARCHITECTURE/code_structure.md (ui-helpers.js ergänzen)
+**Impact:** Low
+**Breaking Changes:** No (API ist rückwärtskompatibel)
+**Dokumentiert in:** FRONTEND/architecture.md (Section 15)
+
+---
+### 2026-02-13 - Frontend Refactoring Agent (Verarbeitet: 13. Feb 2026)
+**Modul/Datei:** `modules/temu/frontend/` (temu.js, temu.css, temu.html)
+**Art der Änderung:** Refactoring
+**Beschreibung:** TEMU-Modul Frontend: XSS behoben, triggerJob-Helper, showModal-Helper, Inline-Styles → CSS-Klassen, DOM-Caching
+**Details:**
+- `temu.js`: `renderJob()` innerHTML mit API-Daten (XSS) → DOM-Erstellung mit textContent/addEventListener
+- `temu.js`: 2x fast identischer Trigger-Pattern → generischer `triggerJob()` Helper
+- `temu.js`: 2x Dialog mit jeweils ~60 Zeilen innerHTML + Inline-Styles → `showModal()` Helper + DOM-Erstellung
+- `temu.js`: `createVerboseCheckbox()` extrahiert (war 2x dupliziert in Dialogen)
+- `temu.js`: Progress-Funktionen DOM-Caching via `getProgressElements()` (lazy init)
+- `temu.js`: Magic Strings → `TEMU_CONFIG` Konstante (Endpoints, Selectors, Timings)
+- `temu.js`: `formatLogEntry()` als eigene Funktion extrahiert
+- `temu.css`: `.log-controls`, `.logs-content`, `.loading` Duplikate aus master.css entfernt
+- `temu.css`: Neue CSS-Klassen für Dialog: `.modal-form-grid`, `.modal-field-hint`, `.modal-help-box`, `.checkbox-label`, `.job-actions`
+- `temu.html`: Unbenutzter 2. Parameter bei `loadNavigation()` entfernt
+**Betroffene Dokumentation:**
+- [x] docs/FRONTEND/architecture.md aktualisieren
+**Impact:** Low
+**Breaking Changes:** No
+**Dokumentiert in:** FRONTEND/architecture.md (Section 16)
+
+---
+### 2026-02-13 - Frontend Refactoring Agent (Verarbeitet: 13. Feb 2026)
+**Modul/Datei:** `modules/pdf_reader/frontend/` (pdf.js, pdf.css, pdf.html)
+**Art der Änderung:** Refactoring
+**Beschreibung:** PDF-Modul Frontend: Duplicate Code eliminiert, XSS behoben, performAction-Helper, DOM-Caching
+**Details:**
+- `pdf.js`: 6x identisches try/catch/progress/toast Pattern → generischer `performAction()` Helper
+- `pdf.js`: `werbungFiles`/`rechnungenFiles` separate Arrays + if/else → `fileState` Map-Objekt
+- `pdf.js`: `renderFileList()` innerHTML mit `file.name` (XSS-Lücke) → DOM-Erstellung mit textContent
+- `pdf.js`: `loadStatus()` inline `style="..."` → CSS-Klasse `.status-info-grid`
+- `pdf.js`: 4x `getElementById()` pro Progress-Aufruf → gecachte `getProgressElements()`
+- `pdf.js`: Magic Strings → `PDF_CONFIG` Konstante (Endpoints, Selectors, Toast-Duration)
+- `pdf.js`: Log-Formatierung → eigene `formatLogEntry()` Funktion extrahiert
+- `pdf.css`: `.log-controls` + `.cleanup-section` (1:1 Duplikate aus master.css) entfernt
+- `pdf.css`: `.log-content` → nur noch `max-height: 300px` Override statt komplettem Duplikat
+- `pdf.css`: `.status-info-grid` Klasse für dynamisches Status-Grid hinzugefügt
+- `pdf.html`: Duplikater Burger-Menu-Script entfernt (nav-loader.js macht das bereits)
+- `pdf.html`: SW-Update-Script bereinigt (console.log entfernt, kompakter)
+- `pdf.html`: Unbenutzter 2. Parameter bei `loadNavigation()` entfernt
+**Betroffene Dokumentation:**
+- [x] docs/FRONTEND/architecture.md aktualisieren
+**Impact:** Low
+**Breaking Changes:** No
+**Dokumentiert in:** FRONTEND/architecture.md (Section 16)
+
+---
+### 2026-02-13 - Frontend Refactoring Agent (Verarbeitet: 13. Feb 2026)
+**Modul/Datei:** `frontend/` (mehrere Dateien)
+**Art der Änderung:** Refactoring
+**Beschreibung:** Frontend-Ordner refactored: Duplicate Code eliminiert, Callbacks → async/await, Inline-Scripts externalisiert, DOM-Caching eingeführt
+**Details:**
+- `nav-loader.js`: 3x duplizierte Menu-Close-Logik → zentrale `closeMenu()` Funktion extrahiert, `initMenuBehavior()` Funktion erstellt, Magic Strings → `NAV_CONFIG` Konstante, JSDoc hinzugefügt
+- `service-worker.js`: `.then()` Callbacks → `async function staleWhileRevalidate()` und `cleanOldCaches()`, `ASSETS` → `PRECACHE_ASSETS` (beschreibender Name), Cache-Version bumped
+- `progress-helper.js`: 4x wiederholte `getElementById()` Aufrufe → `ProgressOverlay` Module Pattern mit gecachten DOM-Referenzen, Default Steps → `DEFAULT_PROGRESS_STEPS` Konstante
+- `index-new.html`: Inline `<script>` (30 Zeilen) → externe `dashboard.js` Datei mit `DASHBOARD_CONFIG`, `loadStatus()`, `renderOfflineStatus()`, `registerServiceWorker()`
+- `docs.html`: Inline `<style>` → nach `dashboard.css` verschoben (`.docs-page`, `.swagger-container`), CSS cache-busting Version hinzugefügt
+**Betroffene Dokumentation:**
+- [x] docs/FRONTEND/architecture.md aktualisieren
+**Impact:** Low
+**Breaking Changes:** No
+**Dokumentiert in:** FRONTEND/architecture.md (Section 17)
+
+---
+
+
+---
+### [2026-02-13] - Frontend Review Agent (Verarbeitet: 13. Feb 2026)
+**Modul/Datei:** `frontend/` (gesamter Ordner)
+**Art der Änderung:** Security, Performance, Accessibility, PWA
+**Beschreibung:** Vollständiges Frontend Review - 19 Findings gefixt
+**Geänderte Dateien:** 8 Dateien (master.css, index-new.html, docs.html, navigation.html, nav-loader.js, service-worker.js, manifest.json, csv.html)
+**Impact:** High
+**Breaking Changes:** No
+**Dokumentiert in:** CURRENT_STATUS.md (Section 10)
 
 ---
 ### 2026-02-13 - Refactoring-Agent (Verarbeitet: 13. Feb 2026)

@@ -10,7 +10,7 @@
 <body>
     <!-- Navigation wird dynamisch geladen -->
     <script src="/components/nav-loader.js"></script>
-    <script>loadNavigation('pdf', '📄 PDF Processor');</script>
+    <script>loadNavigation('pdf');</script>
 
     <div class="container">
         <!-- Header -->
@@ -139,44 +139,16 @@
         </div>
     </div>
 
-    <script>
-        // Burger Menu Toggle
-        function toggleMenu() {
-            const menu = document.getElementById('mobile-menu');
-            const toggle = document.querySelector('.burger-toggle');
-            menu.classList.toggle('active');
-            toggle.classList.toggle('active');
-        }
-
-        // Close menu when clicking outside
-        document.addEventListener('click', (e) => {
-            const nav = document.querySelector('.mobile-nav');
-            const menu = document.getElementById('mobile-menu');
-            const toggle = document.querySelector('.burger-toggle');
-
-            if (!nav.contains(e.target) && menu && menu.classList.contains('active')) {
-                menu.classList.remove('active');
-                toggle.classList.remove('active');
-            }
-        });
-    </script>
-
-    <!-- Force Service Worker Update -->
+    <!-- Service Worker Update Check -->
     <script>
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.getRegistrations().then(registrations => {
-                registrations.forEach(registration => {
-                    // Force update check on every page load
-                    registration.update().then(() => {
-                        console.log('Service Worker update check completed');
-                    });
-
-                    // Listen for new service worker
-                    registration.addEventListener('updatefound', () => {
-                        const newWorker = registration.installing;
+                registrations.forEach(reg => {
+                    reg.update();
+                    reg.addEventListener('updatefound', () => {
+                        const newWorker = reg.installing;
                         newWorker.addEventListener('statechange', () => {
                             if (newWorker.state === 'activated') {
-                                console.log('New Service Worker activated, reloading page...');
                                 window.location.reload();
                             }
                         });
@@ -186,6 +158,8 @@
         }
     </script>
 
-    <script src="/static/pdf.js?v=20260203"></script>
+    <script src="/components/progress-helper.js"></script>
+    <script src="/components/ui-helpers.js"></script>
+    <script src="/static/pdf.js?v=20260213"></script>
 </body>
 </html>
