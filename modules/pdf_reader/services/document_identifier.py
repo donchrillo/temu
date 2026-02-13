@@ -1,4 +1,4 @@
-# Copied from streamlit-app/src/document_identifier.py
+"""Erkennt Land und Dokumenttyp anhand typischer Begriffe im PDF-Text."""
 
 rules = [
     # Deutschland

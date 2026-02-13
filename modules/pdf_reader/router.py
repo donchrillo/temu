@@ -54,6 +54,31 @@ def _dir_status(dir_path: Path) -> dict:
     files = [p for p in dir_path.glob("*") if p.is_file()]
     return {"path": str(dir_path), "count": len(files), "files": [p.name for p in files[:5]]}
 
+def _result_count(result) -> int:
+    """Sichere Längenbestimmung für Verarbeitungsergebnisse."""
+    return len(result) if hasattr(result, "__len__") else 0
+
+async def _run_process_job(job_type: str, process_fn, job_id: str) -> dict:
+    """Generischer Runner für Process-Endpoints (Werbung/Rechnungen)."""
+    log_service.start_job_capture(job_id, job_type)
+    try:
+        result = process_fn(job_id)
+        count = _result_count(result)
+        log_service.log(job_id, job_type, "INFO", f"Verarbeitet: {count} Einträge")
+        log_service.end_job_capture(success=True)
+        return {"status": "ok", "processed": True, "count": count, "job_id": job_id}
+    except Exception as e:
+        log_service.log(job_id, job_type, "ERROR", f"Process Fehler: {e}")
+        log_service.end_job_capture(success=False, error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+def _get_result_file(filename: str) -> FileResponse:
+    """Generischer Download für Excel-Ergebnisse."""
+    excel_path = ORDNER_AUSGANG / filename
+    if excel_path.exists():
+        return FileResponse(str(excel_path), filename=filename)
+    raise HTTPException(status_code=404, detail="Kein Ergebnis verfügbar. Bitte zuerst verarbeiten.")
+
 # ═══════════════════════════════════════════════════════════════
 # HEALTH & STATUS
 # ═══════════════════════════════════════════════════════════════
@@ -100,16 +125,13 @@ async def upload_werbung(files: List[UploadFile] = File(default=[]), process: bo
         extracted_filenames = []
         
         if process:
-            # Wenn process=True, machen wir alles in einem Job
             log_service.log(job_id, "pdf_werbung_upload", "INFO", "Starte automatische Verarbeitung...")
             
             extracted_files = extract_and_save_first_page(job_id)
             extracted_filenames = [p.name for p in extracted_files]
             
             result = process_ad_pdfs(job_id)
-            
-            count = len(result) if hasattr(result, '__len__') else 0
-            log_service.log(job_id, "pdf_werbung_upload", "INFO", f"Werbung verarbeitet: {count} Einträge")
+            log_service.log(job_id, "pdf_werbung_upload", "INFO", f"Werbung verarbeitet: {_result_count(result)} Einträge")
 
         log_service.end_job_capture(success=True)
         return {
@@ -150,33 +172,12 @@ async def extract_werbung():
 async def process_werbung():
     """Verarbeite extrahierte Werbungs-PDFs zu Excel."""
     job_id = f"pdf_werbung_process_{int(time.time())}"
-    log_service.start_job_capture(job_id, "pdf_werbung_process")
-    
-    try:
-        result = process_ad_pdfs(job_id)
-        
-        count = len(result) if hasattr(result, '__len__') else 0
-        log_service.log(job_id, "pdf_werbung_process", "INFO", f"Verarbeitet: {count} Einträge")
-        log_service.end_job_capture(success=True)
-        
-        return {
-            "status": "ok",
-            "processed": True,
-            "count": count,
-            "job_id": job_id
-        }
-    except Exception as e:
-        log_service.log(job_id, "pdf_werbung_process", "ERROR", f"Process Fehler: {e}")
-        log_service.end_job_capture(success=False, error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+    return await _run_process_job("pdf_werbung_process", process_ad_pdfs, job_id)
 
 @router.get("/werbung/result")
 async def get_werbung_result():
     """Download Werbungs-Excel-Export"""
-    excel_path = ORDNER_AUSGANG / "werbung.xlsx"
-    if excel_path.exists():
-        return FileResponse(str(excel_path), filename="werbung.xlsx")
-    raise HTTPException(status_code=404, detail="Kein Ergebnis verfügbar. Bitte zuerst verarbeiten.")
+    return _get_result_file("werbung.xlsx")
 
 # ═══════════════════════════════════════════════════════════════
 # RECHNUNGEN (INVOICES) ENDPOINTS
@@ -196,9 +197,7 @@ async def upload_rechnungen(files: List[UploadFile] = File(default=[]), process:
         if process:
             log_service.log(job_id, "pdf_rechnungen_upload", "INFO", "Starte automatische Verarbeitung...")
             result = process_rechnungen(job_id)
-            
-            count = len(result) if hasattr(result, '__len__') else 0
-            log_service.log(job_id, "pdf_rechnungen_upload", "INFO", f"Rechnungen verarbeitet: {count} Einträge")
+            log_service.log(job_id, "pdf_rechnungen_upload", "INFO", f"Rechnungen verarbeitet: {_result_count(result)} Einträge")
 
         log_service.end_job_capture(success=True)
         return {
@@ -216,33 +215,12 @@ async def upload_rechnungen(files: List[UploadFile] = File(default=[]), process:
 async def process_rechnungen_endpoint():
     """Verarbeite Rechnungs-PDFs zu Excel."""
     job_id = f"pdf_rechnungen_process_{int(time.time())}"
-    log_service.start_job_capture(job_id, "pdf_rechnungen_process")
-    
-    try:
-        result = process_rechnungen(job_id)
-        
-        count = len(result) if hasattr(result, '__len__') else 0
-        log_service.log(job_id, "pdf_rechnungen_process", "INFO", f"Verarbeitet: {count} Einträge")
-        log_service.end_job_capture(success=True)
-        
-        return {
-            "status": "ok",
-            "processed": True,
-            "count": count,
-            "job_id": job_id
-        }
-    except Exception as e:
-        log_service.log(job_id, "pdf_rechnungen_process", "ERROR", f"Process Fehler: {e}")
-        log_service.end_job_capture(success=False, error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+    return await _run_process_job("pdf_rechnungen_process", process_rechnungen, job_id)
 
 @router.get("/rechnungen/result")
 async def get_rechnungen_result():
     """Download Rechnungs-Excel-Export"""
-    excel_path = ORDNER_AUSGANG / "rechnungen.xlsx"
-    if excel_path.exists():
-        return FileResponse(str(excel_path), filename="rechnungen.xlsx")
-    raise HTTPException(status_code=404, detail="Kein Ergebnis verfügbar. Bitte zuerst verarbeiten.")
+    return _get_result_file("rechnungen.xlsx")
 
 # ═══════════════════════════════════════════════════════════════
 # LOGS & CLEANUP
