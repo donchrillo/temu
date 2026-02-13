@@ -24,8 +24,77 @@ Jeder Agent dokumentiert seine Änderungen in folgendem Format:
 
 ## Pending Changes (Noch nicht dokumentiert)
 
+_Keine ausstehenden Änderungen._
+
+## Processed Changes (Bereits dokumentiert)
+
 ---
-### 2026-02-14 - Codereview-Agent (GitHub Copilot)
+### 2026-02-13 - Refactoring-Agent (Verarbeitet: 13. Feb 2026)
+**Modul/Datei:** `modules/shared/` (gesamtes shared-Modul)
+**Art der Änderung:** Refactoring
+**Beschreibung:** Systematisches Refactoring des shared-Moduls: DRY-Verletzungen, Dead Code, God Class, fehlende Type Hints
+**Details:**
+- 🔴 **Dead Code entfernt**: `modules/shared/config.py` (defekter Import: `from config.settings`) und `modules/shared/database.py` (defekter Import: `from ..connection`) — beides unbenutzte Re-Export-Layer mit kaputten Import-Pfaden
+- 🔴 **DRY: `_get_log_service()` zentralisiert**: Identische Lazy-Import-Funktion war in 6 Repository-Dateien kopiert → Extrahiert in `database/repositories/_log_helper.py`, alle 6 Dateien importieren jetzt von dort
+- 🔴 **DRY: SELECT-Spaltenlisten** als Klassenkonstanten extrahiert: `OrderRepository._ORDER_COLUMNS` (4×wiederholt) und `OrderItemRepository._ITEM_COLUMNS` (3×wiederholt)
+- 🔴 **God Class aufgelöst**: Domain Models `Order` und `OrderItem` aus Repositories in eigene `models.py` extrahiert — Rückwärtskompatibel per Re-Export
+- 🟡 **Lange Funktion aufgeteilt**: `TemuMarketplaceService.fetch_orders()` (90 Zeilen, 4 Verantwortlichkeiten) → aufgeteilt in `_fetch_orders_from_api()`, `_fetch_and_save_order_details()`, `_save_json()` (je <25 Zeilen)
+- 🟡 **Unused variable** `error_trace` in `service.py` entfernt (assigned but never used)
+- 🟡 **print() → app_logger**: 2× `print()` Fallback in `log_repository.py` durch `app_logger.error()` ersetzt
+- 🔵 **Type Hints hinzugefügt**: `settings.py` (alle Config-Werte), `connection.py` (`_parse_server`), `signature.py` (`calculate_signature`)
+- 🔵 **Dead Code**: `__main__` Testblock in `signature.py` entfernt, auskommentierte Methode in `service.py` entfernt
+- Neue Dateien: `repositories/_log_helper.py`, `repositories/temu/models.py`
+- 0 Breaking Changes, alle Consumer-Imports verifiziert
+**Betroffene Dokumentation:**
+- [x] Architecture-Docs überarbeiten (neue Dateien: `_log_helper.py`, `models.py`)
+- [x] README.md anpassen
+- **Dokumentiert in:** CURRENT_STATUS.md (Section 8), ARCHITECTURE/code_structure.md (Projektbaum + Repositories)
+
+---
+### 2026-02-13 - Codereview-Agent (Verarbeitet: 13. Feb 2026)
+**Modul/Datei:** `modules/shared/` (Database, Connectors, Logging)
+**Art der Änderung:** Security + Bug Fix + Performance
+**Beschreibung:** 8 Findings aus Security-Review des shared-Moduls umgesetzt
+**Details:**
+- 🔴 Dead Code in `jtl_repository.py` entfernt: Doppelter except-Block + unerreichbarer Code nach return in `get_customer_number_by_order_id` (Copy-Paste Rest)
+- 🔴 Missing `return False` in `service.py`: `fetch_orders()` lief nach fehlgeschlagener Credential-Validierung weiter — jetzt Early Return
+- 🔴 Missing `return False` in `service.py`: Exception-Handler gab implizit `None` zurück statt `False`
+- 🔴 SQL Injection in `log_repository.py`: `f"SELECT TOP {limit}"` → parametrisiertes `SELECT TOP (:limit)` mit Input-Clamping
+- 🟡 N+1 Query in `order_repository.py`: `get_orders_for_tracking_export()` machte n+1 Queries — jetzt Batch-Query mit `IN :order_ids`
+- 🟡 Lazy Init in `log_service.py`: `ensure_table_exists()` aus `__init__` in Lazy `_ensure_table()` verschoben — App startet auch ohne DB
+- 🟡 Log Rotation in `logger.py`: `FileHandler` → `RotatingFileHandler` (10MB, 5 Backups) — verhindert unbegrenztes Log-Wachstum
+- 🟡 `mark_synced` in `inventory_repository.py`: Implizites `executemany` via List-Übergabe an `_execute_stmt` → explizites Loop
+- 🔵 Counter-Bug in `product_repository.py` + `inventory_repository.py`: `inserted/updated` Counter war immer 0/N — vereinfacht zu `processed` Counter (MERGE unterscheidet nicht)
+- Aufrufer in `inventory_service.py` an neues `{"processed": n}` Format angepasst
+**Betroffene Dokumentation:**
+- [x] API-Docs aktualisieren
+- [x] Architecture-Docs überarbeiten
+- [x] README.md anpassen
+- **Dokumentiert in:** CURRENT_STATUS.md (Section 8), ARCHITECTURE/code_structure.md (Logging + Repositories)
+
+---
+### 2026-02-13 - Refactoring-Agent (Verarbeitet: 13. Feb 2026)
+**Modul/Datei:** `modules/jtl/xml_export/xml_export_service.py`
+**Art der Änderung:** Refactoring
+**Beschreibung:** Strukturelles Refactoring zur Verbesserung von Lesbarkeit und Wartbarkeit
+**Details:**
+- `export_to_xml()` Loop-Body in `_process_single_order()` extrahiert (100→40 Zeilen)
+- Item-Fetching-Logik in `_fetch_order_items()` extrahiert
+- 3× dupliziertes "wrap in root + deepcopy + prettify" Pattern in `_prettify_wrapped_xml()` konsolidiert (DRY)
+- Header-Felder aus `_generate_order_xml()` in `_add_header_fields()` extrahiert
+- Stateless Methoden als `@staticmethod` markiert (6 Methoden)
+- Type Hints modernisiert: `Dict`/`List` → `dict`/`list` (Python 3.9+)
+- Überflüssige Leerzeilen und inkonsistente Formatierung bereinigt
+- Methoden logisch gruppiert mit Section-Headern (Public API / Order Processing / XML Generation / Customer Lookup / Persistence / XML Helpers)
+- Zeilen: 497 → 473 (-5%)
+- Keine Verhaltensänderung, kein Breaking Change
+**Betroffene Dokumentation:**
+- [x] Architecture-Docs überarbeiten (Service-Methoden-Übersicht)
+- [x] README.md anpassen
+- **Dokumentiert in:** CURRENT_STATUS.md (Section 9)
+
+---
+### 2026-02-14 - Codereview-Agent (Verarbeitet: 13. Feb 2026)
 **Modul/Datei:** `modules/jtl/xml_export/xml_export_service.py`
 **Art der Änderung:** Bug Fix (Critical)
 **Beschreibung:** Silent Data Loss durch ET.Element.append() behoben — append() VERSCHIEBT Elemente statt zu kopieren
@@ -37,13 +106,14 @@ Jeder Agent dokumentiert seine Änderungen in folgendem Format:
   - `_save_xml_to_db()` (Zeile 463)
 - Ohne Fix: Gesamt-XML (`_save_xml_to_disk`) enthielt nur die LETZTE Bestellung, da vorherige append()-Aufrufe das Element aus dem Original-Tree entfernten
 **Betroffene Dokumentation:**
-- [ ] API-Docs aktualisieren
-- [ ] Architecture-Docs überarbeiten
-- [ ] README.md anpassen
+- [x] API-Docs aktualisieren
+- [x] Architecture-Docs überarbeiten
+- [x] README.md anpassen
+- **Dokumentiert in:** CURRENT_STATUS.md (Section 9)
 ---
 
 ---
-### 2026-02-14 - Codereview-Agent (GitHub Copilot)
+### 2026-02-14 - Codereview-Agent (Verarbeitet: 13. Feb 2026)
 **Modul/Datei:** `modules/jtl/xml_export/xml_export_service.py`
 **Art der Änderung:** Security + Performance + Code Quality (Prio 2)
 **Beschreibung:** 8 Review-Findings aus Code-Review umgesetzt
@@ -55,12 +125,11 @@ Jeder Agent dokumentiert seine Änderungen in folgendem Format:
 - 🟡 `str(filepath)` entfernt — Path-Objekte funktionieren direkt mit `open()` (2 Stellen)
 - 🔵 Redundantes `else` nach `return` entfernt in `export_to_xml()`
 **Betroffene Dokumentation:**
-- [ ] API-Docs aktualisieren
-- [ ] Architecture-Docs überarbeiten
-- [ ] README.md anpassen
+- [x] API-Docs aktualisieren
+- [x] Architecture-Docs überarbeiten
+- [x] README.md anpassen
+- **Dokumentiert in:** CURRENT_STATUS.md (Section 9)
 ---
-
-## Processed Changes (Bereits dokumentiert)
 
 ---
 ### 2026-02-13 - GitHub Copilot (Verarbeitet: 13. Feb 2026)

@@ -220,4 +220,58 @@ Umfassende Refactorings und Security-Fixes im PDF-Reader-Modul:
 
 ---
 
+## 8. Shared Module Refactoring (13. Feb 2026 - ABGESCHLOSSEN ✅)
+
+Systematisches Refactoring des shared-Moduls zur Verbesserung von Code-Qualität und Wartbarkeit.
+
+### Code-Qualität (Refactoring-Agent)
+- **Dead Code entfernt:** `modules/shared/config.py` und `modules/shared/database.py` (defekte Re-Export-Layer)
+- **DRY:** `_get_log_service()` in `_log_helper.py` zentralisiert (vorher 6× kopiert in Repositories)
+- **DRY:** SELECT-Spaltenlisten als Klassenkonstanten (`OrderRepository._ORDER_COLUMNS`, `OrderItemRepository._ITEM_COLUMNS`)
+- **God Class aufgelöst:** Domain Models `Order`/`OrderItem` aus Repositories in `models.py` extrahiert (rückwärtskompatibel per Re-Export)
+- **Lange Funktion aufgeteilt:** `TemuMarketplaceService.fetch_orders()` (90→3×25 Zeilen)
+- **print() → app_logger:** Fallback in `log_repository.py` durch `app_logger.error()` ersetzt
+- **Type Hints:** `settings.py`, `connection.py`, `signature.py` ergänzt
+- **Dead Code:** `__main__` Testblock in `signature.py`, auskommentierte Methode in `service.py` entfernt
+
+### Security & Bug Fixes (Codereview-Agent)
+- 🔴 **Dead Code** in `jtl_repository.py`: Doppelter except-Block + unerreichbarer Code entfernt
+- 🔴 **Missing Return:** `fetch_orders()` lief nach fehlgeschlagener Credential-Validierung weiter → Early Return
+- 🔴 **SQL Injection Fix:** `f"SELECT TOP {limit}"` → parametrisiertes `SELECT TOP (:limit)` mit Input-Clamping
+- 🟡 **N+1 Query Fix:** `get_orders_for_tracking_export()` → Batch-Query mit `IN :order_ids`
+- 🟡 **Lazy Init:** `log_service.py` `ensure_table_exists()` → Lazy `_ensure_table()` (App startet ohne DB)
+- 🟡 **Log Rotation:** `FileHandler` → `RotatingFileHandler` (10MB, 5 Backups)
+- 🟡 **mark_synced:** Implizites `executemany` → explizites Loop
+- 🔵 **Counter-Fix:** `inserted/updated` Counter (immer 0/N) → vereinfacht zu `processed`
+
+---
+
+## 9. JTL XML-Export Refactoring (13.-14. Feb 2026 - ABGESCHLOSSEN ✅)
+
+Umfassende Verbesserung des XML-Export-Services für JTL-Integration.
+
+### Strukturelles Refactoring
+- `export_to_xml()` Loop-Body in `_process_single_order()` extrahiert (100→40 Zeilen)
+- 3× dupliziertes "wrap in root + deepcopy + prettify" Pattern in `_prettify_wrapped_xml()` konsolidiert
+- Header-Felder in `_add_header_fields()` extrahiert
+- Stateless Methoden als `@staticmethod` markiert (6 Methoden)
+- Type Hints modernisiert: `Dict`/`List` → `dict`/`list` (Python 3.9+)
+- Methoden logisch gruppiert (Public API / Order Processing / XML Generation / Customer Lookup / Persistence / XML Helpers)
+- **Zeilen:** 497 → 473 (-5%)
+
+### Kritischer Bug Fix: Silent Data Loss
+- **Problem:** `ET.Element.append()` VERSCHIEBT Elemente statt zu kopieren → Gesamt-XML enthielt nur letzte Bestellung
+- **Lösung:** 3× `root.append(bestellung_elem)` → `root.append(copy.deepcopy(bestellung_elem))`
+- **Betroffen:** `_import_to_jtl()`, `_archive_order_to_docs()`, `_save_xml_to_db()`
+
+### Security & Code Quality
+- 🔴 **XML Control-Character Sanitization:** `_prettify_xml()` entfernt illegale Chars via Regex vor minidom-Parsing
+- 🔴 `import traceback` von inline nach Top-Level verschoben
+- 🟡 **Magic Number:** `1.19` → Konstante `VERSAND_MWST_SATZ = 19.0` mit berechneter Formel
+- 🟡 **Cache-Limit:** Kundennummer-Cache begrenzt auf 1000 Einträge (`_CUSTOMER_CACHE_MAXSIZE`)
+- 🟡 Redundante `str(filepath)` Aufrufe entfernt
+- 🔵 Redundantes `else` nach `return` entfernt
+
+---
+
 **Weiterführende Dokumentation:** Bitte beachten Sie die detaillierten Architektur-Dokumente im `docs/`-Verzeichnis für weitere Informationen.

@@ -41,7 +41,7 @@ Um den aktuellen Projektkontext zu verstehen, solltest du immer mit diesen Dokum
 
 ## 3. Technologie-Stack
 
-- **Sprache:** Python 3.11+
+- **Sprache:** Python 3.12+
 - **Framework:** FastAPI (Async/Await)
 - **Datenbank:** MSSQL (pyodbc + SQLAlchemy)
 - **Job Scheduling:** APScheduler
@@ -71,7 +71,7 @@ Folgt einem **Monorepo**-Pattern mit strikter Separation of Concerns.
 │   │   ├── services/           # PDF Services
 │   │   ├── frontend/           # PDF Frontend
 │   │   └── router.py           # FastAPI Router
-│   ├── csv_verarbeiter/        # CSV Processing (in Entwicklung)
+│   ├── csv_verarbeiter/        # CSV Processing (JTL→DATEV) ✅ Abgeschlossen
 │   │   ├── services/           # CSV Services
 │   │   ├── frontend/           # CSV Frontend
 │   │   └── router.py           # FastAPI Router
@@ -250,7 +250,7 @@ pip install -r requirements.txt
 ```bash
 cd /pfad/zu/deinem/entwicklungsordner
 source .venv/bin/activate
-python --version  # Sollte Python 3.11+ zeigen
+python --version  # Sollte Python 3.12+ zeigen
 ```
 
 ---
@@ -387,15 +387,18 @@ export PYTHONPATH=$(pwd)
 
 ## 12. Current Status (13. Februar 2026)
 
-### Stabil
+### Stabil & Abgeschlossen
 - ✅ TEMU Order/Inventory Sync
-- ✅ PDF Reader
+- ✅ PDF Reader (inkl. Refactoring + Security Fixes)
+- ✅ CSV Verarbeiter (JTL→DATEV) – vollständig migriert und in Produktion
 - ✅ Frontend Architecture (CSS Consolidation, Central Navigation)
+- ✅ JTL XML-Export (Refactoring + Critical Bug Fix)
 
-### In Entwicklung
-- 🔄 Migration von CSV Verarbeiter (JTL2DATEV) zur Monorepo-Struktur (`feature/csv-verarbeiter-migration`)
-
-### Kürzliche Achievements
+### Kürzliche Achievements (13. Feb 2026)
+- ✅ TEMU Module Refactoring (6 Prioritäten, God Methods aufgelöst, BaseWorkflowService, 15+ Constants)
+- ✅ Shared Module Refactoring (DRY, Dead Code, Security Fixes, Log Rotation, SQL Injection Fix)
+- ✅ JTL XML-Export Refactoring (Silent Data Loss behoben, Control-Char Sanitization)
+- ✅ PDF Reader Refactoring (Security Fixes, MwSt-Extraktion, Shipping Services Format)
 - ✅ CSS Consolidation eliminierte 1,537 Zeilen Duplikate (44% Reduktion)
 - ✅ Zentrale Navigation für alle Module implementiert
 

@@ -174,5 +174,5 @@ Ausstehende Aufgaben & Zukünftige Erweiterungen
 
 ---
 
-**Zuletzt aktualisiert:** 5. Februar 2026  
+**Zuletzt aktualisiert:** 13. Februar 2026  
 **Wartbar:** Ja ✅
