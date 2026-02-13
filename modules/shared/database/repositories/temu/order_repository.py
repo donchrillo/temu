@@ -1,58 +1,30 @@
 """Order Repository - SQLAlchemy + Raw SQL (FIXED)"""
 
 from typing import Optional, List, Dict
-from sqlalchemy import text
+from sqlalchemy import text, bindparam
 from ...connection import get_engine
 from ....config.settings import TABLE_ORDERS, TABLE_ORDER_ITEMS, DB_TOCI
 from ..base import BaseRepository
+from .._log_helper import get_log_service as _get_log_service
 
-# Lazy import to avoid circular dependency
-def _get_log_service():
-    from ...logging.log_service import log_service
-    return log_service
-
-class Order:
-    """Domain Model für Order"""
-    def __init__(self, id=None, bestell_id=None, bestellstatus=None, 
-                 kaufdatum=None, vorname_empfaenger=None, nachname_empfaenger=None,
-                 strasse=None, adresszusatz=None, plz=None, ort=None, bundesland=None, land=None,
-                 land_iso=None, email=None, telefon_empfaenger=None, 
-                 versandkosten=None, status=None, xml_erstellt=False,
-                 trackingnummer=None, versanddienstleister=None, versanddatum=None):
-        self.id = id
-        self.bestell_id = bestell_id
-        self.bestellstatus = bestellstatus
-        self.kaufdatum = kaufdatum
-        self.vorname_empfaenger = vorname_empfaenger
-        self.nachname_empfaenger = nachname_empfaenger
-        self.strasse = strasse
-        self.adresszusatz = adresszusatz
-        self.plz = plz
-        self.ort = ort
-        self.bundesland = bundesland
-        self.land = land
-        self.land_iso = land_iso
-        self.email = email
-        self.telefon_empfaenger = telefon_empfaenger
-        self.versandkosten = versandkosten
-        self.status = status
-        self.xml_erstellt = xml_erstellt
-        self.trackingnummer = trackingnummer
-        self.versanddienstleister = versanddienstleister
-        self.versanddatum = versanddatum
+# Domain Model - importiert aus zentraler models.py (Rückwärtskompatibel)
+from .models import Order
 
 class OrderRepository(BaseRepository):
     """Data Access Layer - ONLY DB Operations"""
+
+    # Zentrale Spaltenliste für SELECT-Queries (DRY)
+    _ORDER_COLUMNS = """id, bestell_id, bestellstatus, kaufdatum,
+                       vorname_empfaenger, nachname_empfaenger,
+                       strasse, adresszusatz, plz, ort, bundesland, land, land_iso,
+                       email, telefon_empfaenger, versandkosten, status, xml_erstellt,
+                       trackingnummer, versanddienstleister, versanddatum"""
     
     def find_by_bestell_id(self, bestell_id: str) -> Optional[Order]:
         """Hole Order aus DB"""
         try:
             sql = f"""
-                SELECT id, bestell_id, bestellstatus, kaufdatum,
-                       vorname_empfaenger, nachname_empfaenger,
-                       strasse, adresszusatz, plz, ort, bundesland, land, land_iso,
-                       email, telefon_empfaenger, versandkosten, status, xml_erstellt,
-                       trackingnummer, versanddienstleister, versanddatum
+                SELECT {self._ORDER_COLUMNS}
                 FROM {TABLE_ORDERS}
                 WHERE bestell_id = :bestell_id
             """
@@ -165,11 +137,7 @@ class OrderRepository(BaseRepository):
         """Hole alle Orders mit bestimmtem Status"""
         try:
             sql = f"""
-                SELECT id, bestell_id, bestellstatus, kaufdatum,
-                       vorname_empfaenger, nachname_empfaenger,
-                       strasse, adresszusatz, plz, ort, bundesland, land, land_iso,
-                       email, telefon_empfaenger, versandkosten, status, xml_erstellt,
-                       trackingnummer, versanddienstleister, versanddatum
+                SELECT {self._ORDER_COLUMNS}
                 FROM {TABLE_ORDERS}
                 WHERE status = :status
                 ORDER BY created_at DESC
@@ -219,33 +187,43 @@ class OrderRepository(BaseRepository):
             """
             rows = self._fetch_all(sql)
             
+            if not rows:
+                return []
+            
+            # Alle Order-IDs sammeln
+            order_ids = [row._mapping['id'] for row in rows]
+            
+            # Alle Items in EINEM Query holen (verhindert N+1 Problem)
+            items_sql = text(f"""
+                SELECT order_id, bestellartikel_id, menge
+                FROM {TABLE_ORDER_ITEMS}
+                WHERE order_id IN :order_ids
+            """).bindparams(bindparam('order_ids', expanding=True))
+            all_items_rows = self._fetch_all(items_sql, {"order_ids": order_ids})
+            
+            # Items nach order_id gruppieren
+            items_by_order = {}
+            for item in all_items_rows:
+                m = item._mapping
+                oid = m['order_id']
+                if oid not in items_by_order:
+                    items_by_order[oid] = []
+                items_by_order[oid].append({
+                    "bestellartikel_id": m['bestellartikel_id'],
+                    "menge": int(m['menge'])
+                })
+            
             result_list = []
             for row in rows:
                 row_data = row._mapping
                 order_id = row_data['id']
-                
-                # Hole Items für diese Order
-                items_sql = f"""
-                    SELECT bestellartikel_id, menge
-                    FROM {TABLE_ORDER_ITEMS}
-                    WHERE order_id = :order_id
-                """
-                items_rows = self._fetch_all(items_sql, {"order_id": order_id})
-                
-                items = [
-                    {
-                        "bestellartikel_id": item._mapping['bestellartikel_id'],
-                        "menge": int(item._mapping['menge'])
-                    }
-                    for item in items_rows
-                ]
                 
                 result_list.append({
                     "order_id": order_id,
                     "bestell_id": row_data['bestell_id'],
                     "trackingnummer": row_data['trackingnummer'],
                     "versanddienstleister": row_data['versanddienstleister'],
-                    "items": items
+                    "items": items_by_order.get(order_id, [])
                 })
             
             return result_list
@@ -322,11 +300,7 @@ class OrderRepository(BaseRepository):
         """Hole Orders für Tracking-Abgleich"""
         try:
             sql = f"""
-                SELECT id, bestell_id, bestellstatus, kaufdatum,
-                       vorname_empfaenger, nachname_empfaenger,
-                       strasse, adresszusatz, plz, ort, bundesland, land, land_iso,
-                       email, telefon_empfaenger, versandkosten, status, xml_erstellt,
-                       trackingnummer, versanddienstleister, versanddatum
+                SELECT {self._ORDER_COLUMNS}
                 FROM {TABLE_ORDERS}
                 WHERE xml_erstellt = 1
                   AND (trackingnummer IS NULL OR trackingnummer = '')

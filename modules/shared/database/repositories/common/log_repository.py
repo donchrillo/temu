@@ -4,10 +4,7 @@ Data Access Layer - Strukturiertes Logging in SQL Server
 """
 
 from typing import Dict, List
-# Lazy import to avoid circular dependency
-def _get_log_service():
-    from ...logging.log_service import log_service
-    return log_service
+from .._log_helper import get_log_service as _get_log_service
 from ..base import BaseRepository
 
 class LogRepository(BaseRepository):
@@ -41,8 +38,9 @@ class LogRepository(BaseRepository):
             """)
             return True
         except Exception as e:
-            # Nutze print als Fallback
-            print(f"CRITICAL DB ERROR (Log Table): {e}")
+            # Nutze app_logger als Fallback
+            from ...logging.logger import app_logger
+            app_logger.error(f"CRITICAL DB ERROR (Log Table): {e}")
             return False
 
     def insert_log(self, job_id: str, job_type: str, level: str, message: str, 
@@ -67,7 +65,8 @@ class LogRepository(BaseRepository):
             self._execute_stmt(sql, params)
             return True
         except Exception as e:
-            print(f"LOG INSERT FAILED: {e}")
+            from ...logging.logger import app_logger
+            app_logger.error(f"LOG INSERT FAILED: {e}")
             return False
 
     def get_logs(self, job_id: str = None, level: str = None, 
@@ -133,14 +132,16 @@ class LogRepository(BaseRepository):
     def get_recent_logs(self, job_id: str, limit: int = 100) -> List[Dict]:
         """Hole aktuelle Logs für einen Job"""
         try:
-            sql = f"""
-                SELECT TOP {limit} log_id, job_id, job_type, level, message, timestamp, 
+            # Sicherstellen dass limit ein positiver Integer ist (Defense in Depth)
+            limit = max(1, min(int(limit), 1000))
+            sql = """
+                SELECT TOP (:limit) log_id, job_id, job_type, level, message, timestamp, 
                        duration_seconds, status, error_text
                 FROM [dbo].[scheduler_logs]
                 WHERE job_id = :job_id
                 ORDER BY timestamp DESC
             """
-            rows = self._fetch_all(sql, {"job_id": job_id})
+            rows = self._fetch_all(sql, {"job_id": job_id, "limit": limit})
             return [dict(row._mapping) for row in rows]
 
         except Exception as e:

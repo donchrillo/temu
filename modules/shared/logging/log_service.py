@@ -9,10 +9,19 @@ class LogService:
     
     def __init__(self):
         self.repo = LogRepository()
-        self.repo.ensure_table_exists()
+        self._table_checked = False
         self.current_job_id: Optional[str] = None
         self.current_job_type: Optional[str] = None
         self.log_buffer: List[str] = []
+    
+    def _ensure_table(self):
+        """Lazy Table Check - nur einmal beim ersten Log-Aufruf"""
+        if not self._table_checked:
+            try:
+                self.repo.ensure_table_exists()
+                self._table_checked = True
+            except Exception as e:
+                app_logger.error(f"Log-Tabelle konnte nicht erstellt werden: {e}")
     
     def start_job_capture(self, job_id: str, job_type: str):
         """Starte Capturing für einen Job"""
@@ -28,6 +37,9 @@ class LogService:
 
         if not job_id or not job_type:
             raise ValueError("job_id und job_type muessen gesetzt sein")
+        
+        # Lazy Table Check beim ersten Aufruf
+        self._ensure_table()
         
         # In Memory Buffer
         self.log_buffer.append(message)
