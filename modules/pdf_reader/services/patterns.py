@@ -18,8 +18,10 @@ pattern = {
             "rechnungsdatum": "Date de facturation",
             "zeitraum": "Période de facturation",
             "summe": "Montant de la facture dû",
-            "mwst": "VAT (0%) - FRANCE",
-            "währung": "EUR"
+            "währung": "EUR",
+            "mwst": "VAT",
+            "mwst_regex": r"VAT\s*\(0%\)\s*-\s*FRANCE\s*([\d.,]+)\s*EUR",
+            "mwst_calc": True
         }
     },
     "de": {
@@ -41,7 +43,8 @@ pattern = {
             "zeitraum": "Rechnungszeitraum",
             "summe": "Fälliger Gesamtbetrag",
             "währung": "EUR",
-            "mwst": "VAT (19%) - GERMANY"
+            "mwst": "VAT",
+            "mwst_regex": r"VAT\s*\(19%\)\s*-\s*GERMANY\s*([\d.,]+)\s*EUR"
         }
     },
 
@@ -87,12 +90,16 @@ pattern = {
             "währung": "EUR"
         },
         "werbung": {
-            "rechnungsnummer": "Numero della fattura",
-            "rechnungsdatum": "Data della fattura",
-            "zeitraum": "Periodo della fattura",
-            "summe": "Importo Totale Dovuto",
-            "mwst": "VAT (0%) - ITALY",
-            "währung": "EUR"
+            "rechnungsnummer": "Numero Di Fattura",
+            "rechnungsdatum": "Data Della Fattura",
+            "zeitraum": "Periodo Della Fattura",
+            "summe": "Importo Fatturato Dovuto",
+            "währung": "EUR",
+            "mwst": "VAT",
+            "mwst_regex": r"VAT\s*\(\d+%\)\s*-\s*ITALY\s*([\d.,]+)\s*EUR",
+            "mwst_calc": True,
+            "brutto_pattern": "Importo Totale \\(Tasse Incluse\\)",
+            "netto_pattern": "Totale Parziale \\(Tasse Escluse\\)"
         }        
     },
     "es": {
@@ -113,8 +120,10 @@ pattern = {
             "rechnungsdatum": "Fecha de la factura",
             "zeitraum": "Periodo de facturación",
             "summe": "Importe de factura adeudado",
-            "mwst": "VAT (0%) - SPAIN",
-            "währung": "EUR"
+            "währung": "EUR",
+            "mwst": "VAT",
+            "mwst_regex": r"VAT\s*\(0%\)\s*-\s*SPAIN\s*([\d.,]+)\s*EUR",
+            "mwst_calc": True
         }       
     },
     "pl": {
@@ -149,8 +158,10 @@ pattern = {
             "rechnungsdatum": "Invoice Date",
             "zeitraum": "Invoice Period",
             "summe": "Total Amount Due",
-            "mwst": "VAT (0%) - UNITED KINGDOM",
-            "währung": "GBP"
+            "währung": "GBP",
+            "mwst": "VAT",
+            "mwst_regex": r"VAT\s*\(\d+%\)\s*-\s*UNITED KINGDOM\s*([\d.,]+)\s*GBP",
+            "mwst_calc": True
          }
     },
     "ie": {
@@ -185,8 +196,10 @@ pattern = {
             "rechnungsdatum": "Fakturadatum",
             "zeitraum": "Fakturaperiod",
             "summe": "Totalt belopp (inkl. moms)",
-            "mwst": "VAT (0%) - SWEDEN",
-            "währung": "SEK"
+            "währung": "SEK",
+            "mwst": "VAT",
+            "mwst_regex": r"VAT\s*\(\d+%\)\s*-\s*SWEDEN\s*([\d.,]+)\s*SEK",
+            "mwst_calc": True
         }        
     }
 

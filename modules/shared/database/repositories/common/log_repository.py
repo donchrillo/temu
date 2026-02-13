@@ -112,6 +112,24 @@ class LogRepository(BaseRepository):
             _get_log_service().log("SYSTEM_ERROR", "log_repository", "ERROR", f"LogRepository get_logs: {e}")
             return []
 
+    def get_logs_by_prefix(self, prefix: str, limit: int = 200, offset: int = 0) -> List[Dict]:
+        """Hole Logs nach Prefix in job_id oder job_type (LIKE prefix%)."""
+        try:
+            pattern = f"{prefix}%"
+            sql = """
+                SELECT log_id, job_id, job_type, level, message, timestamp,
+                       duration_seconds, status, error_text
+                FROM [dbo].[scheduler_logs]
+                WHERE job_id LIKE :pattern OR job_type LIKE :pattern
+                ORDER BY timestamp DESC
+                OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
+            """
+            rows = self._fetch_all(sql, {"pattern": pattern, "limit": limit, "offset": offset})
+            return [dict(row._mapping) for row in rows]
+        except Exception as e:
+            _get_log_service().log("SYSTEM_ERROR", "log_repository", "ERROR", f"LogRepository get_logs_by_prefix: {e}")
+            return []
+
     def get_recent_logs(self, job_id: str, limit: int = 100) -> List[Dict]:
         """Hole aktuelle Logs für einen Job"""
         try:

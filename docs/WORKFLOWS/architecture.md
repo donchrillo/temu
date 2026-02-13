@@ -1,7 +1,7 @@
 # 📘 TEMU Integration – Architektur-Dokumentation: Workflows
 
-**Status:** 🟢 STABLE / VERIFIED  
-**Datum:** 23. Januar 2026  
+**Status:** 🟢 STABLE / VERIFIED
+**Datum:** 6. Februar 2026
 **Bereich:** Job Orchestrierung, APScheduler, PM2 Integration
 
 ---
@@ -74,7 +74,7 @@ Database Layer (Transactional)
 
 ## 2. APScheduler Integration
 
-**Datei:** `workers/worker_service.py` + `workers/workers_config.json`
+**Datei:** `workers/worker_service.py` + `workers/config/workers_config.json`
 
 ### Initialization
 ```python
@@ -200,7 +200,7 @@ module.exports = {
   apps: [
     {
       name: 'temu-api',
-      script: './api/server.py',
+      script: 'main.py',
       interpreter: '/home/chx/temu/.venv/bin/python',
       watch: false,  // Don't auto-restart on file changes
       max_memory_restart: '1G',  // Auto-restart wenn > 1GB RAM
@@ -221,6 +221,7 @@ module.exports = {
       ref: 'origin/main',
       repo: 'git@github.com:...',
       path: '/home/chx/temu',
+      script: 'main.py',
       'pre-deploy-local': '',
       'post-deploy': 'npm install && npm run build',
       'pre-deploy': 'echo "Deploying to production server"',
@@ -308,7 +309,7 @@ class Job:
             "enabled": self.enabled
         }
     
-    def is_running(self) -> bool:
+    def is_running() -> bool:
         return self.status.status == "running"
     
     def mark_started(self):
@@ -397,14 +398,14 @@ def _execute_job(self, job_id: str, params: Dict[str, Any]):
 def _execute_workflow(self, job_id: str, params: Dict[str, Any]):
     """Delegate an entsprechende Workflow-Klasse"""
     if "inventory" in job_id:
-        from src.modules.temu.inventory_workflow_service import InventoryWorkflowService
+        from modules.temu.services.inventory_workflow_service import InventoryWorkflowService
         workflow = InventoryWorkflowService()
         return workflow.run_complete_workflow(
             mode=params.get("mode", "quick"),
             verbose=params.get("verbose", False)
         )
     elif "order" in job_id:
-        from src.modules.temu.order_workflow_service import OrderWorkflowService
+        from modules.temu.services.order_workflow_service import OrderWorkflowService
         workflow = OrderWorkflowService()
         return workflow.run_complete_workflow(**params)
     else:
@@ -458,50 +459,55 @@ def _schedule_retry(self, job_id: str, params: Dict[str, Any]):
 
 ## 6. Workflow Orchestrierung – Praktische Beispiele
 
-### Inventory Workflow (4 Schritte)
+### Inventory Workflow (4 Schritte, 3 Blöcke)
 ```python
-from src.modules.temu.inventory_workflow_service import InventoryWorkflowService
+from modules.temu.services.inventory_workflow_service import InventoryWorkflowService
 
 class InventoryWorkflow:
-    """4-Schritt Orchestrierung"""
+    """4-Schritt Orchestrierung (Transaction Splitting)"""
     
     def run_complete_workflow(self, mode: str = "quick") -> bool:
         """
-        Vollständiger Bestandabgleich:
+        Vollständiger Bestandabgleich (in Blöcke unterteilt für Stabilität):
+        
+        Block 1: Import (Optional)
         1. TEMU API → JSON (Fetch SKU-Liste)
-        2. JSON → TOCI (Import in Datenbank)
-        3. JTL Bestand → TOCI (Lookup JTL-Stock)
-        4. TOCI → TEMU API (Update Stock)
+        2. JSON → TOCI (Import in Datenbank, Commit)
+        
+        Block 2: JTL Update
+        3. JTL Bestand → TOCI (Lookup JTL-Stock, Commit)
+        
+        Block 3: API Sync
+        4. TOCI → TEMU API (Update Stock, Commit nach jedem Batch)
         """
         
+        # --- BLOCK 1: IMPORT ---
+        if mode == "full":
+            logger.info("[1/4] Fetching SKU list from TEMU API...")
+            api_data = self._step_1_fetch_api()
+            
+            with db_connect(DB_TOCI) as toci_conn:
+                logger.info("[2/4] Importing SKUs into TOCI...")
+                result = self._step_2_json_to_db(toci_conn)
+                logger.info(f"✓ Inserted: {result['inserted']}, Updated: {result['updated']}")
+            # Commit Block 1
+        
+        # --- BLOCK 2: JTL UPDATE ---
         with db_connect(DB_TOCI) as toci_conn:
             with db_connect(DB_JTL) as jtl_conn:
-                
-                # Step 1: API Fetch
-                if mode == "full":
-                    logger.info("[1/4] Fetching SKU list from TEMU API...")
-                    api_data = self._step_1_fetch_api()
-                    if not api_data:
-                        raise Exception("API Fetch failed")
-                    logger.info(f"✓ Got {len(api_data)} SKUs")
-                
-                # Step 2: JSON → DB
-                if mode == "full":
-                    logger.info("[2/4] Importing SKUs into TOCI...")
-                    result = self._step_2_json_to_db(toci_conn)
-                    logger.info(f"✓ Inserted: {result['inserted']}, Updated: {result['updated']}")
-                
-                # Step 3: JTL Stock Lookup
                 logger.info("[3/4] Fetching stock from JTL...")
-                stock_map = self._step_3_jtl_to_inventory(jtl_conn, toci_conn)
-                logger.info(f"✓ Updated {len(stock_map)} items")
-                
-                # Step 4: Push to TEMU
-                logger.info("[4/4] Pushing stock to TEMU API...")
-                updated = self._step_4_update_temu_api(stock_map)
-                logger.info(f"✓ Updated {updated} items on TEMU")
-                
-                return True
+                self._step_3_jtl_to_inventory(jtl_conn, toci_conn)
+        # Commit Block 2
+
+        # --- BLOCK 3: API SYNC ---
+        with db_connect(DB_TOCI) as toci_conn:
+            logger.info("[4/4] Pushing stock to TEMU API...")
+            # Intern: Loop über GoodsID, API Call, dann sofortiges DB-Update
+            updated = self._step_4_update_temu_api(toci_conn)
+            logger.info(f"✓ Sync Process finished")
+        # Commit Block 3
+        
+        return True
 ```
 
 ### Order Workflow
@@ -655,7 +661,7 @@ def get_job_health_status(self) -> Dict[str, Any]:
 
 ### Metrics & Alerts
 ```python
-from src.services.logger import app_logger
+from modules.shared.logging.logger import app_logger
 
 def log_job_metrics(self, job_id: str, duration: float, success: bool):
     """Logs Job-Metriken für Monitoring"""
@@ -689,7 +695,7 @@ module.exports = {
   apps: [
     {
       name: 'temu-api',
-      script: './api/server.py',
+      script: 'main.py',
       interpreter: '/home/chx/temu/.venv/bin/python',
       instances: 4,  // ← 4 Worker-Prozesse
       exec_mode: 'cluster',  // ← Cluster Mode (mit Load Balancer)

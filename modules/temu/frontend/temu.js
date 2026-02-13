@@ -14,7 +14,6 @@ let currentProgress = 0;
 // ═══════════════════════════════════════════════════════════
 
 document.addEventListener('DOMContentLoaded', () => {
-    loadStats();
     loadJobs();
     loadLogs();
 
@@ -70,28 +69,6 @@ function hideProgress() {
     const overlay = document.getElementById('progress-overlay');
     overlay.classList.remove('active');
     currentProgress = 0;
-}
-
-// ═══════════════════════════════════════════════════════════
-// Statistics
-// ═══════════════════════════════════════════════════════════
-
-async function loadStats() {
-    try {
-        const [statsRes, jobsRes] = await Promise.all([
-            fetch(`${TEMU_API}/stats`),
-            fetch(`${API_BASE}/jobs`)
-        ]);
-
-        const stats = await statsRes.json();
-        const jobs = await jobsRes.json();
-
-        document.getElementById('stat-orders').textContent = stats.orders?.total || 0;
-        document.getElementById('stat-inventory').textContent = stats.inventory?.total_skus || 0;
-        document.getElementById('stat-jobs').textContent = jobs?.length || 0;
-    } catch (err) {
-        console.error('Failed to load stats:', err);
-    }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -187,8 +164,7 @@ async function triggerOrderSync() {
         const url = `${API_BASE}/jobs/${orderJob.job_id}/run-now?` +
             `parent_order_status=${params.status}&` +
             `days_back=${params.days}&` +
-            `verbose=${params.verbose}&` +
-            `log_to_db=${params.log_to_db}`;
+            `verbose=${params.verbose}`;
 
         const res = await fetch(url, {
             method: 'POST'
@@ -233,7 +209,12 @@ async function triggerInventorySync() {
             throw new Error('Inventory Sync Job nicht gefunden');
         }
 
-        const res = await fetch(`${API_BASE}/jobs/${invJob.job_id}/run-now?mode=${params.mode}`, {
+        // Build URL with parameters
+        const url = `${API_BASE}/jobs/${invJob.job_id}/run-now?` +
+            `mode=${params.mode}&` +
+            `verbose=${params.verbose}`;
+
+        const res = await fetch(url, {
             method: 'POST'
         });
 
@@ -262,10 +243,8 @@ async function triggerInventorySync() {
 
 async function loadLogs() {
     try {
-        const filter = document.getElementById('log-filter').value;
-        const url = filter
-            ? `${API_BASE}/logs?job_id=${filter}&limit=50`
-            : `${API_BASE}/logs?limit=50`;
+        const filter = document.getElementById('log-filter').value || 'temu';
+        const url = `${API_BASE}/logs?job_id=${filter}&limit=200`;
 
         const res = await fetch(url);
         const logs = await res.json();
@@ -279,7 +258,7 @@ async function loadLogs() {
 
         container.textContent = logs.map(log => {
             const time = new Date(log.timestamp).toLocaleString('de-DE');
-            return `[${time}] [${log.level}] ${log.message}`;
+            return `[${time}] [${log.job_type}] [${log.level}] ${log.message}`;
         }).join('\n');
     } catch (err) {
         console.error('Failed to load logs:', err);
@@ -398,15 +377,10 @@ function showOrderSyncParameterDialog() {
                             </p>
                         </div>
 
-                        <div style="display: flex; gap: 15px;">
+                        <div>
                             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                                 <input type="checkbox" id="param-verbose" style="width: 18px; height: 18px; cursor: pointer;">
                                 <span>🔍 Verbose Mode</span>
-                            </label>
-
-                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                <input type="checkbox" id="param-log-to-db" checked style="width: 18px; height: 18px; cursor: pointer;">
-                                <span>💾 Log to Database</span>
                             </label>
                         </div>
                     </div>
@@ -429,8 +403,7 @@ function showOrderSyncParameterDialog() {
             const params = {
                 status: parseInt(document.getElementById('param-status').value),
                 days: parseInt(document.getElementById('param-days').value),
-                verbose: document.getElementById('param-verbose').checked,
-                log_to_db: document.getElementById('param-log-to-db').checked
+                verbose: document.getElementById('param-verbose').checked
             };
             dialog.remove();
             resolve(params);
@@ -472,6 +445,13 @@ function showInventorySyncParameterDialog() {
                                 </p>
                             </div>
                         </div>
+
+                        <div>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="param-verbose" style="width: 18px; height: 18px; cursor: pointer;">
+                                <span>🔍 Verbose Mode</span>
+                            </label>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -490,7 +470,8 @@ function showInventorySyncParameterDialog() {
 
         document.getElementById('submit-btn').onclick = () => {
             const params = {
-                mode: document.getElementById('param-mode').value
+                mode: document.getElementById('param-mode').value,
+                verbose: document.getElementById('param-verbose').checked
             };
             dialog.remove();
             resolve(params);

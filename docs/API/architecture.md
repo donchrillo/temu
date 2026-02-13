@@ -1,7 +1,7 @@
 # 📘 TEMU Integration – Architektur-Dokumentation: API-Layer
 
 **Status:** 🟢 STABLE / VERIFIED  
-**Datum:** 23. Januar 2026  
+**Datum:** 5. Februar 2026  
 **Bereich:** FastAPI Server, REST Endpoints, WebSocket Integration
 
 ---
@@ -40,18 +40,44 @@ Database Layer (SQLAlchemy, Connection Pooling)
 
 ## 2. Server Setup & Konfiguration
 
-**Datei:** `api/server.py`
+**Datei:** `main.py`
 
 ### Initialization
 ```python
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
+from contextlib import asynccontextmanager
+import os
+from modules.shared.database.connection import db_connect
+from modules.shared.logging.logger import app_logger as logger # Verwende 'logger' für Konsistenz in dieser Doku
+from datetime import datetime # Wird im Exception Handler benötigt
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Server-Lifecycle: Setup & Teardown"""
+    # Startup
+    logger.info("API Server starting...")
+    # Prüfe DB Connection
+    try:
+        # Annahme: DB_JTL ist für einen Test ausreichend und in .env gesetzt
+        with db_connect(os.getenv("DB_JTL")) as conn:
+            logger.info("✅ Database connected")
+    except Exception as e:
+        logger.error(f"❌ Database connection failed: {e}")
+        # Hier könnte man entscheiden, ob der Server trotzdem starten soll
+        # oder einen kritischen Fehler auslösen
+
+    yield  # Server läuft
+
+    # Shutdown
+    logger.info("API Server shutting down...")
 
 app = FastAPI(
     title="TEMU Integration API",
     description="Job Management & Real-time Logging",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan # Lifespan-Manager integrieren
 )
 
 # CORS - Allow Frontend
@@ -77,7 +103,7 @@ app.add_middleware(
 ### Grundmuster: Job Management
 ```python
 from fastapi import APIRouter, HTTPException
-from src.workers.worker_service import WorkerService
+from workers.worker_service import WorkerService
 
 router = APIRouter(prefix="/api", tags=["jobs"])
 worker_service = WorkerService()
@@ -137,6 +163,8 @@ async def trigger_job(job_id: str, mode: str = "quick", verbose: bool = False):
 from fastapi import WebSocket, WebSocketDisconnect
 import asyncio
 import json
+import time
+from modules.shared.logging.logger import app_logger as logger # Verwende 'logger' für Konsistenz in dieser Doku
 
 @app.websocket("/ws/logs")
 async def websocket_logs(websocket: WebSocket):
@@ -149,14 +177,14 @@ async def websocket_logs(websocket: WebSocket):
     try:
         while True:
             # Sammle aktuelle Job-States
-            jobs = worker_service.get_all_jobs()
+            # Für die Doku wird hier eine vereinfachte Version ohne WorkerService genutzt.
+            # In der echten Implementierung würde hier worker_service.get_all_jobs() aufgerufen.
             jobs_serializable = [
                 {
-                    "job_id": j.job_id,
-                    "status": j.status.status,
-                    "last_duration": j.status.last_duration,
+                    "job_id": "dummy_job", # Dummy-Daten für Doku
+                    "status": "running",
+                    "last_duration": 0.5,
                 }
-                for j in jobs
             ]
             
             # Sende an Client
@@ -210,21 +238,22 @@ ws.onclose = () => console.log("Connection closed");
 ```python
 @router.get("/jobs/{job_id}")
 async def get_job(job_id: str):
-    job = worker_service.find_job(job_id)
+    # Annahme: worker_service ist global oder über Abhängigkeit erreichbar
+    job = {"job_id": job_id, "is_active": True} # Dummy-Implementierung für Doku
     
-    if not job:
+    if not job: # Dummy-Prüfung für Doku
         raise HTTPException(
             status_code=404,  # Not Found
             detail=f"Job '{job_id}' does not exist"
         )
     
-    if not job.is_active:
+    if not job.get("is_active", True): # Dummy-Prüfung für Doku
         raise HTTPException(
             status_code=423,  # Locked
             detail="Job is disabled"
         )
     
-    return job.to_dict()
+    return {"job_id": job_id, "status": "dummy_status"} # job.to_dict()
 ```
 
 ### Status Code Reference
@@ -242,7 +271,8 @@ async def get_job(job_id: str):
 ```python
 from fastapi import Request
 from fastapi.responses import JSONResponse
-from src.services.logger import app_logger
+from modules.shared.logging.logger import app_logger # Angepasster Import
+from datetime import datetime # Import hinzugefügt
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -265,7 +295,8 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 ### API-Key Pattern (Optional)
 ```python
-from fastapi import Header, HTTPException
+import os # Import hinzugefügt
+from fastapi import Header, HTTPException, Depends # Depends hinzugefügt
 
 async def verify_api_key(x_api_key: str = Header(...)):
     """
@@ -281,7 +312,8 @@ async def trigger_job(
     api_key: str = Depends(verify_api_key)
 ):
     # Nur wenn API-Key korrekt
-    return worker_service.trigger_job(job_id)
+    # Annahme: worker_service ist global oder über Abhängigkeit erreichbar
+    return {"status": "triggered", "job_id": job_id, "auth_status": "API Key OK"} # worker_service.trigger_job(job_id)
 ```
 
 ### CORS Best Practices
@@ -339,7 +371,8 @@ async def trigger_job(
 ):
     # request.mode ist garantiert ein String
     # request.verbose ist garantiert ein Bool
-    return worker_service.trigger_job(job_id, request.dict())
+    # Annahme: worker_service ist global oder über Abhängigkeit erreichbar
+    return {"status": "triggered", "job_id": job_id, "params": request.dict()} # worker_service.trigger_job(job_id, request.dict())
 
 # ❌ Falscher Request (422 Response):
 POST /api/jobs/sync_inventory/run-now
@@ -366,49 +399,63 @@ POST /api/jobs/sync_inventory/run-now
 
 ### Async Best Practices
 ```python
+import time # Hinzugefügt für time.sleep()
+
 # ❌ BLOCKIEREND - Nur 1 Request gleichzeitig:
 @app.get("/jobs")
 def list_jobs():  # ← Keine async!
     time.sleep(2)  # ← Blockiert ALLE Requests!
-    return worker_service.get_all_jobs()
+    # Annahme: worker_service ist global oder über Abhängigkeit erreichbar
+    return [] # worker_service.get_all_jobs() # Dummy-Implementierung für Doku
 
 # ✅ NICHT-BLOCKIEREND - Viele Requests gleichzeitig:
 @app.get("/jobs")
 async def list_jobs():  # ← Async!
     # Nicht blockierend
-    return worker_service.get_all_jobs()
+    # Annahme: worker_service ist global oder über Abhängigkeit erreichbar
+    return [] # worker_service.get_all_jobs() # Dummy-Implementierung für Doku
 ```
 
 ### Connection Management
 ```python
 from contextlib import asynccontextmanager
-from src.db.connection import db_connect
+from modules.shared.database.connection import db_connect # Angepasster Import
+from modules.shared.logging.logger import app_logger as logger # Angepasster Import
+import os # Hinzugefügt für os.getenv
 
+# Dieser Block zeigt das Pattern, ist aber nicht Teil der Haupt-app-Definition hier.
+# Die tatsächliche Lifespan-Definition ist jetzt in main.py zu finden.
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Server-Lifecycle: Setup & Teardown"""
+async def lifespan_example(app: FastAPI):
+    """Server-Lifecycle: Setup & Teardown Beispiel für Doku"""
     # Startup
-    logger.info("API Server starting...")
+    logger.info("API Server starting (example)...")
     # Prüfe DB Connection
-    with db_connect(DB_JTL) as conn:
-        logger.info("✅ Database connected")
-    
-    yield  # Server läuft
-    
-    # Shutdown
-    logger.info("API Server shutting down...")
+    try:
+        # Annahme: DB_JTL ist für einen Test ausreichend und in .env gesetzt
+        with db_connect(os.getenv("DB_JTL")) as conn:
+            logger.info("✅ Database connected (example)")
+    except Exception as e:
+        logger.error(f"❌ Database connection failed (example): {e}")
 
-app = FastAPI(lifespan=lifespan)
+    yield  # Server läuft (Beispiel)
+
+    # Shutdown
+    logger.info("API Server shutting down (example)...")
+
+# app = FastAPI(lifespan=lifespan_example) # Diese Zeile ist in main.py, nicht hier in der Doku
 ```
 
 ### Response Caching
 ```python
 from fastapi import Response
+import time # Hinzugefügt für time.time()
 
 @router.get("/jobs")
 async def list_jobs(response: Response):
     """Cache 5 Sekunden client-side"""
-    jobs = worker_service.get_all_jobs()
+    # Annahme: worker_service ist global oder über Abhängigkeit erreichbar
+    jobs = [] # worker_service.get_all_jobs() # Dummy-Implementierung für Doku
     
     response.headers["Cache-Control"] = "public, max-age=5"
     return jobs
@@ -418,6 +465,8 @@ async def list_jobs(response: Response):
 ```python
 from starlette.middleware.base import BaseHTTPMiddleware
 import time
+from fastapi import Request # Hinzugefügt für Request
+from modules.shared.logging.logger import app_logger as logger # Angepasster Import
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -431,7 +480,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         )
         return response
 
-app.add_middleware(RequestLoggingMiddleware)
+# app.add_middleware(RequestLoggingMiddleware) # Diese Zeile ist in main.py, nicht hier in der Doku
 ```
 
 ---
@@ -511,10 +560,10 @@ LOG_LEVEL=INFO
 ### Uvicorn Startup (Production)
 ```bash
 # Development
-uvicorn api.server:app --reload --host 0.0.0.0 --port 8000
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 # Production
-uvicorn api.server:app \
+uvicorn main:app \
   --host 0.0.0.0 \
   --port 8000 \
   --workers 4 \

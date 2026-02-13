@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSV Verarbeiter</title>
+    <link rel="stylesheet" href="/static/master.css?v=20260206b">
+    <link rel="stylesheet" href="/static/csv.css?v=20260206c">
+</head>
+<body>
+    <!-- Navigation wird dynamisch geladen -->
+    <script src="/components/nav-loader.js"></script>
+    <script>loadNavigation('csv', '📊 CSV Verarbeiter');</script>
+
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>📊 CSV Verarbeiter</h1>
+            <p class="subtitle">Amazon DATEV Export Processing System</p>
+        </header>
+
+        <main class="main-content">
+
+            <!-- Upload / Verarbeitung -->
+            <div class="card">
+                <h2>📦 Datei-Upload (CSV oder ZIP)</h2>
+                <p class="description">Amazon DATEV Export Dateien hochladen und verarbeiten</p>
+
+                <div class="upload-zone" id="uploadArea">
+                    <div class="upload-icon">&#128230;</div>
+                    <p>Dateien hier ablegen oder klicken zum Auswählen</p>
+                    <input type="file" id="fileInput" hidden accept=".csv,.zip">
+                </div>
+
+                <div class="upload-status" id="uploadStatus" style="display: none;">
+                    <div class="file-info">
+                        <span class="file-name" id="fileNameDisplay"></span>
+                        <span class="file-size" id="fileSizeDisplay"></span>
+                    </div>
+                </div>
+
+                <div class="process-status" id="processStatus" style="display: none;">
+                    <span class="status-badge" id="statusBadge">Processing...</span>
+                    <div class="status-details" id="statusDetails"></div>
+                </div>
+            </div>
+
+            <!-- Mini-Report -->
+            <div class="card" id="reportSection" style="display: none;">
+                <h2>Mini-Report</h2>
+
+                <div class="metrics">
+                    <div class="metric-card">
+                        <div class="metric-label">Ersetzungen</div>
+                        <div class="metric-value" id="metricReplacements">0</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Fehler</div>
+                        <div class="metric-value" id="metricErrors">0</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Offene Order-IDs</div>
+                        <div class="metric-value" id="metricOpen">0</div>
+                    </div>
+                </div>
+
+                <div class="tabs">
+                    <button class="tab-button active" data-tab="mini">Mini-Report</button>
+                    <button class="tab-button" data-tab="aenderungen">Aenderungen</button>
+                    <button class="tab-button" data-tab="fehler">Fehler</button>
+                    <button class="tab-button" data-tab="nicht-gefunden">Nicht gefunden</button>
+                </div>
+
+                <div class="tab-content" id="tab-mini"></div>
+                <div class="tab-content" id="tab-aenderungen" style="display: none;"></div>
+                <div class="tab-content" id="tab-fehler" style="display: none;"></div>
+                <div class="tab-content" id="tab-nicht-gefunden" style="display: none;"></div>
+
+                <div class="latest-report" id="latestReportInfo" style="display: none;"></div>
+            </div>
+
+            <!-- Export -->
+            <div class="card">
+                <h2>📤 Nachbereitung / Export</h2>
+                <p class="description">Wähle CSV-Dateien für den Export (ZIP)</p>
+
+                <label for="exportSelect">CSV-Dateien auswählen:</label>
+                <select id="exportSelect" class="export-select" multiple></select>
+
+                <div class="export-options">
+                    <label for="zipNameInput">ZIP-Dateiname (ohne .zip):</label>
+                    <input type="text" id="zipNameInput" class="text-input" value="export_DE_2024">
+
+                    <div class="checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="includeReportCheckbox" checked>
+                            <span>Mini-Report beilegen</span>
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="includeLogCheckbox" checked>
+                            <span>Letztes Logfile beilegen</span>
+                        </label>
+                    </div>
+
+                    <button class="btn btn-primary" id="createZipBtn">📦 ZIP-Datei erstellen</button>
+                </div>
+
+                <div class="export-result" id="exportResult" style="display: none;">
+                    <span>ZIP erfolgreich erstellt: <strong id="createdZipName"></strong></span>
+                    <button class="btn btn-success" id="downloadZipBtn">💾 ZIP-Datei herunterladen</button>
+                </div>
+            </div>
+
+            <!-- Letztes Logfile -->
+            <div class="card">
+                <h2>📋 Letztes Logfile</h2>
+                <details id="logDetails">
+                    <summary id="latestLogName">Kein Logfile gefunden</summary>
+                    <pre id="latestLogContent"></pre>
+                </details>
+            </div>
+
+        </main>
+
+        <!-- Cleanup Section -->
+        <section class="cleanup-section">
+            <button class="btn-danger" id="cleanupBtn">🗑️ Aufräumen (Alle Dateien löschen)</button>
+            <div class="cleanup-result" id="cleanupResult"></div>
+        </section>
+    </div>
+
+    <!-- Progress Overlay -->
+    <div id="progress-overlay" class="progress-overlay">
+        <div class="progress-container">
+            <div class="progress-icon">⚙️</div>
+            <div class="progress-text" id="progress-text">Verarbeite...</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill"></div>
+            </div>
+            <div class="progress-percent" id="progress-percent">0%</div>
+        </div>
+    </div>
+
+    <div class="modal" id="messageModal">
+        <div class="modal-content">
+            <span class="modal-icon" id="modalIcon"></span>
+            <h3 id="modalTitle"></h3>
+            <p id="modalMessage"></p>
+            <button class="btn-primary" id="modalCloseBtn">OK</button>
+        </div>
+    </div>
+
+    <script src="/components/progress-helper.js"></script>
+    <script src="/static/csv.script.js?v=20260206"></script>
+</body>
+</html>

@@ -10,11 +10,5 @@
     "interval_minutes": 5,
     "enabled": true,
     "description": "Aktualisiere Bestandszahlen"
-  },
-  {
-    "job_type": "fetch_invoices",
-    "interval_minutes": 60,
-    "enabled": false,
-    "description": "Hole Rechnungen von TEMU"
   }
 ]

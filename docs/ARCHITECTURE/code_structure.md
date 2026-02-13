@@ -4,92 +4,81 @@ Quick Reference für die TEMU-Integration Codebase.
 
 ---
 
+**Datum:** 5. Februar 2026
+
+---
+
 ## 1. Projektbaum
 
 ```
 /home/chx/temu/
-├── api/
-│   └── server.py                    # FastAPI Server (REST + WebSocket)
-├── config/
-│   ├── __init__.py
-│   └── settings.py                  # Konfiguration (DB, TEMU Keys)
-├── data/
-│   ├── temu/                        # TEMU-Daten
-│   │   ├── api_responses/           # JSON-Caches von TEMU API
-│   │   ├── xml/                     # JTL Exporte (Orders→XML)
-│   │   └── export/                  # Export-Arbeitsverzeichnis
-│   └── pdf_reader/                  # PDF Reader Daten
-│       ├── eingang/{rechnungen,werbung}
-│       ├── ausgang/
-│       └── tmp/
-├── frontend/
-│   ├── index.html                   # Hauptseite (PWA)
-│   ├── app.js                       # Hauptlogik (API, WebSocket)
-│   ├── navbar.js                    # Navigation Component
-│   ├── styles.css                   # Styling
-│   ├── manifest.json                # PWA Manifest
-│   ├── service-worker.js            # Offline Caching
-│   ├── test_websocket.html          # Debug-Tool
-│   ├── pwa-debug.html               # PWA-Validator
+├── .venv/                         # Python Virtual Environment
+├── data/                          # Runtime Data (JSON, XML, PDFs)
+│   ├── csv_verarbeiter/
+│   │   ├── eingang/
+│   │   ├── ausgang/
+│   │   └── reports/
+│   ├── pdf_reader/
+│   │   ├── eingang/{rechnungen,werbung}
+│   │   ├── ausgang/
+│   │   └── tmp/
+│   └── temu/
+│       ├── api_responses/
+│       ├── xml/
+│       └── export/
+├── docs/                          # Project Documentation
+├── frontend/                      # Main PWA Frontend
+│   ├── dashboard.css
+│   ├── index-new.html             # Main HTML (PWA Entry)
+│   ├── manifest.json
+│   ├── service-worker.js
 │   └── icons/
-│       ├── icon-192.png
-│       └── icon-512.png
-├── src/
-│   ├── db/
-│   │   ├── connection.py            # SQLAlchemy Engine + Pooling
-│   │   └── repositories/            # CRUD Layer
-│   │       ├── common/log_repository.py
-│   │       ├── jtl_common/jtl_repository.py
-│   │       └── temu/
-│   │           ├── order_repository.py
-│   │           ├── product_repository.py
-│   │           ├── inventory_repository.py
-│   │           └── order_item_repository.py
-│   ├── marketplace_connectors/
-│   │   └── temu/
-│   │       ├── api_client.py        # Low-level HTTP + Signaturen
-│   │       ├── orders_api.py        # TEMU Orders Endpoint
-│   │       ├── inventory_api.py     # TEMU Inventory Endpoint
-│   │       ├── service.py           # High-level Connector
-│   │       └── signature.py         # Request Signing
-│   ├── modules/
-│   │   ├── temu/
-│   │   │   ├── order_service.py         # JSON→DB Import
-│   │   │   ├── inventory_service.py     # SKU Download, JTL Refresh
-│   │   │   ├── stock_sync_service.py    # DB→API Deltas
-│   │   │   ├── tracking_service.py      # JTL→DB Tracking
-│   │   │   ├── order_workflow_service.py    # 5-Step Orchestrierung
-│   │   │   ├── inventory_workflow_service.py # 4-Step Orchestrierung
-│   │   │   └── logger.py               # TEMU-spezifischer Logger (logs/temu)
-│   │   └── pdf_reader/
-│   │       ├── config.py               # Pfade data/pdf_reader + logs/pdf_reader
-│   │       ├── logger.py               # PDF Reader Logger (logs/pdf_reader)
-│   │       ├── rechnungen_service.py   # Rechnungserkennung
-│   │       ├── werbung_service.py      # Werbungserkennung
-│   │       └── werbung_extraction_service.py # Seite-1-Extraktion
-│   └── services/
-│       ├── log_service.py           # Job Logging (DB)
-│       └── logger.py                # Base Logger Factory (app/temu/pdf_reader)
-├── workers/
-│   ├── worker_service.py            # Job Execution
-│   ├── job_models.py                # Job State Models
-│   ├── workers_config.py            # Config Loader
-│   └── config/
-│       └── workers_config.json      # Schedule + Intervalle
-├── workflows/
-│   ├── temu_orders.py               # Historisch (CLI wrapper)
-│   └── temu_inventory.py            # Historisch (CLI wrapper)
-├── main.py                          # Historisch (nicht aktiv)
-├── ecosystem.config.js              # PM2 Config
-├── requirements.txt                 # Python Dependencies
-└── db_schema.sql                    # SQL Server Schema
+├── logs/                          # Runtime Logs by Module
+│   ├── app/
+│   ├── csv_verarbeiter/
+│   └── pdf_reader/
+├── modules/                       # ALL application modules (monorepo)
+│   ├── shared/                    # Common Infrastructure
+│   │   ├── config/                # Settings, .env file
+│   │   ├── connectors/temu/       # TEMU API Client
+│   │   ├── database/              # Connection, Repositories (TOCI + JTL)
+│   │   └── logging/               # Log Service, Logger Factory
+│   ├── temu/                      # TEMU Marketplace Integration
+│   │   ├── frontend/              # PWA Interface
+│   │   ├── services/              # Business Logic (Orders, Inventory, Tracking)
+│   │   ├── jobs.py                # APScheduler Job Definitions
+│   │   └── router.py              # FastAPI Routes
+│   ├── pdf_reader/                # PDF Processing Module
+│   │   ├── frontend/              # Upload Interface
+│   │   ├── services/              # PDF Extraction Logic
+│   │   └── router.py              # FastAPI Routes
+│   ├── jtl/                       # JTL ERP Integration
+│   │   └── xml_export/            # XML Generation Service
+│   └── csv_verarbeiter/           # CSV Processing (JTL2DATEV) [🔄 In Dev]
+│       ├── frontend/              # Light Apple-design UI
+│       ├── services/              # CSV Processing Logic
+│       └── router.py              # FastAPI Routes
+├── workers/                       # APScheduler Job Management
+│   ├── config/
+│   │   └── workers_config.json    # Schedule + Intervals
+│   ├── job_models.py
+│   ├── worker_service.py
+│   └── workers_config.py
+├── scripts/                       # Shell scripts (e.g., setup, export)
+├── .gitignore
+├── CLAUDE.md
+├── db_schema.sql
+├── ecosystem.config.js            # PM2 Configuration
+├── main.py                        # Unified FastAPI Gateway
+├── MIGRATION_STATUS.md
+└── requirements.txt
 ```
 
 ---
 
 ## 2. Kern-Module (Verantwortlichkeiten)
 
-### API Layer – `api/server.py`
+### API Layer – `main.py`
 **Verantwortung:** HTTP/WebSocket Schnittstelle
 
 ```python
@@ -111,7 +100,7 @@ GET /icons/{filename}        # Icon-Serving
 
 ---
 
-### Database Layer – `src/db/`
+### Database Layer – `modules/shared/database/`
 
 #### `connection.py`
 **Verantwortung:** SQLAlchemy Engine + Connection Pool
@@ -168,7 +157,7 @@ class Repository:
 
 ---
 
-### Marketplace Connector – `src/marketplace_connectors/temu/`
+### Marketplace Connector – `modules/shared/connectors/temu/`
 
 **Verantwortung:** TEMU API Kommunikation
 
@@ -209,7 +198,7 @@ class TemuService:
 
 ---
 
-### Business Logic – `src/modules/temu/`
+### Business Logic – `modules/temu/services/`
 
 **Verantwortung:** Domain Logic (Orders, Inventory, Tracking, Stock Sync)
 
@@ -278,7 +267,7 @@ class StockSyncService:
 
 ---
 
-### Workflow Orchestration – `src/modules/temu/`
+### Workflow Orchestration – `modules/temu/services/`
 
 **Verantwortung:** Multi-Step Job Orchestrierung mit DI (Dependency Injection)
 
@@ -380,7 +369,7 @@ DI Pattern: Wie OrderWorkflow
 
 ---
 
-### Services – `src/services/`
+### Services – `modules/shared/logging/`
 
 #### `log_service.py` – Centralized Logging
 ```python
@@ -405,7 +394,6 @@ class WorkerService:
     Jobs:
     - temu_orders_sync → OrderWorkflowService.execute()
     - temu_inventory_sync → InventoryWorkflowService.execute()
-    - fetch_invoices → Placeholder
 ```
 
 **APScheduler Integration:**
@@ -492,7 +480,7 @@ TEMU API (updateStockTarget)
 Browser
    ↓ HTTP
    ↓
-FastAPI (api/server.py)
+FastAPI (main.py)
    ↓ Route Handler
    ↓
 Business Logic (modules/temu/)
@@ -662,7 +650,7 @@ source .venv/bin/activate
 
 # Teste Order Workflow
 python -c "
-from src.modules.temu.order_workflow_service import OrderWorkflowService
+from modules.temu.services.order_workflow_service import OrderWorkflowService
 workflow = OrderWorkflowService()
 result = workflow.execute()
 print(result)

@@ -55,7 +55,6 @@ Bearbeite `job_models.py`:
 class JobType(str, Enum):
     SYNC_ORDERS = "order_workflow"
     SYNC_INVENTORY = "inventory_workflow"
-    FETCH_INVOICES = "fetch_invoices"
 
     # NEU: Amazon Job
     AMAZON_SYNC_ORDERS = "amazon_order_workflow"  # ← Hinzufügen

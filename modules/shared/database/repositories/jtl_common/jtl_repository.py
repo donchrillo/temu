@@ -218,6 +218,43 @@ class JtlRepository(BaseRepository):
             row = self._fetch_one(sql, {"email": email})
             if not row:
                 return None
+            return row[0]
+        except Exception as e:
+            _get_log_service().log("SYSTEM_ERROR", "jtl_repository", "ERROR", f"JTL get_customer_number_by_email: {e}")
+            return None
+    
+    def get_customer_number_by_order_id(self, order_id: str) -> Optional[str]:
+        """
+        Hole JTL Kundennummer (cKundennr) per Amazon OrderID.
+        Abfrage: SELECT cKundennr FROM tAuftrag WHERE cExterneAuftragsnummer = order_id
+        
+        Dies wird für CSV-Verarbeiter verwendet, um Amazon OrderIDs durch
+        interne JTL-Kundennummern zu ersetzen.
+        
+        Args:
+            order_id: Amazon OrderID (z.B. 306-1234567-8910111)
+            
+        Returns:
+            str: Kundennummer oder None wenn nicht gefunden
+        """
+        if not order_id:
+            return None
+        
+        try:
+            # Abfrage der Tabelle tAuftrag - enthält die externe Auftragsnummer (Amazon OrderID)
+            sql = """
+                SELECT TOP 1 [cKundennr]
+                FROM [eazybusiness].[Verkauf].[tAuftrag]
+                WHERE [cExterneAuftragsnummer] = :order_id
+                ORDER BY [kAuftrag] DESC
+            """
+            row = self._fetch_one(sql, {"order_id": order_id})
+            if not row:
+                return None
+            return str(row[0])
+        except Exception as e:
+            _get_log_service().log("SYSTEM_ERROR", "jtl_repository", "ERROR", f"JTL get_customer_number_by_order_id: {e}")
+            return None
             kunden_nr = row[0]
             return kunden_nr if kunden_nr else None
         except Exception as e:

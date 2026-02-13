@@ -35,6 +35,7 @@ from modules.shared import log_service, app_logger
 # Module imports
 from modules.pdf_reader import get_router as get_pdf_router
 from modules.temu import get_router as get_temu_router, register_jobs as register_temu_jobs
+from modules.csv_verarbeiter.router import router as csv_router
 
 # ═══════════════════════════════════════════════════════════════
 # Scheduler
@@ -76,8 +77,8 @@ app = FastAPI(
     description="Unified API Gateway für PDF-Processing & TEMU Integration",
     version="2.0.0",
     lifespan=lifespan,
-    docs_url="/docs",
-    redoc_url="/redoc"
+    docs_url="/api/docs",
+    redoc_url="/api/redoc"
 )
 
 # CORS Middleware
@@ -107,6 +108,13 @@ app.include_router(
     tags=["TEMU Integration"]
 )
 
+# CSV Verarbeiter Modul
+app.include_router(
+    csv_router,
+    prefix="/api/csv",
+    tags=["CSV Verarbeiter"]
+)
+
 # ═══════════════════════════════════════════════════════════════
 # Job Management Endpoints
 # ═══════════════════════════════════════════════════════════════
@@ -118,7 +126,7 @@ async def health():
         "status": "ok",
         "timestamp": datetime.now().isoformat(),
         "version": "2.0.0",
-        "modules": ["pdf-reader", "temu"]
+        "modules": ["pdf-reader", "temu", "csv-verarbeiter"]
     }
 
 @app.get("/api/jobs")
@@ -137,11 +145,10 @@ async def trigger_job(
     parent_order_status: int = 2,
     days_back: int = 7,
     verbose: bool = False,
-    log_to_db: bool = True,
     mode: str = "quick"
 ):
     """Job sofort triggern"""
-    scheduler.trigger_job_now(job_id, parent_order_status, days_back, verbose, log_to_db, mode)
+    scheduler.trigger_job_now(job_id, parent_order_status, days_back, verbose, mode)
     return {
         "status": "triggered",
         "job_id": job_id,
@@ -149,7 +156,6 @@ async def trigger_job(
             "parent_order_status": parent_order_status,
             "days_back": days_back,
             "verbose": verbose,
-            "log_to_db": log_to_db,
             "mode": mode
         }
     }
@@ -283,7 +289,11 @@ async def serve_module_static(filename: str):
         temu_file = base_dir / "modules" / "temu" / "frontend" / filename
         if temu_file.exists():
             return FileResponse(str(temu_file))
-
+    # Check CSV module
+    if filename.startswith('csv.'):
+        csv_file = base_dir / "modules" / "csv_verarbeiter" / "frontend" / filename
+        if csv_file.exists():
+            return FileResponse(str(csv_file))
     # Fallback to frontend directory
     frontend_file = frontend_dir / filename
     if frontend_file.exists():
@@ -328,6 +338,34 @@ async def temu_ui():
     if not temu_html.exists():
         raise HTTPException(status_code=404, detail="TEMU Frontend not found")
     return FileResponse(str(temu_html))
+
+@app.get("/csv")
+async def csv_ui():
+    """CSV Verarbeiter UI - serviert direkt aus Modul"""
+    csv_html = Path(__file__).parent / "modules" / "csv_verarbeiter" / "frontend" / "csv.html"
+    if not csv_html.exists():
+        raise HTTPException(status_code=404, detail="CSV Frontend not found")
+    return FileResponse(str(csv_html))
+
+@app.get("/docs")
+async def docs_ui():
+    """API Documentation UI - serviert mit Navigation"""
+    docs_html = Path(__file__).parent / "frontend" / "docs.html"
+    if not docs_html.exists():
+        raise HTTPException(status_code=404, detail="Docs Frontend not found")
+    return FileResponse(str(docs_html))
+
+@app.get("/components/{component_name}")
+async def serve_component(component_name: str):
+    """Serve zentrale UI-Komponenten"""
+    allowed_extensions = {'.html', '.js', '.css'}
+    if not any(component_name.endswith(ext) for ext in allowed_extensions):
+        raise HTTPException(status_code=403, detail="File type not allowed")
+    
+    component_path = frontend_dir / "components" / component_name
+    if component_path.exists():
+        return FileResponse(str(component_path))
+    raise HTTPException(status_code=404, detail=f"Component not found: {component_name}")
 
 @app.get("/manifest.json")
 async def get_manifest():

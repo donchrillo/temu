@@ -1,7 +1,7 @@
 # 📘 TEMU Integration – Architektur-Dokumentation: Basis-Layer (Database)
 
 **Status:** 🟢 STABLE / VERIFIED  
-**Datum:** 23. Januar 2026  
+**Datum:** 5. Februar 2026  
 **Bereich:** Database Connectivity & Configuration
 
 ---
@@ -12,7 +12,7 @@ Dieser Layer bildet das Fundament der Anwendung. Er stellt sicher, dass die Verb
 ---
 
 ## 1. Konfiguration
-**Datei:** `config/settings.py`
+**Datei:** `modules/shared/config/settings.py`
 
 Diese Datei ist die zentrale Steuerzentrale der Anwendung. Sie trennt Code von Konfiguration gemäß den *12-Factor App* Prinzipien.
 
@@ -28,7 +28,7 @@ Diese Datei ist die zentrale Steuerzentrale der Anwendung. Sie trennt Code von K
 ---
 
 ## 2. Datenbank-Engine & Pooling
-**Datei:** `src/db/connection.py`
+**Datei:** `modules/shared/database/connection.py`
 
 Das Herzstück der Datenhaltung. Hier wurde von "Single Connection" auf "Enterprise Connection Pooling" umgestellt.
 
@@ -45,7 +45,7 @@ Das Herzstück der Datenhaltung. Hier wurde von "Single Connection" auf "Enterpr
 ---
 
 ## 3. Modul-Schnittstelle
-**Datei:** `src/db/__init__.py`
+**Datei:** `modules/shared/database/__init__.py`
 
 Die saubere Schnittstelle nach außen.
 
@@ -61,8 +61,8 @@ Die saubere Schnittstelle nach außen.
 
 ### Transaktions-Beispiel mit Rollback
 ```python
-from src.db.connection import db_connect
-from config.settings import DB_JTL
+from modules.shared.database.connection import db_connect
+from modules.shared.config.settings import DB_JTL
 
 # Automatisches COMMIT bei Erfolg, ROLLBACK bei Fehler
 with db_connect(DB_JTL) as conn:
@@ -85,7 +85,7 @@ with db_connect(DB_TOCI) as toci_conn:
 
 ### Ohne Context Manager (selten nötig)
 ```python
-from src.db.connection import get_engine
+from modules.shared.database.connection import get_engine
 
 engine = get_engine(DB_JTL)
 with engine.connect() as conn:
@@ -102,8 +102,8 @@ Alle Repositories (`JtlRepository`, `ProductRepository`, `InventoryRepository`) 
 
 ```python
 from sqlalchemy import text
-from src.db.connection import get_engine
-from config.settings import DB_JTL
+from modules.shared.database.connection import get_engine
+from modules.shared.config.settings import DB_JTL
 
 class JtlRepository:
     def __init__(self, connection=None):
@@ -129,9 +129,9 @@ class JtlRepository:
 
 ### Nutzung in Workflows (mit Transaktionssicherheit)
 ```python
-from src.db.repositories.jtl_common.jtl_repository import JtlRepository
-from src.db.connection import db_connect
-from config.settings import DB_JTL
+from modules.shared.database.repositories.jtl_common.jtl_repository import JtlRepository
+from modules.shared.database.connection import db_connect
+from modules.shared.config.settings import DB_JTL
 
 with db_connect(DB_JTL) as jtl_conn:
     # Injiziere die Transaktion ins Repository
@@ -240,7 +240,7 @@ def update_jtl_article_id(self, product_id: int, jtl_article_id: int) -> bool:
 
 ### Logging & Debugging
 ```python
-from src.modules.temu.logger import temu_logger  # Modul-spezifischer Logger
+from modules.shared.logging.logger import app_logger as temu_logger  # Modul-spezifischer Logger
 
 try:
     result = repository.execute_query()
@@ -284,7 +284,7 @@ for p in products:
 ```
 
 ### Connection Pool Tuning
-**Datei:** `src/db/connection.py`
+**Datei:** `modules/shared/database/connection.py`
 
 ```python
 # Aktuelle Settings:
@@ -300,7 +300,7 @@ max_overflow=30
 ### Messung & Benchmarking
 ```python
 import time
-from src.modules.temu.logger import temu_logger
+from modules.shared.logging.logger import app_logger as temu_logger
 
 start = time.time()
 result = repository.get_stocks_by_article_ids(article_ids)
@@ -348,12 +348,12 @@ A: ~2-5 MB pro Connection. Bei 30 Connections max. ~150 MB extra.
 
 ---
 
-## 5. Strukturiertes Logging – scheduler_logs Tabelle (28. Januar 2026)
+## 9. Strukturiertes Logging – scheduler_logs Tabelle (28. Januar 2026)
 
 ### Übersicht
 Die `scheduler_logs` Tabelle speichert strukturierte Logs aller TEMU-Jobs (Inventar-Sync, Auftrags-Sync, etc.) mit Meta-Informationen.
 
-**Datei:** `src/db/repositories/common/log_repository.py`
+**Datei:** `modules/shared/database/repositories/common/log_repository.py`
 
 ### Tabellen-Schema
 ```sql

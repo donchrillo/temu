@@ -8,7 +8,6 @@ class JobType(str, Enum):
     """Verfügbare Job-Typen"""
     SYNC_ORDERS = "sync_orders"
     SYNC_INVENTORY = "sync_inventory"
-    FETCH_INVOICES = "fetch_invoices"
 
 class JobStatusEnum(str, Enum):
     """Job-Status"""

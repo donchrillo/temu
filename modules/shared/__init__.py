@@ -14,9 +14,7 @@ from .database.connection import get_engine, db_connect, get_db, close_all_engin
 from .database.repositories.base import BaseRepository
 
 # Logging (lokale Imports aus modules/shared/logging/)
-from .logging.logger import create_module_logger
-from .logging.log_service import log_service
-from .logging import app_logger
+from .logging import create_module_logger, log_service, app_logger
 
 # Config (lokale Imports aus modules/shared/config/)
 from .config.settings import (

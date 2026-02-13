@@ -4,6 +4,10 @@ Minimale Dokumentation für Remote SSH + PM2 Setup.
 
 ---
 
+**Datum:** 5. Februar 2026
+
+---
+
 ## 1. SSH/Remote Setup (VSCode)
 
 ### VSCode Remote SSH Extension
@@ -111,7 +115,7 @@ SCHEDULER_TIMEZONE=Europe/Berlin
 
 ### Laden in Python
 ```python
-# config/settings.py
+# modules/shared/config/settings.py
 from dotenv import load_dotenv
 import os
 
@@ -164,7 +168,7 @@ pm2 logs temu-api --err
 # 3. Manuell testen
 cd /home/chx/temu
 source .venv/bin/activate
-python -c "import src.modules.temu.inventory_service; print('OK')"
+python -c "import modules.temu.services.inventory_service; print('OK')"
 ```
 
 ### Memory/CPU spike
