@@ -1,7 +1,7 @@
 # Monorepo Migration Summary
 
-**Datum:** 6. Februar 2026
-**Zweck:** Zusammenfassung der abgeschlossenen Monorepo-Migration und Status der CSV-Verarbeiter-Migration.
+**Datum:** 13. Februar 2026
+**Zweck:** Zusammenfassung der abgeschlossenen Monorepo-Migration und CSV-Verarbeiter-Migration.
 
 ---
 
@@ -18,15 +18,16 @@ Die umfangreiche Monorepo-Migration wurde erfolgreich abgeschlossen. Dieses Proj
 *   **Frontend-Modernisierung:** CSS Consolidation (1,537 Zeilen eliminiert) und zentrale Navigation implementiert.
 
 ### Referenzen zum Migrationsprozess:
-*   `GEMINI.md`: Beschreibt die neue Monorepo-Struktur und wichtige Entwicklungsinformationen.
-*   `CURRENT_STATUS.md`: Bietet eine detaillierte Statusübersicht der Monorepo-Migration (als abgeschlossen markiert) und der laufenden CSV-Verarbeiter-Migration.
+*   `AI_GUIDE.md`: Umfassender Leitfaden mit Projektübersicht, Architektur, Setup und Arbeitsprinzipien (konsolidiert aus früheren Dokumenten).
+*   `CURRENT_STATUS.md`: Bietet eine detaillierte Statusübersicht der Monorepo-Migration und der abgeschlossenen CSV-Verarbeiter-Migration.
+*   `docs/ARCHITECTURE/code_structure.md`, `docs/DATABASE/architecture.md` und weitere modulare Dokumentation beschreiben die neue Struktur.
 *   Historische Dokumente wie `migration_archive/COMPLETE_MIGRATION_PLAN.md` und andere Dateien im `migration_archive`-Verzeichnis dienten während des Migrationsprozesses als Leitfaden und sind nun hauptsächlich von historischem Interesse.
 
 ---
 
 ## 2. Status der CSV-Verarbeiter-Migration
 
-Die Migration des CSV-Verarbeiters von einer Standalone-Anwendung in das Monorepo ist noch im Gange (**Phase 2 von 7 abgeschlossen**). Die Core Services für Amazon DATEV Export-Verarbeitung sind vollständig implementiert. Detaillierte Informationen hierzu finden Sie in der `CURRENT_STATUS.md` und `TODO_LIST.md`.
+Die Migration des CSV-Verarbeiters von einer Standalone-Anwendung in das Monorepo ist **vollständig abgeschlossen (Phase 7 von 7)** und wurde erfolgreich in Produktion eingesetzt. Die Core Services für Amazon DATEV Export-Verarbeitung sind vollständig implementiert und getestet. Detaillierte Informationen hierzu finden Sie in der `CURRENT_STATUS.md`.
 
 ---
 
@@ -56,7 +57,7 @@ Die Migration des CSV-Verarbeiters von einer Standalone-Anwendung in das Monorep
 
 ## 4. Historische Migrationsdokumente
 
-Dateien im `migration_archive/`-Verzeichnis (z.B. `COMPLETE_MIGRATION_PLAN.md`, `PHASE3_VERIFICATION.txt`, etc.) sind historische Artefakte, die den Verlauf und die Planung der Monorepo-Migration dokumentieren. Da die Migration erfolgreich abgeschlossen und die aktuelle Architektur in den primären Dokumentationsdateien (`docs/ARCHITECTURE/code_structure.md`, `GEMINI.md`, etc.) beschrieben ist, sind diese historischen Dateien für den laufenden Betrieb und die Entwicklung nicht mehr direkt relevant.
+Dateien im `migration_archive/`-Verzeichnis (z.B. `COMPLETE_MIGRATION_PLAN.md`, `PHASE3_VERIFICATION.txt`, etc.) sind historische Artefakte, die den Verlauf und die Planung der Monorepo-Migration dokumentieren. Da die Migration erfolgreich abgeschlossen und die aktuelle Architektur in den primären Dokumentationsdateien (`docs/ARCHITECTURE/code_structure.md`, `AI_GUIDE.md`, etc.) beschrieben ist, sind diese historischen Dateien für den laufenden Betrieb und die Entwicklung nicht mehr direkt relevant.
 
 Es wird empfohlen, diese historischen Migrationsdokumente zu entfernen, um die Projektstruktur sauber zu halten und Verwechslungen mit aktiver Dokumentation zu vermeiden.
 

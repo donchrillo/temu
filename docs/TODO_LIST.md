@@ -1,6 +1,6 @@
 # Project TODO List
 
-**Datum:** 6. Februar 2026
+**Datum:** 13. Februar 2026
 **Zweck:** Auflistung aller ausstehenden Aufgaben, nächsten Schritte, bekannten Probleme und zukünftigen Erweiterungen für das TEMU-Integrationsprojekt.
 
 

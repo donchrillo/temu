@@ -4,7 +4,7 @@ Minimale Dokumentation für Remote SSH + PM2 Setup.
 
 ---
 
-**Datum:** 5. Februar 2026
+**Datum:** 13. Februar 2026
 
 ---
 

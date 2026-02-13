@@ -1,7 +1,7 @@
 # 📘 TEMU Integration – Architektur-Dokumentation: Workflows
 
 **Status:** 🟢 STABLE / VERIFIED
-**Datum:** 6. Februar 2026
+**Datum:** 13. Februar 2026
 **Bereich:** Job Orchestrierung, APScheduler, PM2 Integration
 
 ---
