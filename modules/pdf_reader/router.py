@@ -10,7 +10,7 @@ REST API Endpoints für PDF-Verarbeitung:
 """
 
 import time
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import List
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
@@ -33,17 +33,44 @@ from .services.rechnungen_service import process_rechnungen
 router = APIRouter()
 
 # ═══════════════════════════════════════════════════════════════
+# UPLOAD CONSTRAINTS
+# ═══════════════════════════════════════════════════════════════
+
+ALLOWED_EXTENSIONS = {".pdf"}
+MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
+
+# ═══════════════════════════════════════════════════════════════
 # HELPER FUNCTIONS
 # ═══════════════════════════════════════════════════════════════
 
 async def _save_uploads(files: List[UploadFile], target_dir: Path) -> list[str]:
-    """Speichere Uploads in das Zielverzeichnis."""
+    """Speichere Uploads in das Zielverzeichnis.
+
+    Sicherheitsmaßnahmen:
+    - Path Traversal Schutz: Nur der Dateiname wird verwendet (Directory-Komponenten entfernt)
+    - Dateitypvalidierung: Nur .pdf Dateien werden akzeptiert
+    - Größenlimit: Maximal 50 MB pro Datei
+    """
     ensure_directories()
     saved = []
     target_dir.mkdir(parents=True, exist_ok=True)
     for f in files:
-        dest = target_dir / f.filename
+        # Path Traversal Schutz: Nur den reinen Dateinamen extrahieren
+        safe_name = PurePosixPath(f.filename).name
+        if not safe_name:
+            raise HTTPException(status_code=400, detail="Ungültiger Dateiname")
+
+        # Dateiendung prüfen
+        if Path(safe_name).suffix.lower() not in ALLOWED_EXTENSIONS:
+            raise HTTPException(status_code=400, detail=f"Nur PDF-Dateien erlaubt, erhalten: '{safe_name}'")
+
         content = await f.read()
+
+        # Größenlimit prüfen
+        if len(content) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=413, detail=f"Datei zu groß ({len(content)} Bytes): '{safe_name}'. Max: {MAX_FILE_SIZE} Bytes")
+
+        dest = target_dir / safe_name
         with open(dest, "wb") as out:
             out.write(content)
         saved.append(str(dest))
