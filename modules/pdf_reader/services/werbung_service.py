@@ -75,17 +75,18 @@ def extract_data_from_pdf(pdf_path: Path, job_id: str) -> Optional[dict]:
         }
 
         if lang_patterns.get("rechnungsnummer"):
-            match = re.search(fr"{re.escape(lang_patterns['rechnungsnummer'])}\s*(\w+)", text)
+            match = re.search(fr"{re.escape(lang_patterns['rechnungsnummer'])}\s*[:\s]*(\w+)", text, re.IGNORECASE)
             if match:
                 data["Rechnungsnummer"] = match.group(1)
 
         if lang_patterns.get("rechnungsdatum"):
-            match = re.search(fr"{re.escape(lang_patterns['rechnungsdatum'])}\s*([\d\-]+)", text)
+            match = re.search(fr"{re.escape(lang_patterns['rechnungsdatum'])}\s*[:\s]*([\d\-]+)", text, re.IGNORECASE)
             if match:
                 data["Rechnungsdatum"] = match.group(1)
 
         if lang_patterns.get("zeitraum"):
-            match = re.search(fr"{re.escape(lang_patterns['zeitraum'])}\s*([\d\-]+)\s*-\s*([\d\-]+)", text)
+            # Für italienisch: "al" statt "-"
+            match = re.search(fr"{re.escape(lang_patterns['zeitraum'])}\s*[:\s]*([\d\-]+)\s*(?:-|al)\s*([\d\-]+)", text, re.IGNORECASE)
             if match:
                 data["Zeitraum_Start"] = match.group(1)
                 data["Zeitraum_Ende"] = match.group(2)
@@ -94,18 +95,50 @@ def extract_data_from_pdf(pdf_path: Path, job_id: str) -> Optional[dict]:
         currency = lang_patterns.get("währung", "EUR")
 
         if lang_patterns.get("summe"):
-            match = re.search(fr"{re.escape(lang_patterns['summe'])}\s*([\d.,]+)\s*{currency}", text)
+            match = re.search(fr"{re.escape(lang_patterns['summe'])}\s*([\d.,]+)\s*{currency}", text, re.IGNORECASE)
             if match:
                 data["Bruttowert"] = parse_amount(match.group(1), currency)
 
         if lang_patterns.get("mwst"):
             try:
-                pattern = fr"{re.escape(lang_patterns['mwst'])}\s*([\d.,]+)\s*{currency}"
-                match = re.search(pattern, text)
-                if match:
-                    data["Mehrwertsteuer"] = parse_amount(match.group(1), currency)
+                # Versuch 1: Verwende spezifische Regex (z.B. "VAT(19%) - GERMANY 382.53 EUR")
+                if lang_patterns.get("mwst_regex"):
+                    match = re.search(lang_patterns["mwst_regex"], text, re.IGNORECASE)
+                    if match:
+                        data["Mehrwertsteuer"] = parse_amount(match.group(1), currency)
+                        log_service.log(job_id, "pdf_werbung_process", "INFO", f"MwSt extrahiert via Regex: {data['Mehrwertsteuer']} {currency}")
+                    # Fallback: Berechne MwSt aus Brutto - Netto
+                    elif lang_patterns.get("mwst_calc"):
+                        brutto_pattern = lang_patterns.get("brutto_pattern", "Importo Totale \\(Tasse Incluse\\)")
+                        netto_pattern = lang_patterns.get("netto_pattern", "Totale Parziale \\(Tasse Escluse\\)")
+                        
+                        brutto_match = re.search(fr"{brutto_pattern}\s*([\d.,]+)\s*{currency}", text, re.IGNORECASE)
+                        netto_match = re.search(fr"{netto_pattern}\s*([\d.,]+)\s*{currency}", text, re.IGNORECASE)
+                        
+                        if brutto_match and netto_match:
+                            brutto = parse_amount(brutto_match.group(1), currency)
+                            netto = parse_amount(netto_match.group(1), currency)
+                            data["Mehrwertsteuer"] = round(brutto - netto, 2)
+                            log_service.log(job_id, "pdf_werbung_process", "INFO", f"MwSt berechnet: {brutto} - {netto} = {data['Mehrwertsteuer']} {currency}")
+                        else:
+                            # MwSt 0 wenn nicht gefunden
+                            data["Mehrwertsteuer"] = 0.00
+                            log_service.log(job_id, "pdf_werbung_process", "WARNING", f"MwSt nicht gefunden, setze auf 0.00")
+                    else:
+                        data["Mehrwertsteuer"] = 0.00
+                        log_service.log(job_id, "pdf_werbung_process", "WARNING", f"Keine MwSt-Regex vorhanden, setze auf 0.00")
+                else:
+                    # Legacy Fallback für alte Pattern-Struktur
+                    pattern = fr"{re.escape(lang_patterns['mwst'])}\s*([\d.,]+)\s*{currency}"
+                    match = re.search(pattern, text, re.IGNORECASE)
+                    if match:
+                        data["Mehrwertsteuer"] = parse_amount(match.group(1), currency)
+                    else:
+                        data["Mehrwertsteuer"] = 0.00
+                        log_service.log(job_id, "pdf_werbung_process", "WARNING", f"MwSt nicht gefunden (Legacy), setze auf 0.00")
             except Exception as e:
                 log_service.log(job_id, "pdf_werbung_process", "WARNING", f"Fehler beim Extrahieren der MwSt: {e}")
+                data["Mehrwertsteuer"] = 0.00
 
         return data
     except Exception as e:

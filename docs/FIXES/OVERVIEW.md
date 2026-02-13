@@ -1,6 +1,6 @@
 # Fixes Overview & Lessons Learned
 
-**Datum:** 6. Februar 2026
+**Datum:** 13. Februar 2026
 **Zweck:** Konsolidierte Übersicht über wichtige behobene Fehler und daraus abgeleitete Best Practices im TEMU-Integrationsprojekt.
 
 ---
@@ -35,6 +35,30 @@
 ---
 
 ## 3. PDF Reader Fixes
+
+### 3.0 Mehrwertsteuer-Extraktion & Case-Sensitivity (2026-02-13)
+*   **Problem:** Mehrere Probleme bei der Verarbeitung von Werbe-PDFs:
+    1. Italienische PDF wurde nicht erkannt (Case-Sensitivity: "Periodo Della Fattura" vs "Periodo della fattura")
+    2. Deutsche PDFs: Mehrwertsteuer wurde nicht extrahiert ("VAT(19%)" ohne Leerzeichen vs Pattern "VAT (19%)")
+    3. Italienische PDF: Mehrwertsteuer-Zeile "VAT (0%) - ITALY" existiert nicht im PDF
+    4. Italienische Pattern waren veraltet ("Numero della fattura" vs "Numero Di Fattura", "Importo Totale Dovuto" vs "Importo Fatturato Dovuto")
+*   **Lösung:**
+    *   **Document Identifier:** Case-insensitive Matching eingeführt (`text_lower = text.lower()`)
+    *   **Pattern Updates:** 
+        - Deutsche Werbung: Flexibles Regex-Pattern `VAT\s*\(19%\)\s*-\s*GERMANY` statt festes "VAT (19%) - GERMANY"
+        - Italienische Werbung: Patterns an tatsächliche PDF-Struktur angepasst ("Numero Di Fattura", "Importo Fatturato Dovuto")
+        - Alle Werbe-Patterns: `mwst_regex` für flexible Extraktion, `mwst_calc` Flag für Fallback-Berechnung
+    *   **Robuste MwSt-Extraktion:** 
+        - Versuch 1: Direkte Regex-Extraktion (für DE/UK/SE mit expliziter VAT-Zeile)
+        - Fallback: Berechnung aus Brutto - Netto (für IT/FR/ES ohne VAT-Zeile)
+        - Sicherheitsnetz: MwSt = 0.00 wenn nichts gefunden
+    *   **Case-Insensitive Extraktion:** Alle `re.search()` Calls mit `re.IGNORECASE` Flag
+    *   **Zeitraum-Parsing:** Unterstützung für "al" (italienisch) zusätzlich zu "-" als Separator
+*   **Lessons Learned:**
+    *   Reale PDF-Formate sind inkonsistent und variieren nach Land/Sprache - immer Fallback-Strategien implementieren
+    *   Case-Sensitivity kann subtile Bugs verursachen - bei Text-Extraktion aus Dokumenten immer case-insensitive matchen
+    *   Bei fehlenden Daten: Versuche Berechnung aus verwandten Feldern statt sofort zu scheitern
+    *   Flexible Regex-Patterns (z.B. `\s*` für optionale Leerzeichen) sind robuster als exakte String-Matches
 
 ### 3.1 Vereinfachung Dateinamen-Handling (2026-02-05)
 *   **Problem:** Die ursprüngliche Implementierung nutzte ein komplexes `filename_mapping.json` System, um temporäre Dateien umzubenennen, was zu unnötiger Komplexität führte.

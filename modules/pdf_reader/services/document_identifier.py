@@ -66,7 +66,8 @@ def determine_country_and_document_type(text):
     Returns:
         tuple: (land, dokumenttyp) oder (None, None)
     """
+    text_lower = text.lower()
     for rule in rules:
-        if all(keyword in text for keyword in rule["contains"]):
+        if all(keyword.lower() in text_lower for keyword in rule["contains"]):
             return rule["land"], rule["typ"]
     return None, None

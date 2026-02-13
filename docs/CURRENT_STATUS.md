@@ -1,6 +1,6 @@
 # Current Project Status
 
-**Datum:** 6. Februar 2026
+**Datum:** 13. Februar 2026
 **Zweck:** Übersicht über den aktuellen Status des TEMU-Integrationsprojekts.
 
 ---
@@ -103,6 +103,13 @@ Die Migration des CSV-Verarbeiters von einer Standalone-Anwendung in das TOCI To
     *   Verbose Mode Option für Inventory Sync Dialog hinzugefügt (Parität mit Order Sync)
     *   Obsoleter `log_to_db` Parameter entfernt (Frontend, API, Worker) - Logging erfolgt immer über `log_service`
     *   Unnötige Statistik-Boxen (Orders, Inventory, Jobs) aus dem Frontend entfernt für bessere Übersichtlichkeit
+*   **PDF Werbung: Mehrwertsteuer-Extraktion Fix (13. Feb 2026):**
+    *   Behebung von Case-Sensitivity-Problemen (italienische PDFs wurden nicht erkannt)
+    *   Robuste MwSt-Extraktion: Direkte Regex-Extraktion + Fallback-Berechnung (Brutto - Netto)
+    *   Deutsche PDFs: Flexibles VAT-Pattern (`VAT\s*\(19%\)` statt `VAT (19%)`)
+    *   Italienische PDFs: Pattern-Updates ("Numero Di Fattura", "Importo Fatturato Dovuto")
+    *   Case-insensitive Matching für alle Extraktion-Patterns
+    *   Details in `docs/FIXES/OVERVIEW.md`
 
 ---
 
