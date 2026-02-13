@@ -28,7 +28,7 @@ def extract_data_from_pdf(pdf_path: Path, job_id: str) -> Optional[dict]:
     """
     try:
         with pdfplumber.open(pdf_path) as pdf:
-            text = "\n".join([page.extract_text() for page in pdf.pages])
+            text = "\n".join(page.extract_text() or "" for page in pdf.pages)
 
         country_code, document_type = determine_country_and_document_type(text)
         if not country_code or not document_type:

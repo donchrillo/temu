@@ -9,7 +9,9 @@ REST API Endpoints für PDF-Verarbeitung:
 - Download Ergebnisse
 """
 
+import asyncio
 import time
+from functools import partial
 from pathlib import Path, PurePosixPath
 from typing import List
 from fastapi import APIRouter, UploadFile, File, HTTPException
@@ -85,11 +87,16 @@ def _result_count(result) -> int:
     """Sichere Längenbestimmung für Verarbeitungsergebnisse."""
     return len(result) if hasattr(result, "__len__") else 0
 
+async def _run_in_executor(fn, *args):
+    """Führt eine synchrone Funktion im Thread-Pool aus, um den Event-Loop nicht zu blockieren."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, partial(fn, *args))
+
 async def _run_process_job(job_type: str, process_fn, job_id: str) -> dict:
     """Generischer Runner für Process-Endpoints (Werbung/Rechnungen)."""
     log_service.start_job_capture(job_id, job_type)
     try:
-        result = process_fn(job_id)
+        result = await _run_in_executor(process_fn, job_id)
         count = _result_count(result)
         log_service.log(job_id, job_type, "INFO", f"Verarbeitet: {count} Einträge")
         log_service.end_job_capture(success=True)
@@ -154,10 +161,10 @@ async def upload_werbung(files: List[UploadFile] = File(default=[]), process: bo
         if process:
             log_service.log(job_id, "pdf_werbung_upload", "INFO", "Starte automatische Verarbeitung...")
             
-            extracted_files = extract_and_save_first_page(job_id)
+            extracted_files = await _run_in_executor(extract_and_save_first_page, job_id)
             extracted_filenames = [p.name for p in extracted_files]
             
-            result = process_ad_pdfs(job_id)
+            result = await _run_in_executor(process_ad_pdfs, job_id)
             log_service.log(job_id, "pdf_werbung_upload", "INFO", f"Werbung verarbeitet: {_result_count(result)} Einträge")
 
         log_service.end_job_capture(success=True)
@@ -180,7 +187,7 @@ async def extract_werbung():
     log_service.start_job_capture(job_id, "pdf_werbung_extract")
     
     try:
-        extracted_files = extract_and_save_first_page(job_id)
+        extracted_files = await _run_in_executor(extract_and_save_first_page, job_id)
         
         log_service.log(job_id, "pdf_werbung_extract", "INFO", f"Extrahiert: {len(extracted_files)} Dateien")
         log_service.end_job_capture(success=True)
@@ -223,7 +230,7 @@ async def upload_rechnungen(files: List[UploadFile] = File(default=[]), process:
         result = None
         if process:
             log_service.log(job_id, "pdf_rechnungen_upload", "INFO", "Starte automatische Verarbeitung...")
-            result = process_rechnungen(job_id)
+            result = await _run_in_executor(process_rechnungen, job_id)
             log_service.log(job_id, "pdf_rechnungen_upload", "INFO", f"Rechnungen verarbeitet: {_result_count(result)} Einträge")
 
         log_service.end_job_capture(success=True)

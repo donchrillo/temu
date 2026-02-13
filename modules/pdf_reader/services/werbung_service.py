@@ -19,12 +19,21 @@ JOB_TYPE = "pdf_werbung_process"
 def _calc_mwst_from_brutto_netto(
     text: str, lang_patterns: dict, currency: str, country_code: str, job_id: str
 ) -> float:
-    """Berechnet MwSt als Differenz von Brutto und Netto."""
-    brutto_pattern = lang_patterns.get("brutto_pattern", r"Importo Totale \(Tasse Incluse\)")
-    netto_pattern = lang_patterns.get("netto_pattern", r"Totale Parziale \(Tasse Escluse\)")
+    """Berechnet MwSt als Differenz von Brutto und Netto.
 
-    brutto_match = re.search(fr"{brutto_pattern}\s*([\d.,]+)\s*{currency}", text, re.IGNORECASE)
-    netto_match = re.search(fr"{netto_pattern}\s*([\d.,]+)\s*{currency}", text, re.IGNORECASE)
+    Benötigt 'brutto_pattern' und 'netto_pattern' in lang_patterns.
+    Gibt 0.00 zurück wenn die Patterns nicht konfiguriert sind.
+    """
+    brutto_pattern = lang_patterns.get("brutto_pattern")
+    netto_pattern = lang_patterns.get("netto_pattern")
+
+    if not brutto_pattern or not netto_pattern:
+        log_service.log(job_id, JOB_TYPE, "WARNING",
+            f"brutto_pattern/netto_pattern fehlen für mwst_calc ({lang_patterns.get('währung', '?')}) — überspringe Berechnung")
+        return 0.00
+
+    brutto_match = re.search(fr"{brutto_pattern}\s*([\d.,]+)\s*{re.escape(currency)}", text, re.IGNORECASE)
+    netto_match = re.search(fr"{netto_pattern}\s*([\d.,]+)\s*{re.escape(currency)}", text, re.IGNORECASE)
 
     if brutto_match and netto_match:
         brutto = parse_amount(brutto_match.group(1), country_code, currency)
@@ -92,7 +101,7 @@ def extract_data_from_pdf(pdf_path: Path, job_id: str) -> Optional[dict]:
     """
     try:
         with pdfplumber.open(pdf_path) as pdf:
-            text = "\n".join([page.extract_text() for page in pdf.pages])
+            text = "\n".join(page.extract_text() or "" for page in pdf.pages)
 
         country_code, document_type = determine_country_and_document_type(text)
         if not country_code or not document_type:
