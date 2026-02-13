@@ -42,6 +42,24 @@ Jeder Agent dokumentiert seine Änderungen in folgendem Format:
 - [ ] README.md anpassen
 ---
 
+---
+### 2026-02-14 - Codereview-Agent (GitHub Copilot)
+**Modul/Datei:** `modules/jtl/xml_export/xml_export_service.py`
+**Art der Änderung:** Security + Performance + Code Quality (Prio 2)
+**Beschreibung:** 8 Review-Findings aus Code-Review umgesetzt
+**Details:**
+- 🔴 XML Control-Character Sanitization: `_prettify_xml()` entfernt jetzt illegale Chars (0x00-0x08, 0x0B, 0x0C, 0x0E-0x1F, 0x7F) via Regex vor minidom-Parsing — verhindert Crash bei Kundendaten mit Control-Chars
+- 🔴 `import traceback` von inline (2x) nach Top-Level verschoben
+- 🟡 Magic Number `1.19` → Konstante `VERSAND_MWST_SATZ = 19.0` mit berechneter Formel `(1 + VERSAND_MWST_SATZ / 100)`
+- 🟡 Kundennummer-Cache begrenzt auf 1000 Einträge (`_CUSTOMER_CACHE_MAXSIZE`) — verhindert unbegrenztes Memory-Wachstum
+- 🟡 `str(filepath)` entfernt — Path-Objekte funktionieren direkt mit `open()` (2 Stellen)
+- 🔵 Redundantes `else` nach `return` entfernt in `export_to_xml()`
+**Betroffene Dokumentation:**
+- [ ] API-Docs aktualisieren
+- [ ] Architecture-Docs überarbeiten
+- [ ] README.md anpassen
+---
+
 ## Processed Changes (Bereits dokumentiert)
 
 ---

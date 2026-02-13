@@ -1,6 +1,8 @@
 """XML Export Service - Business Logic für XML Generierung"""
 
 import copy
+import re
+import traceback
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 from datetime import datetime
@@ -12,6 +14,17 @@ from modules.shared.database.repositories.jtl_common.jtl_repository import JtlRe
 from modules.shared.logging.log_service import log_service
 from modules.shared.config.settings import JTL_WAEHRUNG, JTL_SPRACHE, JTL_K_BENUTZER, JTL_K_FIRMA
 from modules.temu.services.config import XML_OUTPUT_PATH, TEMU_EXPORT_DIR
+
+# XML-illegale Control-Characters (Tab 0x09, LF 0x0A, CR 0x0D sind erlaubt)
+_XML_ILLEGAL_CHARS_RE = re.compile(
+    '[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]'
+)
+
+# Standard MwSt-Satz für Versandkosten (19% Deutschland)
+VERSAND_MWST_SATZ = 19.0
+
+# Max Einträge im Kundennummer-Cache
+_CUSTOMER_CACHE_MAXSIZE = 1000
 
 class XmlExportService:
     """Business Logic - XML Generierung für JTL"""
@@ -53,15 +66,12 @@ class XmlExportService:
             orders = self._get_orders_to_export(job_id)
 
             if not orders:
-
                 log_service.log(job_id, "xml_export", "INFO",
                                   "✓ Keine neuen Orders zum Exportieren")
                 return {'exported': 0, 'jtl_imported': 0, 'success': False}
 
-
-            else:
-                log_service.log(job_id, "xml_export", "INFO",
-                              f"  {len(orders)} Orders zum Exportieren gefunden")
+            log_service.log(job_id, "xml_export", "INFO",
+                          f"  {len(orders)} Orders zum Exportieren gefunden")
 
             # ===== Generate XML Root (für gesamt-export) =====
             root = ET.Element('tBestellungen')
@@ -124,7 +134,6 @@ class XmlExportService:
                                           f"  ⚠ {order.bestell_id}: XML Generation fehlgeschlagen")
 
                 except Exception as e:
-                    import traceback
                     error_trace = traceback.format_exc()
 
                     log_service.log(job_id, "xml_export", "ERROR",
@@ -148,7 +157,6 @@ class XmlExportService:
             }
 
         except Exception as e:
-            import traceback
             error_trace = traceback.format_exc()
 
             log_service.log(job_id, "xml_export", "ERROR",
@@ -253,7 +261,7 @@ class XmlExportService:
         versand_pos = ET.SubElement(bestellung_elem, 'twarenkorbpos')
 
         versandkosten_netto = float(order.versandkosten or 0)
-        versandkosten_brutto = versandkosten_netto * 1.19
+        versandkosten_brutto = versandkosten_netto * (1 + VERSAND_MWST_SATZ / 100)
 
         ET.SubElement(versand_pos, 'cName').text = 'TEMU Versand'
         ET.SubElement(versand_pos, 'cArtNr')
@@ -261,7 +269,7 @@ class XmlExportService:
         ET.SubElement(versand_pos, 'cEinheit')
         ET.SubElement(versand_pos, 'fPreisEinzelNetto').text = f"{versandkosten_netto:.5f}"
         ET.SubElement(versand_pos, 'fPreis').text = f"{versandkosten_brutto:.2f}"
-        ET.SubElement(versand_pos, 'fMwSt').text = '19.00'
+        ET.SubElement(versand_pos, 'fMwSt').text = f"{VERSAND_MWST_SATZ:.2f}"
         ET.SubElement(versand_pos, 'fAnzahl').text = '1.00'
         ET.SubElement(versand_pos, 'cPosTyp').text = 'versandkosten'
         ET.SubElement(versand_pos, 'fRabatt').text = '0.00'
@@ -309,6 +317,9 @@ class XmlExportService:
 
         try:
             kunden_nr = self.jtl_repo.get_customer_number_by_email(key) or ''
+            # Begrenze Cache-Größe um Memory-Leak zu vermeiden
+            if len(self._customer_nr_cache) >= _CUSTOMER_CACHE_MAXSIZE:
+                self._customer_nr_cache.clear()
             self._customer_nr_cache[key] = kunden_nr
             return kunden_nr
         except Exception:
@@ -420,9 +431,8 @@ class XmlExportService:
             # Stelle sicher, dass das Verzeichnis existiert
             filepath.parent.mkdir(parents=True, exist_ok=True)
 
-            with open(str(filepath), 'w', encoding='ISO-8859-1') as f:
+            with open(filepath, 'w', encoding='ISO-8859-1') as f:
                 f.write(xml_string)
-
 
             log_service.log(job_id, "xml_export", "INFO",
                               f"  ✓ XML gespeichert: {filepath}")
@@ -445,7 +455,7 @@ class XmlExportService:
             TEMU_EXPORT_DIR.mkdir(parents=True, exist_ok=True)
             archive_file = TEMU_EXPORT_DIR / f"temu_order_{bestell_id}_{timestamp}.xml"
 
-            with open(str(archive_file), 'w', encoding='ISO-8859-1') as f:
+            with open(archive_file, 'w', encoding='ISO-8859-1') as f:
                 f.write(xml_string)
 
             log_service.log(job_id, "xml_export", "INFO",
@@ -475,9 +485,11 @@ class XmlExportService:
 
 
     def _prettify_xml(self, elem: ET.Element) -> str:
-        """Formatiere XML schön"""
+        """Formatiere XML schön — entfernt XML-illegale Control-Characters"""
         rough_string = ET.tostring(elem, 'utf-8')
-        reparsed = minidom.parseString(rough_string).toprettyxml(
+        # Entferne Control-Characters die minidom.parseString() crashen würden
+        cleaned = _XML_ILLEGAL_CHARS_RE.sub('', rough_string.decode('utf-8'))
+        reparsed = minidom.parseString(cleaned.encode('utf-8')).toprettyxml(
             indent="  ",
             encoding="ISO-8859-1"
         )
