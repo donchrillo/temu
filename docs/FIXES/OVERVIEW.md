@@ -36,7 +36,7 @@
 
 ## 3. PDF Reader Fixes
 
-### 3.0 Mehrwertsteuer-Extraktion & Case-Sensitivity (2026-02-13)
+### 3.0 Mehrwertsteuer-Extraktion & Case-Sensitivity Werbung (2026-02-13)
 *   **Problem:** Mehrere Probleme bei der Verarbeitung von Werbe-PDFs:
     1. Italienische PDF wurde nicht erkannt (Case-Sensitivity: "Periodo Della Fattura" vs "Periodo della fattura")
     2. Deutsche PDFs: Mehrwertsteuer wurde nicht extrahiert ("VAT(19%)" ohne Leerzeichen vs Pattern "VAT (19%)")
@@ -60,7 +60,28 @@
     *   Bei fehlenden Daten: Versuche Berechnung aus verwandten Feldern statt sofort zu scheitern
     *   Flexible Regex-Patterns (z.B. `\s*` für optionale Leerzeichen) sind robuster als exakte String-Matches
 
-### 3.1 Vereinfachung Dateinamen-Handling (2026-02-05)
+### 3.1 Rechnungen: Shipping Services Format & Dezimalpunkt-Ambiguität (2026-02-13)
+*   **Problem:** Deutsche Rechnungen im Shipping Services Format (INV-DE-*) wurden nicht vollständig extrahiert:
+    1. "Nettobertrag:" (Typo statt "Nettobetrag") wurde nicht erkannt
+    2. Dezimalpunkt-Ambiguität: "92.00" wurde als 9200.0 geparst (Punkt als Tausendertrennzeichen behandelt)
+    3. MwSt-Zeile "USt: EUR 17.48" wurde nicht gefunden (Regex matched "USt.-Satz" in Tabellenkopf zuerst)
+    4. Labels ohne Doppelpunkt matchten zu viele falsche Stellen im Text
+*   **Lösung:**
+    *   **parse_amount_local Heuristik:** Wenn Punkt mit genau 2 Nachkommastellen → Dezimalpunkt, sonst Tausendertrennzeichen
+    *   **find_value_after_labels Verbesserungen:**
+        - Unterstützung für Labels mit/ohne Doppelpunkt am Ende
+        - Spezielle Behandlung für Labels mit ":" (kein optionales ":" hinzufügen)
+        - Validierung: Ignoriere Matches mit < 2 Zeichen (z.B. "." aus "USt.-Satz")
+    *   **Erweiterte Fallback-Labels:**
+        - Netto: "Nettobetrag", "Nettobertrag" (Typo), "Netto", "Nettowert"
+        - MwSt: "USt:", "MwSt:", "Umsatzsteuer:", "Steuerbetrag:" (mit Doppelpunkt!)
+        - Brutto: "Bruttobetrag", "Gesamtbetrag", "Rechnungsbetrag", "Gesamtsumme", "Endbetrag"
+*   **Lessons Learned:**
+    *   Ambiguität bei Dezimaltrennzeichen: Heuristiken basierend auf Nachkommastellen sind hilfreich
+    *   Bei Labels mit Regex: Prüfe alle Matches im Text, nicht nur das erste (oder mache Labels spezifischer)
+    *   Tabellenköpfe und wiederholte Begriffe können False Positives verursachen - Labels mit Doppelpunkt sind spezifischer
+
+### 3.2 Vereinfachung Dateinamen-Handling (2026-02-05)
 *   **Problem:** Die ursprüngliche Implementierung nutzte ein komplexes `filename_mapping.json` System, um temporäre Dateien umzubenennen, was zu unnötiger Komplexität führte.
 *   **Lösung:** Das Mapping wurde entfernt. Extrahierte Seiten werden nun direkt unter dem Originaldateinamen im `TMP_ORDNER` gespeichert. Dies vereinfacht den Workflow massiv und eliminiert eine Fehlerquelle.
 *   **Lessons Learned:** Keep it simple. Wenn der Originalname erhalten bleiben soll, speichere ihn direkt so, statt Mapping-Layer zu bauen.

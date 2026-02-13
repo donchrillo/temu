@@ -19,31 +19,55 @@ def parse_amount_local(amount_str: str, country_code: str) -> float:
          return float(amount_str.replace(",", ""))
     else:
          # DE, FR, IT, ES, etc. -> 1.000,00 -> 1000.00
-         # Entferne Tausendertrennzeichen (Punkt) und ersetze Dezimaltrennzeichen (Komma) durch Punkt
-         clean_str = amount_str.replace(".", "").replace(",", ".")
-         return float(clean_str)
+         # ABER: 92.00 ist 92.00, nicht 9200!
+         # Heuristik: Wenn nur EIN Punkt/Komma und genau 2 Stellen danach -> Dezimaltrennzeichen
+         # Wenn Komma vorhanden -> Komma ist Dezimaltrennzeichen, Punkt ist Tausender
+         if ',' in amount_str:
+             # EU-Format: 1.000,00 -> entferne Punkte, ersetze Komma durch Punkt
+             clean_str = amount_str.replace(".", "").replace(",", ".")
+             return float(clean_str)
+         elif '.' in amount_str:
+             # Könnte "92.00" (Dezimal) oder "10.000" (Tausender) sein
+             parts = amount_str.split('.')
+             if len(parts) == 2 and len(parts[1]) == 2:
+                 # Genau 2 Nachkommastellen -> Dezimalpunkt
+                 return float(amount_str)
+             else:
+                 # Kein Komma, Punkt als Tausender -> entfernen
+                 return float(amount_str.replace(".", ""))
+         else:
+             # Keine Trennzeichen
+             return float(amount_str)
 
 def find_value_after_labels(text: str, labels: List[str], country_code: str) -> Optional[float]:
     """Sucht nach einer Zahl, die nach einem der Labels im Text steht."""
     for label in labels:
-        # Finde Label (case insensitive wäre gut, aber text ist raw)
-        # Wir suchen Label, gefolgt von optionalem Doppelpunkt, Whitespace, optional Währung, Whitespace, Zahl
-        # Zahl Pattern: Ziffern mit . oder ,
+        # Finde Label (case insensitive)
+        # Pattern 1: Label Währung Betrag (z.B. "Nettobetrag EUR 92.00")
+        # Pattern 2: Label: Währung Betrag (z.B. "USt: EUR 17.48")
+        # Pattern 3: Label Betrag (ohne Währung)
         
-        # Regex konstruieren
-        # (?i) für Case Insensitive
-        # Label
-        # \W* : Non-word characters (Doppelpunkt, Space)
-        # (?:EUR|GBP|USD)? : Optionale Währung (vereinfacht)
-        # \s*
+        # Flexibles Regex:
+        # (?i) : Case insensitive
+        # Label (evtl. schon mit : am Ende)
+        # \s*:?\s* : Optional WEITERER Doppelpunkt mit Leerzeichen (falls Label noch keinen : hat)
+        # (?:EUR|GBP|USD|SEK|PLN)?\s* : Optionale Währung mit Leerzeichen
         # ([\d.,]+) : Die Zahl
         
-        regex = fr"(?i){re.escape(label)}\W*(?:EUR|GBP|USD|SEK|PLN)?\s*([\d.,]+)"
+        # Prüfe ob Label schon mit : endet
+        if label.endswith(':'):
+            # Label hat schon :, füge keinen weiteren hinzu
+            regex = fr"(?i){re.escape(label)}\s*(?:EUR|GBP|USD|SEK|PLN)?\s*([\d.,]+)"
+        else:
+            # Label hat keinen :, optionaler : möglich
+            regex = fr"(?i){re.escape(label)}\s*:?\s*(?:EUR|GBP|USD|SEK|PLN)?\s*([\d.,]+)"
+        
         match = re.search(regex, text)
         if match:
             amount_str = match.group(1)
-            # Validierung: Hat es am Ende .xx oder ,xx?
-            # Ignoriere reine Jahreszahlen oder IDs wenn möglich, aber patterns sind meist eindeutig ("Nettobetrag")
+            # Validierung: Ignoriere einzelne Zeichen wie "." (aus "USt.-Satz")
+            if len(amount_str) < 2:
+                continue
             try:
                 return parse_amount_local(amount_str, country_code)
             except ValueError:
@@ -160,17 +184,17 @@ def extract_data_from_pdf(pdf_path: Path, job_id: str) -> Optional[dict]:
             if country_code == 'de':
                 # Netto
                 if not data["Nettowert"]:
-                    val = find_value_after_labels(text, ["Nettobetrag", "Netto", "Nettowert"], country_code)
+                    val = find_value_after_labels(text, ["Nettobetrag", "Nettobertrag", "Netto", "Nettowert"], country_code)
                     if val is not None: data["Nettowert"] = val
                 
                 # Steuer
                 if not data["Mehrwertsteuer"]:
-                    val = find_value_after_labels(text, ["USt", "MwSt", "Umsatzsteuer"], country_code)
+                    val = find_value_after_labels(text, ["USt:", "MwSt:", "Umsatzsteuer:", "Steuerbetrag:"], country_code)
                     if val is not None: data["Mehrwertsteuer"] = val
                 
                 # Brutto
                 if not data["Bruttowert"]:
-                    val = find_value_after_labels(text, ["Bruttobetrag", "Gesamtbetrag", "Rechnungsbetrag", "Gesamtsumme"], country_code)
+                    val = find_value_after_labels(text, ["Bruttobetrag", "Gesamtbetrag", "Rechnungsbetrag", "Gesamtsumme", "Endbetrag"], country_code)
                     if val is not None: data["Bruttowert"] = val
                 
                 # Gutschrift-Logik anwenden (Negativ machen)

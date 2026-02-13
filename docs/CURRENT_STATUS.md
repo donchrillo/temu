@@ -110,6 +110,12 @@ Die Migration des CSV-Verarbeiters von einer Standalone-Anwendung in das TOCI To
     *   Italienische PDFs: Pattern-Updates ("Numero Di Fattura", "Importo Fatturato Dovuto")
     *   Case-insensitive Matching für alle Extraktion-Patterns
     *   Details in `docs/FIXES/OVERVIEW.md`
+*   **PDF Rechnungen: Shipping Services Format Fix (13. Feb 2026):**
+    *   Behebung von Extraktionsproblemen bei deutschen Shipping-Service-Rechnungen (INV-DE-*)
+    *   Verbesserte Dezimalpunkt-Erkennung mit Heuristik (2 Nachkommastellen = Dezimalpunkt)
+    *   Erweiterte Fallback-Labels: "Nettobertrag" (Typo), "USt:" mit Doppelpunkt
+    *   Robustere find_value_after_labels Funktion gegen False Positives
+    *   Details in `docs/FIXES/OVERVIEW.md`
 
 ---
 
