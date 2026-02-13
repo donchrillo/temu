@@ -100,6 +100,29 @@ GET /icons/{filename}        # Icon-Serving
 
 ---
 
+### PDF Reader – `modules/pdf_reader/`
+**Verantwortung:** PDF Upload, Extraktion (Werbung/Rechnungen) und Excel-Export
+
+**Kern-Dateien:**
+- `router.py` – Upload, Extract, Process, Result Endpoints
+- `services/rechnungen_service.py` – Rechnungs-Parsing
+- `services/werbung_service.py` – Werbungs-Parsing
+- `services/werbung_extraction_service.py` – Erste Seite extrahieren
+- `services/amount_utils.py` – Gemeinsame Betrags-Parsing-Utilities
+
+**Datenpfade:**
+- `data/pdf_reader/eingang/{rechnungen,werbung}` – Uploads
+- `data/pdf_reader/tmp` – extrahierte Einzelseiten (Werbung)
+- `data/pdf_reader/ausgang` – Excel-Exporte
+
+**Security/Robustheit:**
+- Uploads akzeptieren nur `.pdf`
+- 50 MB Größenlimit pro Datei
+- Dateiname wird bereinigt (Path Traversal Schutz)
+- `extract_text()` None-safe für bildbasierte PDFs
+
+---
+
 ### Database Layer – `modules/shared/database/`
 
 #### `connection.py`
@@ -293,11 +316,71 @@ Step 5: Tracking→API
   - Upload Tracking to TEMU
   - Update Order Status
 
+#### `base_workflow_service.py` – Shared Workflow Infrastructure (NEW ✅)
+**Verantwortung:** Gemeinsame Connection-, Credential- und Job-Lifecycle-Verwaltung für alle Workflow-Services
+
+**Basis-Klasse für Workflow Services:**
+```python
+class BaseWorkflowService:
+    def _validate_credentials(self) → bool
+        # Check TEMU API keys vorhanden
+    
+    def _generate_job_id(self) → str
+        # Unique Job ID mit Timestamp
+    
+    def _cleanup_connections(self) → None
+        # Reset connection state, call subclass cleanup hook
+    
+    def _cleanup_service_caches(self) → None
+        # Override hook für Subclasses, z.B. für Domain-spezifische Repos
+    
+    def _get_temu_service(self) → TemuService
+        # Lazy-load shared TemuMarketplaceService
+    
+    def _get_jtl_repo(self) → JltRepository
+        # Lazy-load shared JltRepository
+```
+
+**Vorteile:**
+- ✅ **Eliminiert 55+ Zeilen Duplikation** zwischen OrderWorkflowService und InventoryWorkflowService
+- ✅ **DRY Prinzip:** Credential checking, job ID generation, connection lifecycle zentral
+- ✅ **Inheritance Chain:** OrderWorkflowService → BaseWorkflowService → object
+- ✅ **MRO validiert:** Korrekte Method Resolution Order für Override patterns
+- ✅ **Testierbar:** Mocks für Basis-Funktionalität möglich
+
+**Subclass Example:**
+```python
+class OrderWorkflowService(BaseWorkflowService):
+    def run_complete_workflow(self) → WorkflowResult:
+        self._validate_credentials()  # From base
+        job_id = self._generate_job_id()  # From base
+        
+        # Domain-specific logic
+        result = self._step_1_fetch_api()  # Nur in Order
+        result += self._step_2_import_db()  # Nur in Order
+        # ...
+        
+        self._cleanup_connections()  # From base
+        return result
+    
+    def _cleanup_service_caches(self) → None:
+        # Override for Order-specific repos
+        self.order_repo = None
+        self.order_item_repo = None
+        # ...
+```
+
+**Metriken:**
+- OrderWorkflowService: 312 → 259 Zeilen (-17% Duplikation)
+- InventoryWorkflowService: 211 → 189 Zeilen (-10% Duplikation)
+- BaseWorkflowService: 97 neue Zeilen (gut investiert)
+
 Architecture:
 - DI: Services injiziert (TemuService, Repos, JTL Repo)
 - Lazy Loading: Connections erst bei Bedarf
 - Error Handling: Catch + Log, nicht crash
 - Transactional: Context Manager für multi-step safety
+- **NEW:** BaseWorkflowService für shared infrastructure
 ```
 
 **Praktisches Example:**
@@ -366,6 +449,55 @@ Modes:
 
 DI Pattern: Wie OrderWorkflow
 ```
+
+---
+
+### Config & Constants – `modules/temu/config/config.py`
+
+**Verantwortung:** Zentralisierte Geschäftskonstanten und Magic Numbers
+
+**Neue Constants (Prio 3 Refactoring: 15+ Named Constants):**
+```python
+# API Response Parsing
+AMOUNT_DIVISOR = 100              # TEMU API gibt Beträge in Cents
+TAX_RATE_DIVISOR = 1_000_000      # TEMU Tax Rate in Mikrotax (19000000 = 19%)
+
+# Status & Mapping
+ORDER_STATUS_MAP = {
+    1: 'pending',
+    2: 'processing',
+    3: 'shipped',
+    4: 'delivered',
+    5: 'cancelled',
+}
+VALID_ORDER_STATUSES = {0, 1, 2, 3, 4, 5}           # Router Validierung
+WORKFLOW_ORDER_STATUSES = {2, 3, 4, 5}             # Workflow execution filter
+
+# Carrier Mapping (TEMU Carrier IDs)
+CARRIER_MAPPING = {
+    'dhl': 141252268,
+    'dpd': 998264853,
+    'hermes': 414141241,
+    'ups': 141241414,
+    'gls': 141214124,
+}
+
+# Scheduler Defaults
+ORDER_SYNC_INTERVAL_MINUTES = 30          # Default: alle 30 Min
+INVENTORY_SYNC_INTERVAL_MINUTES = 60      # Default: alle 60 Min
+```
+
+**Vorteile:**
+- ✅ **Single Source of Truth:** Alle Magic Numbers zentral
+- ✅ **Weniger Fehler:** Keine Typos bei hardcoded values
+- ✅ **Einfach zu testen:** Constants mockbar
+- ✅ **Runtime-Tuning:** Interval-Änderungen ohne Code-Restart
+- ✅ **Konsistenz:** Router + Service validieren mit gleichen Sets
+
+**Metriken:**
+- config.py: 29 → 97 Zeilen (gut investiert)
+- ~20 Hardcoded Values ersetzt verteilt über 5+ Dateien
+- Imports in order_service.py, router.py, jobs.py aktualisiert
 
 ---
 

@@ -59,7 +59,108 @@ Die Migration des CSV-Verarbeiters von einer Standalone-Anwendung in das TOCI To
 
 ---
 
-## 5. Abgeschlossene Tasks (seit Monorepo-Migration)
+## 5. TEMU Module Refactoring (13. Feb 2026 - ABGESCHLOSSEN ✅)
+
+Umfassende Code-Qualitäts-Verbesserung mit 6-Prio Refactoring-Plan:
+
+### Priority 1 ✅ - God Method Extraction
+**Datei:** `modules/temu/services/order_service.py`
+- **Problem:** `import_from_api_response()` - 120 Zeilen God Method (Parsing + Merging + Upsert gemischt)
+- **Lösung:** Zerlegt in 5 fokussierte Funktionen:
+  - `_load_json_responses()` — JSON-File-Handling
+  - `_parse_shipping_data()` — Customer/Address-Extraktion
+  - `_parse_amount_data()` — Pricing-Extraktion
+  - `_upsert_order()` — Order Insert/Update Logic
+  - `_upsert_order_items()` — Order Items Processing
+- **Ergebnis:** Main method 120 → ~40 Zeilen (Orchestrator Pattern), `error_counter` in return dict
+- **Testierbarkeit:** Jede Funktion einzeln mockbar (Single Responsibility)
+
+### Priority 2 ✅ - Code Deduplication
+**Datei:** `modules/temu/services/order_service.py`
+- **Problem:** Duplicate JSON loading (2x identisch implementiert)
+- **Lösung:** Neue Helper `_load_json_responses()` mit centralized validation
+- **Ergebnis:** DRY-Prinzip, Single Source of Truth
+
+### Priority 3 ✅ - Magic Numbers Elimination
+**Datei:** `modules/temu/config/config.py`
+- **Problem:** ~20 Hardcoded Values über 5+ Dateien verteilt (100, 1000000, Status Maps, Carrier IDs, etc.)
+- **Lösung:** 15+ Named Constants erstellt (AMOUNT_DIVISOR, TAX_RATE_DIVISOR, ORDER_STATUS_MAP, CARRIER_MAPPING, etc.)
+- **Ergebnis:** config.py 29 → 97 Zeilen, Imports in order_service.py, router.py, jobs.py aktualisiert
+
+### Priority 4 ✅ - Error Counter (Teil von Prio 1)
+**Datei:** `modules/temu/services/order_service.py`
+- **Problem:** Fehler während Import nicht richtig gezählt
+- **Lösung:** `error_counter` in return dict eingebaut (Errors-Handling transparent)
+
+### Priority 5 ✅ - Shared Workflow Infrastructure
+**Datei:** `modules/temu/services/base_workflow_service.py` (NEW, 97 Zeilen)
+- **Problem:** 55+ Zeilen Duplikation (Credential checking, Connection management, Job lifecycle) zwischen OrderWorkflowService und InventoryWorkflowService
+- **Lösung:** Neue BaseWorkflowService mit shared methods:
+  - `_validate_credentials()` — TEMU API keys prüfen
+  - `_generate_job_id()` — Unique ID mit Timestamp
+  - `_cleanup_connections()` — Connection state reset
+  - `_cleanup_service_caches()` — Override hook für Subclasses
+  - `_get_temu_service()` — Lazy-load TemuMarketplaceService
+  - `_get_jtl_repo()` — Lazy-load JltRepository
+- **Inheritance:** OrderWorkflowService → BaseWorkflowService, InventoryWorkflowService → BaseWorkflowService
+- **Ergebnis:** 
+  - OrderWorkflowService: 312 → 259 Zeilen (-17%)
+  - InventoryWorkflowService: 211 → 189 Zeilen (-10%)
+  - MRO validiert
+
+### Priority 6 ✅ - Dead Code Cleanup
+**Datei:** `modules/temu/services/tracking_service.py`
+- **Problem:** Unused variables, dev comments, redundant imports
+- **Lösung:** 
+  - Removed `tracking_data_for_api = []` (was immer leer)
+  - Removed dev comments `# ← Kein else-Print!`
+  - Consolidated duplicate imports (traceback to top-level)
+  - Removed unnecessary blank lines
+- **Ergebnis:** tracking_service.py 201 → 159 Zeilen (-21%)
+
+**Datei:** `modules/temu/services/stock_sync_service.py`
+- **Lösung:**
+  - Removed empty `__init__(self): pass`
+  - Removed 10-line dev monologue explaining API signature (code speaks for itself)
+  - Removed dead variable `payload_items`
+- **Ergebnis:** stock_sync_service.py 105 → 80 Zeilen (-24%)
+
+### Testing & Verification ✅
+- ✅ **Order Sync Workflow:** SUCCESS in 0.5s (alle 5 Steps ausgeführt)
+- ✅ **Inventory Sync Workflow:** SUCCESS in 0.1s (4-Step Process, 21 Items batch-updated)
+- ✅ Alle Imports verifiziert im venv
+- ✅ MRO (Method Resolution Order) korrekt für BaseWorkflowService Inheritance
+- ✅ **Keine Breaking Changes**
+
+### Zusammenfassung
+| Metric | Vorher | Nachher | Delta |
+| --- | --- | --- | --- |
+| order_service.py | 305 | 385 | +80 (Extracted Helpers) |
+| order_workflow_service.py | 312 | 259 | -53 (-17%) |
+| inventory_workflow_service.py | 211 | 189 | -22 (-10%) |
+| tracking_service.py | 201 | 159 | -42 (-21%) |
+| stock_sync_service.py | 105 | 80 | -25 (-24%) |
+| base_workflow_service.py | NEW | 97 | NEW |
+| config.py | 29 | 97 | +68 (15+ Constants) |
+| **Total Files Modified** | **7+** | - | - |
+| **Total Duplication Removed** | **55+ Zeilen** | - | - |
+
+---
+
+## 6. PDF Reader Refactoring (13. Feb 2026 - ABGESCHLOSSEN ✅)
+
+Umfassende Refactorings und Security-Fixes im PDF-Reader-Modul:
+
+- **Parsing konsolidiert:** `amount_utils.py` als zentrale Betrags-Utility (parse_amount, find_value_after_labels)
+- **Services vereinfacht:** Werbung/Rechnungen in Helper-Funktionen zerlegt, reduzierte Verschachtelung
+- **Extraktion bereinigt:** `werbung_extraction_service.py` mit klaren Helpern für Erkennung/Seiten-Export
+- **Router DRY:** Gemeinsame Helper für Process/Result Endpoints
+- **Security Fixes:** Path Traversal Schutz, PDF-Only Uploads, 50 MB Größenlimit
+- **Bug Fixes:** None-safe `extract_text()`, Sync-Processing via Thread-Pool in Async-Endpoints
+
+---
+
+## 7. Abgeschlossene Tasks (seit Monorepo-Migration)
 
 *   **Frontend CSS Consolidation (6. Feb 2026):**
     *   master.css erstellt mit 700 Zeilen gemeinsamer Styles

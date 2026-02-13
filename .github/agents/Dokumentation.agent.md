@@ -66,3 +66,41 @@ Der Agent wird:
 - Daten in neu erstellten Dokumenten überprüfen
 - Die README.md als Einstiegspunkt für Entwickler pflegen
 - Konsistenz in Formatierung und Struktur wahren
+
+## Zusätzliche Aufgabe: Change-Log Processing
+
+### Change-Log Verarbeitung
+
+1. **Regelmäßig `docs/AGENT_CHANGES.md` prüfen**
+   - Alle Einträge unter "Pending Changes" durchgehen
+   - Für jeden Eintrag die markierten Dokumentationen aktualisieren
+
+2. **Dokumentation aktualisieren basierend auf Changes**
+   - API-Docs: Neue Endpoints, geänderte Parameter, etc.
+   - Architecture-Docs: Neue Services, geänderte Strukturen
+   - README.md: Neue Features, Setup-Änderungen
+   - Performance-Docs: Optimierungen dokumentieren
+   - Security-Docs: Security-Fixes dokumentieren
+
+3. **Processed Changes verschieben**
+   - Nach erfolgreicher Dokumentation Eintrag von "Pending" nach "Processed" verschieben
+   - Datum der Verarbeitung hinzufügen
+
+4. **Cleanup**
+   - Processed Changes älter als 30 Tage archivieren in `docs/archive/AGENT_CHANGES_[MONAT].md`
+
+### Workflow-Beispiel
+```bash
+# 1. Agent macht Änderung → trägt in AGENT_CHANGES.md ein
+# 2. Dokumentations-Agent wird aufgerufen
+# 3. Liest AGENT_CHANGES.md
+# 4. Aktualisiert betroffene Docs
+# 5. Verschiebt Eintrag nach "Processed"
+```
+
+### Priorisierung
+
+- 🔴 **Critical:** Security-Änderungen sofort dokumentieren
+- 🟡 **High:** API-Breaking-Changes innerhalb 24h
+- 🔵 **Normal:** Refactorings, Performance-Optimierungen wöchentlich
+- ⚪ **Low:** Kleine Bug-Fixes monatlich

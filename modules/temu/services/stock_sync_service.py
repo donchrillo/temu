@@ -7,9 +7,6 @@ from modules.shared import log_service
 class StockSyncService:
     """Koordiniert Stock-Sync zu TEMU API"""
     
-    def __init__(self):
-        pass
-    
     def sync_deltas_to_temu(self, temu_inventory_api, inventory_repo, job_id: str) -> None:
         """
         Sendet Delta-Bestände an TEMU (nur needs_sync=1).
@@ -49,28 +46,6 @@ class StockSyncService:
         
         # Sende Updates gruppiert
         for goods_id, items in by_goods_id.items():
-            payload_items = [
-                {
-                    "skuId": it["sku_id"],
-                    "stockTarget": it["jtl_stock"]
-                } for it in items
-            ]
-            
-            # API Call (Single Goods Format: goodsId im Header, Liste nur mit skuId)
-            # Wir bauen hier eine Struktur, die update_stock_target versteht
-            # update_stock_target erwartet eine Liste von Dicts, die intern geprüft wird.
-            # Da wir jetzt gruppiert haben, können wir "goodsId" auch weglassen und der API
-            # sagen "Nimm goodsId X für alle". Aber update_stock_target erwartet momentan
-            # eine Liste von Items. Ich übergebe goodsId einfach im ersten Item oder separat?
-            # Ich passe update_stock_target gleich an, dass es goodsId explizit nimmt?
-            # NEIN, ich nutze die bestehende Signatur. Ich packe goodsId in jedes Item, 
-            # damit die API-Methode (die ich gleich reverten werde) es einfach hat 
-            # ODER ich übergebe es so, wie es vorher war.
-            
-            # Um API Änderungen minimal zu halten: Ich übergebe Items MIT goodsId.
-            # Meine API-Methode (die ich gleich reverten werde) schaut aufs erste Item.
-            # Die reverted API Methode schaut auch aufs erste Item. Passt.
-            
             api_items = [
                 {
                     "goodsId": goods_id,
