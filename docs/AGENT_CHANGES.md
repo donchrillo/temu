@@ -24,7 +24,23 @@ Jeder Agent dokumentiert seine Änderungen in folgendem Format:
 
 ## Pending Changes (Noch nicht dokumentiert)
 
-[Hier tragen Agenten neue Änderungen ein]
+---
+### 2026-02-14 - Codereview-Agent (GitHub Copilot)
+**Modul/Datei:** `modules/jtl/xml_export/xml_export_service.py`
+**Art der Änderung:** Bug Fix (Critical)
+**Beschreibung:** Silent Data Loss durch ET.Element.append() behoben — append() VERSCHIEBT Elemente statt zu kopieren
+**Details:**
+- `import copy` hinzugefügt
+- 3x `root.append(bestellung_elem)` → `root.append(copy.deepcopy(bestellung_elem))` in:
+  - `_import_to_jtl()` (Zeile 372)
+  - `_archive_order_to_docs()` (Zeile 440)
+  - `_save_xml_to_db()` (Zeile 463)
+- Ohne Fix: Gesamt-XML (`_save_xml_to_disk`) enthielt nur die LETZTE Bestellung, da vorherige append()-Aufrufe das Element aus dem Original-Tree entfernten
+**Betroffene Dokumentation:**
+- [ ] API-Docs aktualisieren
+- [ ] Architecture-Docs überarbeiten
+- [ ] README.md anpassen
+---
 
 ## Processed Changes (Bereits dokumentiert)
 

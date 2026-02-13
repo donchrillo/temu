@@ -1,5 +1,6 @@
 """XML Export Service - Business Logic für XML Generierung"""
 
+import copy
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 from datetime import datetime
@@ -367,8 +368,9 @@ class XmlExportService:
 
         try:
             # ✅ WICHTIG: Wrap in Root Element!
+            # deepcopy: append() würde das Element aus dem Original-Tree entfernen
             root = ET.Element('tBestellungen')
-            root.append(bestellung_elem)
+            root.append(copy.deepcopy(bestellung_elem))
 
             # Konvertiere zu XML String
             xml_string = self._prettify_xml(root)
@@ -435,7 +437,8 @@ class XmlExportService:
         """Speichere Einzel-XML pro Bestellung in data/temu/export mit Zeitstempel und Bestell-ID."""
         try:
             root = ET.Element('tBestellungen')
-            root.append(bestellung_elem)
+            # deepcopy: append() würde das Element aus dem Original-Tree entfernen
+            root.append(copy.deepcopy(bestellung_elem))
             xml_string = self._prettify_xml(root)
 
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -457,8 +460,8 @@ class XmlExportService:
         try:
             # Wrap Element in Root für valides XML
             root = ET.Element('tBestellungen')
-            # Kopiere das Element
-            root.append(bestellung_elem)
+            # deepcopy: append() würde das Element aus dem Original-Tree entfernen
+            root.append(copy.deepcopy(bestellung_elem))
 
             xml_string = self._prettify_xml(root)
 
