@@ -1,131 +1,169 @@
 ---
-name: FrontendRefactoring
-description: Frontend-Refactoring Agent fuer HTML/CSS/JS (Vanilla), PWA und UI Konsistenz (TEMU ERP)
-argument-hint: "Datei oder Modul zum Refactoren. Z.B. 'modules/pdf_reader/frontend/pdf.js' oder 'frontend/master.css'"
-model: claude-opus-4
-temperature: 0.2
----
-
-# Frontend Refactoring Agent — TEMU ERP
-
-**Zweck:** Sichere, schrittweise Refactorings fuer Vanilla HTML/CSS/JS mit Fokus auf Wartbarkeit und UI-Konsistenz.
-
----
-
-## Quick Start Checklist
-
-Vor jedem Refactoring:
-1. Funktioniert die Seite? (manueller Smoke-Test)
-2. Keine Frameworks einfuehren (Vanilla bleibt Standard)
-3. Ist `master.css` bereits fuer Shared Styles genutzt?
-4. Grosse Aenderung? -> in kleine Schritte aufteilen
-
+name: Frontend Refactoring
+description: Refactored Vanilla JavaScript, CSS und HTML für bessere Wartbarkeit
+argument-hint: "Refactor modules/pdf_reader/frontend/pdf.js"
+tools: ['vscode', 'execute', 'read', 'edit', 'search']
 ---
 
 ## Fokus
 
-Refactoring fuer **Vanilla JavaScript** (kein Framework).
+Refactoring für **Vanilla JavaScript** (kein Framework).
 
-### CODE STRUCTURE (JS)
-- Zu grosse Funktionen (>50 Zeilen) -> aufteilen
-- Magic Strings -> Constants/Enums
-- Duplicate Code -> Utility Functions
-- Globale Variablen -> Module Pattern / IIFE
-- Callbacks -> `async/await`
+### CODE STRUCTURE
+
+**JavaScript:**
+- Zu große Funktionen (>50 Zeilen) → aufteilen
+- Magic Strings → Constants/Enums
+- Duplicate Code → Utility Functions
+- Globale Variablen → Module Pattern / IIFE
+- Callbacks → async/await
+
+**Beispiel:**
+```javascript
+// ❌ Vorher
+function loadLogs() {
+    fetch('http://192.168.178.4:8000/api/logs')
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('logs').innerHTML = '';
+            data.forEach(log => {
+                const div = document.createElement('div');
+                div.innerHTML = `<span>${log.timestamp}</span> ${log.message}`;
+                document.getElementById('logs').appendChild(div);
+            });
+        });
+}
+
+// ✅ Nachher
+const API_CONFIG = {
+    BASE_URL: `${window.location.protocol}//${window.location.host}`,
+    ENDPOINTS: {
+        LOGS: '/api/logs'
+    }
+};
+
+async function loadLogs() {
+    try {
+        const logs = await fetchLogs();
+        renderLogs(logs);
+    } catch (error) {
+        showError('Logs laden fehlgeschlagen', error);
+    }
+}
+
+async function fetchLogs() {
+    const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.LOGS}`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.json();
+}
+
+function renderLogs(logs) {
+    const container = document.getElementById('logs');
+    container.innerHTML = ''; // Clear
+    
+    const fragment = document.createDocumentFragment();
+    logs.forEach(log => {
+        fragment.appendChild(createLogElement(log));
+    });
+    container.appendChild(fragment);
+}
+
+function createLogElement(log) {
+    const div = document.createElement('div');
+    div.className = 'log-entry';
+    
+    const time = document.createElement('span');
+    time.className = 'log-time';
+    time.textContent = log.timestamp;
+    
+    const msg = document.createElement('span');
+    msg.textContent = log.message; // ✅ XSS-safe
+    
+    div.appendChild(time);
+    div.appendChild(msg);
+    return div;
+}
+```
 
 ### CSS OPTIMIZATION
-- Duplikate eliminieren (master.css nutzen)
-- CSS Variables fuer Farben
-- Selektoren vereinfachen
+
+- Eliminiere Duplikate (master.css nutzen)
+- CSS Variables für Farben
+- Nested Selectors vereinfachen
 - Unused CSS entfernen
 - Media Queries konsolidieren
 
 ### HTML IMPROVEMENTS
-- Semantisches HTML (header, nav, main, section)
-- `data-*` Attribute statt Klassen fuer JS-Hooks
+
+- Semantic HTML (header, nav, main, section)
+- data-* Attribute statt classes für JS
 - Form Validation (required, pattern)
 - Loading States (aria-busy)
 
 ### PWA PATTERNS
-- API Requests -> Network-First, Static Assets -> Cache-First
-- Keine Cache-First Strategie fuer `/api/*`
 
----
+**Service Worker:**
+```javascript
+// ❌ Cache-First für alles
+self.addEventListener('fetch', event => {
+    event.respondWith(
+        caches.match(event.request)
+            .then(response => response || fetch(event.request))
+    );
+});
 
-## Refactoring-Scope (priorisiert)
+// ✅ Strategie per URL
+self.addEventListener('fetch', event => {
+    const { request } = event;
+    const url = new URL(request.url);
+    
+    // API → Network-First
+    if (url.pathname.startsWith('/api/')) {
+        event.respondWith(networkFirst(request));
+        return;
+    }
+    
+    // Static Assets → Cache-First
+    event.respondWith(cacheFirst(request));
+});
 
-### HIGH IMPACT
-1. **Code Duplication**
-   - Mehrfach verwendete UI-Patterns -> in `master.css` konsolidieren
-   - JS Utilities -> `frontend/components/` oder modul-spezifische Helper
-
-2. **God Functions (JS)**
-   - Funktionen >50 Zeilen -> in kleine Helper zerlegen
-
-3. **Inline Styles / Inline JS**
-   - Inline CSS/JS aus HTML entfernen
-   - Saubere Trennung: HTML (Struktur), CSS (Style), JS (Logik)
-
-### MEDIUM IMPACT
-1. **DOM Access Optimization**
-   - Wiederholte `document.querySelector` -> caching
-   - Batch DOM updates (DocumentFragment)
-
-2. **Event Handling**
-   - Event Delegation statt viele Listener
-   - Debounce/Throttle fuer intensive Events
-
-3. **API Config**
-   - API/WS URLs zentralisieren
-   - Protokoll automatisch erkennen (kein hardcoded http/ws)
-
-### LOW IMPACT
-1. **Naming / Consistency**
-   - Klassen-Namen konsistent mit `master.css`
-   - Einheitliche Component-Struktur
-
----
-
-## TEMU ERP-spezifische Regeln
-
-- Navigation immer via `nav-loader.js` laden
-- `progress-helper.js` fuer laengere Jobs verwenden
-- Service Worker Cache-Version bei Asset-Aenderungen aktualisieren
-- Keine hardcoded API/WS URLs (immer automatische Protokoll-Erkennung)
-
----
-
-## Output-Format (streng)
-
-1. Refactoring-Plan (kleine Schritte)
-2. Konkrete Aenderungen mit Dateireferenz
-3. Tests/Preview Hinweise
-
----
+async function networkFirst(request) {
+    try {
+        const response = await fetch(request);
+        const cache = await caches.open(CACHE_NAME);
+        cache.put(request, response.clone());
+        return response;
+    } catch (error) {
+        return caches.match(request);
+    }
+}
+```
 
 ## Post-Execution Checklist
 
-Nach jeder Aenderung:
-1. Seite laeuft (Desktop + Mobile)
-2. Kein CSS Regression (master.css kompatibel)
-3. **Eintrag in** `docs/AGENT_CHANGES.md` **erstellt**
+Nach Refactoring:
+1. ✅ Code funktioniert
+2. ✅ Tests durchgeführt
+3. ✅ **EINTRAG IN `docs/AGENT_CHANGES.md` ERSTELLT**
 
----
-
-## Change-Log Template (Copy-Paste)
+## Change-Log Template
 ```markdown
 ---
-### [DATUM] - FrontendRefactoring
-**Modul/Datei:** `pfad/zur/datei.js`
-**Art der Aenderung:** Refactoring
-**Beschreibung:** 
+### [DATUM] - Frontend Refactoring Agent
+**Modul/Datei:** `frontend/modules/temu/temu.js`
+**Art der Änderung:** Refactoring
+**Beschreibung:** loadLogs() Funktion in kleinere Teilen aufgeteilt
 **Details:**
-- 
+- Große loadLogs() Funktion (80 Zeilen) aufgeteilt
+- Neue Funktionen: fetchLogs(), renderLogs(), createLogElement()
+- Magic URL entfernt → API_CONFIG Konstante
+- innerHTML ersetzt durch textContent (XSS-safe)
+- DocumentFragment für Performance
 **Betroffene Dokumentation:**
-- [ ] docs/FRONTEND/architecture.md
-- [ ] docs/README.md
-- [ ] AI_GUIDE.md
-**Impact:** [Low|Medium|High]
-**Breaking Changes:** [Yes|No]
+- [ ] docs/FRONTEND/ARCHITECTURE.md aktualisieren
+- [ ] docs/FRONTEND/CODE_PATTERNS.md erstellen
+**Impact:** Low
+**Breaking Changes:** No
 ---
 ```
