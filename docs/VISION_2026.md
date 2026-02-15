@@ -1,6 +1,78 @@
-Das ist ein hervorragender Plan. Wir bauen jetzt das **architektonische Bindeglied** zwischen deinem hochgradig funktionalen Backend-Dampfhammer (dem TEMU ERP) und deiner neuen, modernen React-Steuereinheit.
 
-Hier ist der Entwurf für deine `docs/ARCHITECTURE/VISION_2026.md`. Diese Datei ist darauf ausgelegt, dass ein Senior-Agent sie liest und sofort versteht: *"Alles klar, wir bauen hier modular, sicher und mit dem Ziel der totalen JTL-Unabhängigkeit."*
+Hier ist der Entwurf für deine `VISION_2026.md`. Diese Datei ist darauf ausgelegt, dass ein Senior-Agent sie liest und sofort versteht: *"Alles klar, wir bauen hier modular, sicher und mit dem Ziel der totalen JTL-Unabhängigkeit."*
+Das ist ein fantastischer „Deep Dive“. Du hast gerade den kompletten Bauplan für das **TOCI ERP** geliefert. Was du beschreibst, ist der klassische Weg von einem überladenen Legacy-System hin zu einer modernen, spezialisierten **Micro-Services-Architektur** (auch wenn sie in einem Monorepo lebt).
+
+
+---
+
+# 📄 TOCI ERP – Product Vision Master
+
+**Status:** Draft / Vision-Board
+**Ziel:** Schlankes OMS/WMS als Ersatz für JTL-Wawi.
+
+## 1. Markt-Kontext
+
+* **Kanäle:** Amazon (MFN & AFN), Kaufland, Otto, eBay, TEMU.
+* **Logik:** Multi-Channel-Vertrieb mit Fokus auf Eigenversand aus lokalem Lager.
+* **Problemstellung:** JTL ist zu aufgebläht (Beschaffung, Produktion etc. werden nicht benötigt).
+
+## 2. Kern-Module (The Lean Approach)
+
+### A. Kunden-Management (CRM Light)
+
+* **Struktur:** 1 Kunde → 1 Rechnungsadresse → N Lieferadressen.
+* **Historie:** Direkte Sicht auf alle zugehörigen Aufträge.
+* **B2B:** Spezial-Handling für Amazon-Sammelaufträge.
+* **'TEMU Support:** TEMO verkauft die Artikel manchmal günstiger, und da wir einen Fixpreis mit TEMO ausgehandelt haben, werden dann von TEMO aufgestockt. Somit gibt es theoretisch zwei Aufträge:
+1. Einmal an den Kunden über den Verkaufspreis
+2. Und dann nochmal den Supportauftrag an TEMO, die die Differenz übernehmen
+
+### B. Verkauf & Auftragsabwicklung (OMS)
+
+* **Filter:** Herkunft, Plattform, Zahlungsart, Status.
+* **Dokumente:** Belege kommen meist via API von der Plattform (Amazon, TEMU, Otto). Nur für eBay/Kaufland müssen ggf. eigene PDFs erzeugt werden.
+* **Retouren:** Simples Handling direkt aus dem Auftrag heraus (Gutschrift-Trigger).
+
+### C. Lager & Versand (WMS)
+
+* **Versand-Logik:** Filter für lieferbar + bezahlt + Bestand vorhanden.
+* **Pick-Prozess:** Intelligente Picklisten nach Versandart (DHL, DPD, Post). Hier auch laufwegsoptimierte Picklisten nach Lagerbereichen, Pickbereichen. 
+* **Packtisch:** Scan-Vorgang → Label-Druck → Status-Update an Plattform.
+* **Struktur:** Physischer Aufbau (Halle → Regal → Platz).
+
+### D. Artikel-Stamm (PIM Light)
+
+* **Zweck:** Mappen von SKUs/EANs der Plattformen auf interne Artikel für Bestand und Versand.
+* **Minimalismus:** Keine Pflege von Marktplatz-Beschreibungen (erfolgt manuell auf der Plattform).
+* **INHALTE**: Der Name sollte vorhanden sein, Kurzbeschreibung, ein Bild sollte hinterlegt werden, damit wir auch wissen, um was es sich bei dem Artikel natürlich handelt. 
+
+## 3. Datenbank-Architektur (Audit-Proof)
+
+Das Herzstück des Systems folgt dem **"Raw-to-Core"** Prinzip:
+
+1. **Raw-Layer (Stage):** Jede API-Antwort wird 1:1 als JSON/Raw-Datensatz gespeichert (Nachvollziehbarkeit bei Fehlern).
+2. **Transformation:** Ein Service übersetzt Raw-Daten in das TOCI-Schema.
+3. **Core-Layer:** Relationale Tabellen für:
+* `Customers` (UUID, Billing, Shipping)
+* `Orders` (ExternalID, Status, PlatformID)
+* `OrderItems` (SKU, Qty, Price)
+* `Inventory` (Stock, WarehouseLocation)
+
+
+
+---
+
+## 🛠️ Strategische Anweisungen für die Agenten
+
+### 1. Lead Architect Agent (Planung)
+
+* **Aufgabe:** Erstelle die API-Spezifikation für den "Packtisch". Wie sieht der Endpunkt aus, der die Pickliste liefert?
+* **Ziel:** 80% Layout-Skelett in React entwerfen, das die oben genannten Punkte (Verkauf, Versand, Lager) direkt als Navigation abbildet.
+
+### 2. Database Agent (Schema-Design)
+
+* **Aufgabe:** Entwirf das MSSQL-Schema für `Orders` und `OrderItems`.
+* **Wichtig:** Implementiere das **Raw-Storage-Konzept**. Wir brauchen eine Tabelle `PlatformImports`, die den unverarbeiteten JSON-Body speichert, bevor er in die `Orders` wandert.
 
 ---
 

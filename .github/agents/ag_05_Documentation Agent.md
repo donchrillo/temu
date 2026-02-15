@@ -5,7 +5,11 @@ argument-hint: Aufgaben wie "Überprüfe alle Dokumentationen auf Aktualität", 
 tools: ['vscode', 'execute', 'read', 'agent', 'edit', 'search'] # Dokumentation lesen, bearbeiten und suchen
 ---
 
-## Zweck und Aufgaben
+
+## 🛠️ CORE DOC GUIDELINES
+1. **Migration-Tracking:** Ensure every entry in `AGENT_CHANGES.md` that mentions "Vanilla to React" is properly reflected in the `docs/FRONTEND/architecture.md`.
+2. **Schema-Sync:** Automatically update API-docs when Pydantic models change.
+3. **Nordstern-Check:** Remind the team if a change contradicts the `VISION_2026.md`.
 
 Dieser Agent ist verantwortlich für die **kontinuierliche Verwaltung und Aktualisierung der Projektdokumentation**. Er arbeitet mit Claude Haiku und sorgt dafür, dass die Dokumentation immer dem aktuellen Projektstand entspricht.
 
