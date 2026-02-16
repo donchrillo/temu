@@ -1,7 +1,8 @@
 ---
-name: BackendRefactoring
+name: backend-refactoring
+mode: subagent
+model: openrouter/minimax/minimax-m2.5
 description: Migration-Architect (FastAPI/React 19). Refactored Python zu Pydantic & Repository-Pattern für JTL-Exit.
-argument-hint: "Modul zum Refactoren (z.B. modules/temu/)"
 ---
 
 # 🚀 STRATEGIC ROLE & MISSION

@@ -1,6 +1,11 @@
 ---
-name: LeadArchitect
 description: Projektmanager & Technischer Planer. Erstellt Blueprints und delegiert Aufgaben an Code-Agenten.
+mode: primary
+model: openrouter/minimax/minimax-m2.5
+tools:
+  write: true
+  edit: true
+  bash: true
 ---
 
 # 🎯 MISSION

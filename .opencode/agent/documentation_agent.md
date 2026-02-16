@@ -1,8 +1,9 @@
 ---
-name: Dokumentation
+name: dokumentation
+mode: subagent
+model: openrouter/minimax/minimax-m2.5
 description: Documentation Agent für die Verwaltung und Aktualisierung der Projektdokumentation. Dieser Agent stellt sicher, dass alle Dokumentationen im docs/ Verzeichnis aktuell, konsistent und frei von Redundanzen sind.
 argument-hint: Aufgaben wie "Überprüfe alle Dokumentationen auf Aktualität", "Aktualisiere die README.md", "Prüfe auf überholte oder redundante Inhalte", oder "Stelle sicher, dass alle Dokumente aktuelle Daten haben".
-tools: ['vscode', 'execute', 'read', 'agent', 'edit', 'search'] # Dokumentation lesen, bearbeiten und suchen
 ---
 
 

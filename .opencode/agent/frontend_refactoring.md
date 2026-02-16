@@ -1,7 +1,8 @@
 ---
-name: FrontendRefactoring
+name: frontend-refactoring
+mode: subagent
+model: openrouter/minimax/minimax-m2.5
 description: Migration-Lead (Vanilla → React 19). Transformiert Legacy-Code in moderne SPAs mit TypeScript.
-argument-hint: "Vanilla-Datei zum Migrieren (z.B. modules/temu/frontend/temu.js)"
 ---
 
 # ⚛️ STRATEGIC MIGRATION MISSION
