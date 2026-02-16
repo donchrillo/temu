@@ -1,0 +1,78 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "minimax/minimax-m2.5",
+  "small_model": "minimax/minimax-m2.1",
+  "provider": {
+    "openrouter": {
+      "options": {
+        "timeout": 600000
+      }
+    }
+  },
+  "agent": {
+    "lead-architect": {
+      "description": "Projektmanager & Technischer Planer. Erstellt Blueprints und delegiert Aufgaben an Code-Agenten.",
+      "model": "minimax/minimax-m2.5",
+      "mode": "primary",
+      "tools": {
+        "write": true,
+        "edit": true,
+        "bash": true
+      }
+    },
+    "database-agent": {
+      "description": "Daten-Architekt & MSSQL-Stratege. Plant Schemata, Relationen und Migrationspfade.",
+      "model": "minimax/minimax-m2.5",
+      "mode": "subagent",
+      "tools": {
+        "write": false,
+        "edit": false,
+        "bash": false
+      }
+    },
+    "backend-refactoring": {
+      "description": "Migration-Architect (FastAPI). Refactored Python zu Pydantic & Repository-Pattern.",
+      "model": "minimax/minimax-m2.5",
+      "mode": "subagent",
+      "tools": {
+        "write": true,
+        "edit": true,
+        "bash": true
+      }
+    },
+    "frontend-refactoring": {
+      "description": "Migration-Lead (Vanilla → React 19). Transformiert Legacy-Code in moderne SPAs mit TypeScript.",
+      "model": "minimax/minimax-m2.5",
+      "mode": "subagent",
+      "tools": {
+        "write": true,
+        "edit": true,
+        "bash": true
+      }
+    },
+    "dokumentation": {
+      "description": "Documentation Agent für die Verwaltung und Aktualisierung der Projektdokumentation.",
+      "model": "minimax/minimax-m2.1",
+      "mode": "subagent",
+      "tools": {
+        "write": true,
+        "edit": true,
+        "bash": false
+      }
+    }
+  },
+  "instructions": [
+    "./opencode_instructions.md"
+  ],
+  "permission": {
+    "task": {
+      "database-agent": "allow",
+      "backend-refactoring": "allow",
+      "frontend-refactoring": "allow",
+      "dokumentation": "allow"
+    },
+    "edit": "ask",
+    "bash": "ask"
+  },
+  "theme": "dark"
+}
