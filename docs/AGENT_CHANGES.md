@@ -110,25 +110,64 @@ Jeder Agent dokumentiert seine Änderungen in folgendem Format:
 ## Processed Changes (Bereits dokumentiert)
 
 ---
-### 2026-02-19 - Backend Refactoring Agent (Verarbeitet: 19. Feb 2026)
-**Modul/Datei:** `main.py`, `modules/shared/errors/handler.py`, `modules/shared/routers/static_router.py`, `modules/shared/routers/ui_router.py`, `modules/shared/routers/log_router.py`, `modules/shared/routers/websocket_router.py`, `workers/jobs_router.py`
-**Art der Änderung:** Refactoring - Phase 1 API Gateway Separation
-**Beschreibung:** main.py von 419 auf 162 Zeilen reduziert (-61%) durch Router-Extraktion
+
+### 2026-02-19 - Strategy/Plan Agent & Frontend React Agent (Verarbeitet: 19. Feb 2026)
+**Modul/Datei:** 
+- `frontend-react/src/pages/csv/processor.tsx`
+- `frontend-react/src/lib/api-client.ts`
+- `modules/shared/routers/ui_router.py`
+- `modules/shared/routers/static_router.py`
+- `modules/shared/startup/validation.py`
+- `main.py`
+
+**Art der Änderung:** Feature + Refactoring
+
+**Beschreibung:** 
+- CSV-Prozessor vollständig in React implementiert
+- React-Frontend aktiviert (alte Vanilla JS Frontends entfernt)
+- Entwicklungsumgebung eingerichtet (API auf Port 8888, React auf Port 3000)
+
 **Details:**
-- **Error Handler:** `modules/shared/errors/handler.py` - neuer `@handle_api_errors(component)` Decorator für einheitliche Fehlerbehandlung mit vollständigem Traceback-Logging
-- **Static Router:** `modules/shared/routers/static_router.py` - FastAPI StaticFiles für /static, /icons, /components (Security: Path Traversal Protection)
-- **UI Router:** `modules/shared/routers/ui_router.py` - extrahierte UI-Routen: /, /pdf, /temu, /csv, /docs, /manifest.json (~40 Zeilen)
-- **Log Router:** `modules/shared/routers/log_router.py` - extrahierte Log-Management-Endpunkte: /api/logs, /api/logs/stats, /api/logs/export, /api/logs/cleanup
-- **WebSocket Router:** `modules/shared/routers/websocket_router.py` - extrahierter /ws/logs Handler mit Dependency Injection (lambda: scheduler)
-- **Jobs Router:** `workers/jobs_router.py` - extrahierte Job-Management-Endpunkte: /api/jobs, /api/jobs/{job_id}, /api/jobs/{job_id}/run-now, /api/jobs/{job_id}/schedule, /api/jobs/{job_id}/toggle
-- Nicht mehr benötigte Imports in main.py entfernt: asyncio, WebSocket, jsonable_encoder, StaticFiles, FileResponse, log_service
-- Alle Endpoints getestet und funktionsfähig auf Port 8888
+- **CSV Processor (React):**
+  - Upload Zone mit CSV + ZIP Support
+  - Status-Anzeige mit Polling
+  - Mini-Report mit Metrics (Ersetzungen, Fehler, Offene Order-IDs)
+  - Tabs (Mini-Report, Änderungen, Fehler, Nicht gefunden)
+  - Tabellendarstellung
+  - Export Section (Multi-select, ZIP-Name, Checkboxen)
+  - ZIP-Download
+  - Logfile Anzeige
+  - Cleanup Button
+  - Progress Overlay + Modal
+  
+- **API-Client erweitert:**
+  - Alle CSV-Funktionen hinzugefügt: upload, process, getStatus, getLatestReport, listProcessedFiles, createExportZip, getLogs, cleanupAll
+  - TypeScript-Interfaces für alle CSV-Datentypen
+
+- **React-Frontend aktiviert:**
+  - ui_router.py zeigt auf frontend-react/dist
+  - static_router.py für /assets/ (React build)
+  - Alte Vanilla JS Frontends gelöscht:
+    - frontend/
+    - modules/temu/frontend/
+    - modules/pdf_reader/frontend/
+    - modules/csv_verarbeiter/frontend/
+  - Toten Code entfernt (create_module_static_routes)
+
+- **Entwicklungsumgebung:**
+  - API-Server: Port 8888
+  - React Dev Server: Port 3000
+  - Vite Proxy: /api → localhost:8888
+
 **Betroffene Dokumentation:**
-- [x] docs/ARCHITECTURE/code_structure.md (Projektbaum + Router-Architektur aktualisiert)
-- [x] docs/AGENT_CHANGES.md (dieser Eintrag)
-**Impact:** Medium
-**Breaking Changes:** No (Rückwärtskompatibel via Factory Functions für Scheduler-Injection)
-**Dokumentiert in:** docs/ARCHITECTURE/code_structure.md (Section 1 + API Layer)
+- [x] REACT_MIGRATION.md aktualisiert (Phase 4+5: CSV Processor ✅)
+- [x] Architecture-Docs überarbeitet (Projektbaum: frontend-react/ statt frontend/)
+- [x] README.md angepasst (Frontend-Sektion aktualisiert)
+
+**Status:** ✅ Dokumentiert
+
+---
+
 
 ---
 ### 2026-02-13 - Frontend Refactoring Agent (Verarbeitet: 13. Feb 2026)

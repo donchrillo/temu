@@ -3,8 +3,8 @@
 **Projekt:** TEMU ERP / TOCI ERP  
 **Ziel:** Migration von Vanilla JS zu React 19 + TypeScript + Vite + Tailwind + shadcn/ui  
 **Erstellt:** 19. Februar 2026  
-**Version:** 1.2  
-**Status:** Phase 1-3 Abgeschlossen
+**Version:** 1.3  
+**Status:** Phase 1-4 Abgeschlossen
 
 ---
 
@@ -187,14 +187,13 @@ Während der Migration:
 
 ### Sprint 5 (PDF & CSV Module)
 - [x] PDF Reader mit Upload Zone, Tabs, Progress Overlay, Excel Download, Logs
-- [ ] CSV Processor mit Upload
+- [x] CSV Processor mit Upload, Status, Report, Export, Logs
 
 ---
 
 ## 7. Offene Punkte
 
 ### Kurzfristig
-- [ ] CSV Processor Page (analog zu PDF Reader)
 - [ ] TEMU Orders Page (Table mit Filter/Sortierung)
 - [ ] TEMU Inventory Page
 
@@ -219,10 +218,12 @@ Während der Migration:
 - Navigation mit einklappbaren Menüs (Werkzeuge, Verwaltung)
 - TEMU-Connector Page (Scheduled Jobs, Manual Trigger, Logs)
 - PDF Reader Page (Upload Zone, Tabs, Progress Overlay, Excel Download, Logs)
+- CSV Processor Page (Upload Zone, Status Polling, Mini-Report, Tabs, Export, Logs)
+- API-Client mit allen Endpoints (TEMU, PDF, CSV, Jobs, Logs)
 - Vite Proxy (/api → localhost:8888)
+- React-Frontend aktiviert (alte Vanilla JS Frontends entfernt)
 
 ### In Progress 🔄
-- CSV Processor Page
 - TEMU Orders/Inventory Pages
 
 ### Geplant 📋
@@ -233,11 +234,12 @@ Während der Migration:
 
 ## 9. Notes
 
-- **CSS-Konsolidierung:** Alte CSS-Dateien (.css) nach Tailwind-Klassen migrieren
-- **API-Client:** `modules/temu/frontend/temu.js` hat bereits `API_CLIENT` - in TypeScript überführen
-- **Icons:** shadcn/ui Icons (Lucide) verwenden statt eigener Icons
+- **CSS-Konsolidierung:** Alte CSS-Dateien (.css) nach Tailwind-Klassen migriert
+- **API-Client:** Vollständiger TypeScript-Client mit allen Endpoints
+- **Icons:** shadcn/ui Icons (Lucide) verwenden
 - **Service Worker:** Aktueller SW bleibt für PWA-Funktion
-- **Parallelbetrieb:** Alt (Port 8888) + Neu (Port 3000) während Migration
+- **React-Frontend aktiviert:** Alte Vanilla JS Frontends entfernt (frontend/, modules/*/frontend/)
+- **Entwicklungsumgebung:** API auf Port 8888, React Dev Server auf Port 3000
 
 ---
 

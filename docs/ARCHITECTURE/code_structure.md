@@ -30,21 +30,34 @@ Quick Reference für die TEMU-Integration Codebase.
 │       ├── xml/
 │       └── export/
 ├── docs/                          # Project Documentation
-├── frontend/                      # Main PWA Frontend
-│   ├── dashboard.css              # CSS für Root Dashboard
-│   ├── dashboard.js               # Dashboard JS (Refactored ✅)
-│   ├── docs.html                  # Docs Viewer
-│   ├── index-new.html             # Main HTML (PWA Entry)
-│   ├── master.css                 # Zentralisierte Shared Styles (700 Zeilen)
-│   ├── manifest.json
-│   ├── service-worker.js          # Service Worker (async/await Refactored ✅)
-│   ├── components/                # Shared UI Components (Refactored ✅)
-│   │   ├── nav-loader.js          # Zentrale Navigation (DRY optimiert ✅)
-│   │   ├── navigation.html        # Navigation Template
-│   │   ├── progress-helper.js     # Progress-Overlay (Dual-Mode: Auto/Manual ✅)
-│   │   ├── ui-helpers.js          # Toast + Log Formatting (NEW ✅)
-│   │   └── README.md              # Components Dokumentation
-│   └── icons/                     # PWA Icons (192x192, 512x512)
+├── frontend-react/                # React 19 SPA (aktiviert am 19.02.2026)
+│   ├── src/
+│   │   ├── components/           # UI Components (shadcn/ui)
+│   │   │   ├── ui/               # Button, Card, Input, Select, Dialog, Table, Tabs
+│   │   │   ├── layout/           # App Shell, Sidebar, Header
+│   │   │   └── shared/           # Spinner, Skeleton, Toast, Error Boundary
+│   │   ├── pages/                # Page Components
+│   │   │   ├── dashboard.tsx
+│   │   │   ├── temu-connector.tsx
+│   │   │   ├── csv/
+│   │   │   │   └── processor.tsx
+│   │   │   └── pdf-reader.tsx
+│   │   ├── hooks/                # Custom Hooks (use-api, use-websocket)
+│   │   ├── lib/                  # Utilities
+│   │   │   ├── api-client.ts    # axios instance + TypeScript Interfaces
+│   │   │   └── utils.ts         # Tailwind helper
+│   │   ├── types/                # TypeScript Type Definitions
+│   │   ├── App.tsx
+│   │   ├── main.tsx
+│   │   └── index.css
+│   ├── public/
+│   │   └── icons/
+│   ├── dist/                     # Build Output (wird von API served)
+│   ├── index.html
+│   ├── package.json
+│   ├── vite.config.ts            # Proxy: /api → localhost:8888
+│   ├── tailwind.config.js
+│   └── tsconfig.json
 ├── logs/                          # Runtime Logs by Module
 │   ├── app/
 │   ├── csv_verarbeiter/
@@ -76,11 +89,10 @@ Quick Reference für die TEMU-Integration Codebase.
 │   │   │   └── handler.py         # @handle_api_errors Decorator
 │   │   └── routers/               # Extrahiert aus main.py (NEW ✅ 19.02.2026)
 │   │       ├── static_router.py   # FastAPI StaticFiles (/static, /icons, /components)
-│   │       ├── ui_router.py       # UI-Routen (/, /pdf, /temu, /csv, /docs)
+│   │       ├── ui_router.py       # UI-Routen → frontend-react/dist
 │   │       ├── log_router.py      # Log Management (/api/logs)
 │   │       └── websocket_router.py # WebSocket (/ws/logs)
 │   ├── temu/                      # TEMU Marketplace Integration
-│   │   ├── frontend/              # PWA Interface
 │   │   ├── services/
 │   │   │   ├── config.py          # Zentralisierte Constants (15+ Named Constants)
 │   │   │   ├── base_workflow_service.py  # Shared Workflow Infrastructure
@@ -93,7 +105,6 @@ Quick Reference für die TEMU-Integration Codebase.
 │   │   ├── jobs.py                # APScheduler Job Definitions
 │   │   └── router.py              # FastAPI Routes
 │   ├── pdf_reader/                # PDF Processing Module
-│   │   ├── frontend/              # Upload Interface
 │   │   ├── services/
 │   │   │   ├── amount_utils.py    # Zentralisierte Betrags-Utilities
 │   │   │   ├── config.py          # PDF Config
@@ -107,7 +118,6 @@ Quick Reference für die TEMU-Integration Codebase.
 │   │   └── xml_export/
 │   │       └── xml_export_service.py  # XML Generation (refactored)
 │   └── csv_verarbeiter/           # CSV Processing (JTL→DATEV) [✅ Abgeschlossen]
-│       ├── frontend/              # Light Apple-design UI
 │       ├── services/              # CSV Processing Logic
 │       └── router.py              # FastAPI Routes
 ├── workers/                       # APScheduler Job Management
