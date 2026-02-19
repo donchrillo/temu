@@ -40,9 +40,7 @@ async function loadJobs() {
     const container = document.getElementById(TEMU_CONFIG.SELECTORS.JOBS_CONTAINER);
 
     try {
-        const res = await fetch(TEMU_CONFIG.ENDPOINTS.JOBS);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const jobs = await res.json();
+        const jobs = await API_CLIENT.get(TEMU_CONFIG.ENDPOINTS.JOBS);
 
         if (!jobs || jobs.length === 0) {
             container.innerHTML = '<div class="loading">Keine Jobs gefunden</div>';
@@ -140,21 +138,14 @@ async function triggerJob(jobType, queryString, progressText, successText) {
     try {
         showProgress(progressText);
 
-        const jobsRes = await fetch(TEMU_CONFIG.ENDPOINTS.JOBS);
-        if (!jobsRes.ok) throw new Error(`HTTP ${jobsRes.status}`);
-        const jobs = await jobsRes.json();
+        const jobs = await API_CLIENT.get(TEMU_CONFIG.ENDPOINTS.JOBS);
         const job = jobs.find(j => j.config?.job_type === jobType);
 
         if (!job) {
             throw new Error(`${jobType} Job nicht gefunden`);
         }
 
-        const res = await fetch(
-            `${TEMU_CONFIG.ENDPOINTS.JOBS}/${job.job_id}/run-now?${queryString}`,
-            { method: 'POST' }
-        );
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
+        const data = await API_CLIENT.post(`${TEMU_CONFIG.ENDPOINTS.JOBS}/${job.job_id}/run-now?${queryString}`);
         updateProgress(100, 'Gestartet!');
 
         setTimeout(() => {
@@ -206,9 +197,7 @@ async function triggerInventorySync() {
 async function loadLogs() {
     try {
         const filter = document.getElementById(TEMU_CONFIG.SELECTORS.LOG_FILTER).value || 'temu';
-        const res = await fetch(`${TEMU_CONFIG.ENDPOINTS.LOGS}?job_id=${filter}&limit=200`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const logs = await res.json();
+        const logs = await API_CLIENT.get(`${TEMU_CONFIG.ENDPOINTS.LOGS}?job_id=${filter}&limit=200`);
 
         const container = document.getElementById(TEMU_CONFIG.SELECTORS.LOGS_CONTENT);
 
@@ -248,17 +237,9 @@ async function openIntervalDialog(jobId, currentInterval) {
     }
 
     try {
-        const res = await fetch(
-            `${TEMU_CONFIG.ENDPOINTS.JOBS}/${jobId}/schedule?interval_minutes=${interval}`,
-            { method: 'POST' }
-        );
-
-        if (res.ok) {
-            showToast(`Intervall geändert auf ${interval} Minuten`, 'success');
-            loadJobs();
-        } else {
-            showToast('Fehler beim Ändern des Intervalls', 'error');
-        }
+        await API_CLIENT.post(`${TEMU_CONFIG.ENDPOINTS.JOBS}/${jobId}/schedule?interval_minutes=${interval}`);
+        showToast(`Intervall geändert auf ${interval} Minuten`, 'success');
+        loadJobs();
     } catch (err) {
         console.error('Failed to update interval:', err);
         showToast(`Fehler: ${err.message}`, 'error');
@@ -267,17 +248,9 @@ async function openIntervalDialog(jobId, currentInterval) {
 
 async function toggleJob(jobId, enabled) {
     try {
-        const res = await fetch(
-            `${TEMU_CONFIG.ENDPOINTS.JOBS}/${jobId}/toggle?enabled=${enabled}`,
-            { method: 'POST' }
-        );
-
-        if (res.ok) {
-            showToast(`Job ${enabled ? 'aktiviert' : 'deaktiviert'}`, 'success');
-            loadJobs();
-        } else {
-            showToast('Fehler beim Ändern des Job-Status', 'error');
-        }
+        await API_CLIENT.post(`${TEMU_CONFIG.ENDPOINTS.JOBS}/${jobId}/toggle?enabled=${enabled}`);
+        showToast(`Job ${enabled ? 'aktiviert' : 'deaktiviert'}`, 'success');
+        loadJobs();
     } catch (err) {
         console.error('Failed to toggle job:', err);
         showToast(`Fehler: ${err.message}`, 'error');

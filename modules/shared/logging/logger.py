@@ -8,6 +8,8 @@ import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
+from modules.shared.config.settings import LOG_MAX_FILE_SIZE, LOG_BACKUP_COUNT
+
 def create_module_logger(
     module_name: str,
     log_subdir: str,
@@ -54,8 +56,8 @@ def create_module_logger(
     log_file = file_name or f"{log_subdir}.log"
     file_handler = RotatingFileHandler(
         log_dir / log_file, encoding='utf-8',
-        maxBytes=10 * 1024 * 1024,  # 10 MB
-        backupCount=5
+        maxBytes=LOG_MAX_FILE_SIZE,
+        backupCount=LOG_BACKUP_COUNT
     )
     file_handler.setLevel(file_level)
     file_handler.setFormatter(formatter)

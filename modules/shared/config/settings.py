@@ -38,3 +38,7 @@ TEMU_APP_KEY: str = os.getenv('TEMU_APP_KEY', '')
 TEMU_APP_SECRET: str = os.getenv('TEMU_APP_SECRET', '')
 TEMU_ACCESS_TOKEN: str = os.getenv('TEMU_ACCESS_TOKEN', '')
 TEMU_API_ENDPOINT: str = os.getenv('TEMU_API_ENDPOINT', 'https://openapi-b-eu.temu.com/openapi/router')
+
+# === Logging Configuration ===
+LOG_MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+LOG_BACKUP_COUNT = 5

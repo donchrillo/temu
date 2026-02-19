@@ -366,7 +366,9 @@ Update these files when making significant changes:
 
 | Purpose | File |
 |---------|------|
-| Main app | `main.py` |
+| Main app | `main.py` (refactored: 419→162 Zeilen) |
+| API Routers | `modules/shared/routers/` + `workers/jobs_router.py` |
+| Error Handler | `modules/shared/errors/handler.py` |
 | Database connection | `modules/shared/database/connection.py` |
 | Settings | `modules/shared/config/settings.py` |
 | Logging | `modules/shared/logging/log_service.py` |
@@ -375,4 +377,21 @@ Update these files when making significant changes:
 
 ---
 
-*Last updated: February 2026*
+*Last updated: 19. Februar 2026*
+
+---
+
+## Phase 1 Refactoring (Februar 2026) - Zusammenfassung
+
+### API Gateway Refactoring
+- **main.py:** 419 → 162 Zeilen reduziert (-61%)
+- **Neue Router-Struktur:**
+  - `modules/shared/routers/static_router.py` - StaticFiles (/static, /icons, /components)
+  - `modules/shared/routers/ui_router.py` - UI-Routen (/, /pdf, /temu, /csv, /docs)
+  - `modules/shared/routers/log_router.py` - Log Management (/api/logs)
+  - `modules/shared/routers/websocket_router.py` - WebSocket (/ws/logs)
+  - `workers/jobs_router.py` - Job Management (/api/jobs)
+  - `modules/temu/router.py` - TEMU API (/api/temu)
+  - `modules/pdf_reader/router.py` - PDF API (/api/pdf)
+  - `modules/csv_verarbeiter/router.py` - CSV API (/api/csv)
+- **Neue Error-Handling:** `@handle_api_errors` Decorator in `modules/shared/errors/handler.py`

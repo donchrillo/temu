@@ -170,29 +170,12 @@ async function uploadFile(file) {
     const formData = new FormData();
     formData.append('files', file);
 
-    const response = await fetch(`${API_BASE}/upload`, {
-        method: 'POST',
-        body: formData
-    });
-
-    if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Upload fehlgeschlagen');
-    }
-
-    const data = await response.json();
+    const data = await API_CLIENT.postFormData(`${API_BASE}/upload`, formData);
     return data.job_id;
 }
 
 async function triggerProcessing(jobId) {
-    const response = await fetch(`${API_BASE}/process?job_id=${jobId}&skip_critical=false`, {
-        method: 'POST'
-    });
-
-    if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Processing konnte nicht gestartet werden');
-    }
+    await API_CLIENT.post(`${API_BASE}/process?job_id=${jobId}&skip_critical=false`);
 }
 
 function startPolling(jobId) {
@@ -201,8 +184,7 @@ function startPolling(jobId) {
     let progressValue = 50;
     state.pollingInterval = setInterval(async () => {
         try {
-            const response = await fetch(`${API_BASE}/status/${jobId}`);
-            const data = await response.json();
+            const data = await API_CLIENT.get(`${API_BASE}/status/${jobId}`);
 
             // Simuliere Progress
             if (progressValue < 90) {
@@ -318,12 +300,7 @@ function updateMetrics(miniReport) {
 
 async function loadLatestReport() {
     try {
-        const response = await fetch(`${API_BASE}/report/latest`);
-        if (!response.ok) {
-            throw new Error('Report konnte nicht geladen werden');
-        }
-
-        const data = await response.json();
+        const data = await API_CLIENT.get(`${API_BASE}/report/latest`);
         if (!data.filename) {
             elements.reportSection.style.display = 'none';
             return;
@@ -348,12 +325,7 @@ async function loadLatestReport() {
 
 async function loadProcessedFiles() {
     try {
-        const response = await fetch(`${API_BASE}/list-processed-files`);
-        if (!response.ok) {
-            throw new Error('Dateiliste konnte nicht geladen werden');
-        }
-
-        const data = await response.json();
+        const data = await API_CLIENT.get(`${API_BASE}/list-processed-files`);
         const files = data.files || [];
 
         elements.exportSelect.innerHTML = '';
@@ -399,26 +371,14 @@ async function createExportZip() {
         // Zeige Progress
         showProgress('Erstelle ZIP-Datei...', 0);
         
-        const response = await fetch(`${API_BASE}/create-export-zip`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                csv_files: selected,
-                zip_name: zipName,
-                include_report: elements.includeReportCheckbox.checked,
-                include_log: elements.includeLogCheckbox.checked
-            })
+        const data = await API_CLIENT.post(`${API_BASE}/create-export-zip`, {
+            csv_files: selected,
+            zip_name: zipName,
+            include_report: elements.includeReportCheckbox.checked,
+            include_log: elements.includeLogCheckbox.checked
         });
 
         updateProgress(50);
-
-        if (!response.ok) {
-            hideProgress();
-            const error = await response.json();
-            throw new Error(error.detail || 'ZIP-Erstellung fehlgeschlagen');
-        }
-
-        const data = await response.json();
         
         updateProgress(100);
         updateProgressText('ZIP erstellt!');
@@ -447,12 +407,7 @@ function downloadZip() {
 
 async function loadLatestLog() {
     try {
-        const response = await fetch(`${API_BASE}/logs/db?prefix=csv&limit=200`);
-        if (!response.ok) {
-            throw new Error('Logfile konnte nicht geladen werden');
-        }
-
-        const data = await response.json();
+        const data = await API_CLIENT.get(`${API_BASE}/logs/db?prefix=csv&limit=200`);
         const logs = data.logs || [];
         if (logs.length === 0) {
             elements.latestLogName.textContent = 'Keine DB-Logs gefunden';
@@ -492,13 +447,7 @@ function formatTimestamp(value) {
 
 async function cleanupAll() {
     try {
-        const response = await fetch(`${API_BASE}/cleanup-all`, { method: 'POST' });
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Cleanup fehlgeschlagen');
-        }
-
-        const data = await response.json();
+        const data = await API_CLIENT.post(`${API_BASE}/cleanup-all`);
         const errorCount = (data.errors || []).length;
         elements.cleanupResult.textContent = errorCount === 0
             ? `Alle Verzeichnisse geleert. Dateien geloescht: ${data.deleted}`

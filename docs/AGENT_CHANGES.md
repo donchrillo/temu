@@ -24,11 +24,111 @@ Jeder Agent dokumentiert seine Änderungen in folgendem Format:
 
 ## Pending Changes (Noch nicht dokumentiert)
 
-*(Keine ausstehenden Changes)*
+---
+
+### 2026-02-19 - Frontend React Agent (Verarbeitet: 19. Feb 2026)
+**Modul/Datei:** `frontend-react/src/pages/temu-connector.tsx`, `frontend-react/src/pages/pdf-reader.tsx`, `frontend-react/src/components/ui/progress-overlay.tsx`, `frontend-react/vite.config.ts`
+**Art der Änderung:** Feature - Phase 1-3 Abgeschlossen
+**Beschreibung:** React-Migration Phase 1-3 fertiggestellt mit Dashboard, TEMU-Connector und PDF Reader
+**Details:**
+- **Phase 1 Foundation:** Vite + React 19 + TypeScript + Tailwind + shadcn/ui ✅
+- **Phase 2 Shared Components:** Button, Card, Input, Select, Dialog, Table, Dropdown, Tabs ✅
+- **Phase 3 Dashboard:** Dashboard mit Stats Cards + API-Integration ✅
+- **Neue Navigation:** Einklappbare Menüs (Werkzeuge, Verwaltung mit Marktplätze)
+- **TEMU-Connector Page:**
+  - Scheduled Jobs (anzeigen, aktivieren/deaktivieren, Intervall ändern)
+  - Manual Trigger (mit Parameter-Dialog)
+  - Logs-Anzeige
+- **PDF Reader Page:**
+  - Upload Zone (Drag & Drop)
+  - Tabs (Werbung / Rechnungen)
+  - Progress Overlay (Popup mit Slider)
+  - Excel Download
+  - Logs-Anzeige
+- **Technische Änderungen:**
+  - Vite Proxy eingerichtet (/api → localhost:8888)
+  - API-Client mit korrekten Endpunkten
+  - Progress Overlay Component erstellt
+- **Build erfolgreich:** ✅ `npm run build` funktioniert
+**Betroffene Dokumentation:**
+- [x] docs/FRONTEND/REACT_MIGRATION.md (Fortschritt markieren)
+- [x] docs/SPECS/REACT_MIGRATION.md (Acceptance Criteria aktualisieren)
+- [x] AGENT_CHANGES.md (dieser Eintrag)
+
+---
+
+### 2026-02-19 - Frontend React Agent
+**Modul/Datei:** `frontend-react/src/components/ui/`, `frontend-react/src/components/shared/`, `frontend-react/tsconfig.app.json`, `frontend-react/vite.config.ts`
+**Art der Änderung:** Feature - Phase 2 Shared Components
+**Beschreibung:** Erstellung von wiederverwendbaren UI-Komponenten für React 19 SPA
+**Details:**
+- **UI-Komponenten erstellt:**
+  - `button.tsx` - Button mit Varianten (primary, secondary, ghost, danger, outline) und Größen (sm, md, lg), loading state
+  - `card.tsx` - Card mit Header, Title, Description, Content, Footer
+  - `input.tsx` - Input mit Label und Error state
+  - `select.tsx` - Select mit Options und Placeholder
+  - `dialog.tsx` - Modal-Dialog mit Overlay, Focus-Trap, Escape-Key-Handler
+  - `table.tsx` - Table mit Thead, Tbody, Row, Head, Cell
+  - `dropdown-menu.tsx` - Dropdown mit Trigger, Items, click-outside Handler
+  - `tabs.tsx` - Tabs mit TabsList, Tab, TabContent
+- **Shared Components erstellt:**
+  - `loading-spinner.tsx` - Apple-style Spinner mit size/color Props
+  - `skeleton.tsx` - Skeleton für Table-Rows, Cards, Lists (count support)
+  - `toast.tsx` - Toast mit Typen (success, error, warning, info), ToastProvider mit addToast Hook
+  - `error-boundary.tsx` - React Error Boundary mit Reload-Button
+  - `empty-state.tsx` - Empty State mit Icons (orders, inventory, pdf, csv, stats)
+- **Konfiguration aktualisiert:**
+  - `tsconfig.app.json` - Path alias `@/*` hinzugefügt
+  - `vite.config.ts` - Resolve alias hinzugefügt
+- **Build erfolgreich:** ✅ `npm run build` funktioniert
+**Betroffene Dokumentation:**
+- [ ] docs/FRONTEND/architecture.md (Komponenten-Doku)
+- [x] AGENT_CHANGES.md (dieser Eintrag)
+
+---
+
+### 2026-02-19 - Backend Refactoring Agent
+**Modul/Datei:** `modules/shared/config/settings.py`, `modules/shared/logging/logger.py`, `modules/shared/startup/validation.py`, `main.py`
+**Art der Änderung:** Refactoring - Phase 2 Configuration & Validation
+**Beschreibung:** Logging-Hardcoded Values entfernt und Startup-Validierung hinzugefügt
+**Details:**
+- **settings.py:** LOG_MAX_FILE_SIZE und LOG_BACKUP_COUNT hinzugefügt (zentrale Config)
+- **logger.py:** Hardcoded Values (10 MB, 5) durch Importe aus settings ersetzt
+- **validation.py (NEU):** Fail-Fast Startup-Validierung mit:
+  - Prüfung erforderlicher Umgebungsvariablen (SQL_SERVER, SQL_USERNAME, SQL_PASSWORD)
+  - Prüfung Datenbank-Verbindung (nur production-Modus)
+  - Prüfung erforderlicher Verzeichnisse (data/, logs/, frontend/)
+  - APP_ENV=development für Entwicklungsumgebung ohne DB
+- **main.py:** Startup-Validierung im lifespan Context Manager integriert
+- Server startet erfolgreich auf Port 8888
+**Betroffene Dokumentation:**
+- [ ] docs/ARCHITECTURE/code_structure.md (Config-Sektion aktualisieren)
+- [x] AGENTS.md (bereits aktualisiert mit Build/Test Commands)
 
 ---
 
 ## Processed Changes (Bereits dokumentiert)
+
+---
+### 2026-02-19 - Backend Refactoring Agent (Verarbeitet: 19. Feb 2026)
+**Modul/Datei:** `main.py`, `modules/shared/errors/handler.py`, `modules/shared/routers/static_router.py`, `modules/shared/routers/ui_router.py`, `modules/shared/routers/log_router.py`, `modules/shared/routers/websocket_router.py`, `workers/jobs_router.py`
+**Art der Änderung:** Refactoring - Phase 1 API Gateway Separation
+**Beschreibung:** main.py von 419 auf 162 Zeilen reduziert (-61%) durch Router-Extraktion
+**Details:**
+- **Error Handler:** `modules/shared/errors/handler.py` - neuer `@handle_api_errors(component)` Decorator für einheitliche Fehlerbehandlung mit vollständigem Traceback-Logging
+- **Static Router:** `modules/shared/routers/static_router.py` - FastAPI StaticFiles für /static, /icons, /components (Security: Path Traversal Protection)
+- **UI Router:** `modules/shared/routers/ui_router.py` - extrahierte UI-Routen: /, /pdf, /temu, /csv, /docs, /manifest.json (~40 Zeilen)
+- **Log Router:** `modules/shared/routers/log_router.py` - extrahierte Log-Management-Endpunkte: /api/logs, /api/logs/stats, /api/logs/export, /api/logs/cleanup
+- **WebSocket Router:** `modules/shared/routers/websocket_router.py` - extrahierter /ws/logs Handler mit Dependency Injection (lambda: scheduler)
+- **Jobs Router:** `workers/jobs_router.py` - extrahierte Job-Management-Endpunkte: /api/jobs, /api/jobs/{job_id}, /api/jobs/{job_id}/run-now, /api/jobs/{job_id}/schedule, /api/jobs/{job_id}/toggle
+- Nicht mehr benötigte Imports in main.py entfernt: asyncio, WebSocket, jsonable_encoder, StaticFiles, FileResponse, log_service
+- Alle Endpoints getestet und funktionsfähig auf Port 8888
+**Betroffene Dokumentation:**
+- [x] docs/ARCHITECTURE/code_structure.md (Projektbaum + Router-Architektur aktualisiert)
+- [x] docs/AGENT_CHANGES.md (dieser Eintrag)
+**Impact:** Medium
+**Breaking Changes:** No (Rückwärtskompatibel via Factory Functions für Scheduler-Injection)
+**Dokumentiert in:** docs/ARCHITECTURE/code_structure.md (Section 1 + API Layer)
 
 ---
 ### 2026-02-13 - Frontend Refactoring Agent (Verarbeitet: 13. Feb 2026)

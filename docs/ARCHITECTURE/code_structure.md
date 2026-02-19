@@ -4,11 +4,11 @@ Quick Reference für die TEMU-Integration Codebase.
 
 ---
 
-**Datum:** 13. Februar 2026
+**Datum:** 19. Februar 2026
 
 ---
 
-## 1. Projektbaum
+## 1. Projektbaum (Stand: 19. Februar 2026)
 
 ```
 /home/chx/entwicklung/
@@ -69,9 +69,16 @@ Quick Reference für die TEMU-Integration Codebase.
 │   │   │           ├── order_repository.py
 │   │   │           ├── order_item_repository.py
 │   │   │           └── product_repository.py
-│   │   └── logging/               # Log Service + Logger Factory
-│   │       ├── log_service.py     # DB-basiertes Logging (Business Events)
-│   │       └── logger.py          # RotatingFileHandler (Technical Errors)
+│   │   ├── logging/               # Log Service + Logger Factory
+│   │   │   ├── log_service.py     # DB-basiertes Logging (Business Events)
+│   │   │   └── logger.py          # RotatingFileHandler (Technical Errors)
+│   │   ├── errors/                # Error Handling (NEW ✅ 19.02.2026)
+│   │   │   └── handler.py         # @handle_api_errors Decorator
+│   │   └── routers/               # Extrahiert aus main.py (NEW ✅ 19.02.2026)
+│   │       ├── static_router.py   # FastAPI StaticFiles (/static, /icons, /components)
+│   │       ├── ui_router.py       # UI-Routen (/, /pdf, /temu, /csv, /docs)
+│   │       ├── log_router.py      # Log Management (/api/logs)
+│   │       └── websocket_router.py # WebSocket (/ws/logs)
 │   ├── temu/                      # TEMU Marketplace Integration
 │   │   ├── frontend/              # PWA Interface
 │   │   ├── services/
@@ -108,12 +115,13 @@ Quick Reference für die TEMU-Integration Codebase.
 │   │   └── workers_config.json    # Schedule + Intervals
 │   ├── job_models.py
 │   ├── worker_service.py
-│   └── workers_config.py
+│   ├── workers_config.py
+│   └── jobs_router.py             # Job Management Router (NEW ✅ 19.02.2026)
 ├── .gitignore
 ├── AI_GUIDE.md                    # Haupt-Projektleitfaden für AI
 ├── db_schema.sql
 ├── ecosystem.config.js            # PM2 Configuration
-├── main.py                        # Unified FastAPI Gateway
+├── main.py                        # Unified FastAPI Gateway (refactored: 419→162 Zeilen)
 ├── requirements.txt
 └── start_dev.sh                   # Development Start Script
 ```
@@ -122,18 +130,13 @@ Quick Reference für die TEMU-Integration Codebase.
 
 ## 2. Kern-Module (Verantwortlichkeiten)
 
-### API Layer – `main.py`
+### API Layer – `main.py` (Refactored: 419→162 Zeilen ✅)
 **Verantwortung:** HTTP/WebSocket Schnittstelle
 
-```python
-# Endpoints:
-GET /api/health              # Health Check
-GET /api/jobs/status         # All Jobs Status
-GET /api/jobs/<job_id>       # Specific Job Details
-POST /api/jobs/<job_id>/execute # Trigger Job
-WebSocket /ws/logs           # Live Job Updates
-GET /icons/{filename}        # Icon-Serving
-```
+**Metriken (Phase 1 Refactoring - 19.02.2026):**
+- Vorher: 419 Zeilen
+- Nachher: 162 Zeilen (-61%)
+- Ziel: ~150 Zeilen ✅
 
 **Features:**
 - FastAPI (async, ASGI)
@@ -141,6 +144,19 @@ GET /icons/{filename}        # Icon-Serving
 - WebSocket für Live-Updates (JSON messages)
 - Error Handling mit HTTP Status Codes
 - CORS + Security Headers
+
+**Router-Struktur (extrahierte Module):**
+```
+main.py (162 Zeilen)
+├── modules/shared/routers/static_router.py     # /static, /icons, /components
+├── modules/shared/routers/ui_router.py         # /, /pdf, /temu, /csv, /docs
+├── modules/shared/routers/log_router.py        # /api/logs
+├── modules/shared/routers/websocket_router.py  # /ws/logs
+├── workers/jobs_router.py                      # /api/jobs
+├── modules/temu/router.py                      # /api/temu
+├── modules/pdf_reader/router.py                # /api/pdf
+└── modules/csv_verarbeiter/router.py           # /api/csv
+```
 
 ---
 

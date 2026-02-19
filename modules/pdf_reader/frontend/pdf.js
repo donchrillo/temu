@@ -154,9 +154,7 @@ function formatFileSize(bytes) {
 
 async function loadStatus() {
     try {
-        const res = await fetch(PDF_CONFIG.ENDPOINTS.STATUS);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
+        const data = await API_CLIENT.get(PDF_CONFIG.ENDPOINTS.STATUS);
 
         const statusEl = document.getElementById(PDF_CONFIG.SELECTORS.STATUS_INFO);
         statusEl.innerHTML = '';
@@ -206,9 +204,7 @@ async function performAction({ progressText, url, method = 'POST', body = null, 
         const options = { method };
         if (body) options.body = body;
 
-        const res = await fetch(url, options);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
+        const data = await API_CLIENT.request(url, options);
         updateProgress(100, 'Fertig!');
 
         setTimeout(() => {
@@ -331,9 +327,7 @@ async function showLog() {
     
     try {
         const filter = document.getElementById(PDF_CONFIG.SELECTORS.LOG_FILTER).value || 'pdf';
-        const res = await fetch(`${PDF_CONFIG.ENDPOINTS.LOGS}?job_id=${filter}&limit=100`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const logs = await res.json();
+        const logs = await API_CLIENT.get(`${PDF_CONFIG.ENDPOINTS.LOGS}?job_id=${filter}&limit=100`);
 
         if (logs && logs.length > 0) {
             logContent.textContent = logs.map(formatLogEntry).join('\n');

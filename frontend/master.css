@@ -707,3 +707,98 @@ body {
 ::-webkit-scrollbar-thumb:hover {
     background: var(--secondary);
 }
+
+/* ═══ ERP Sidebar Navigation ═══ */
+
+.erp-layout {
+    display: flex;
+    min-height: 100vh;
+}
+
+.erp-sidebar {
+    width: 240px;
+    background: #f8f9fa;
+    height: 100vh;
+    padding: 20px 0;
+    border-right: 1px solid #e9ecef;
+    position: sticky;
+    top: 0;
+    flex-shrink: 0;
+}
+
+.erp-nav {
+    width: 100%;
+}
+
+.nav-section {
+    margin-bottom: 24px;
+}
+
+.nav-section-header {
+    display: flex;
+    align-items: center;
+    padding: 8px 20px;
+    font-weight: 600;
+    color: #6c757d;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.nav-icon {
+    margin-right: 8px;
+}
+
+.nav-items {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.nav-item a {
+    display: block;
+    padding: 10px 20px;
+    color: #212529;
+    text-decoration: none;
+    transition: background 0.2s;
+}
+
+.nav-item a:hover {
+    background: #e9ecef;
+}
+
+.nav-item.active a {
+    background: #007aff;
+    color: white;
+}
+
+.nav-item.disabled a {
+    color: #adb5bd;
+    cursor: not-allowed;
+}
+
+.nav-item.disabled a:hover {
+    background: transparent;
+}
+
+/* Sidebar + Main Content Layout */
+.erp-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+@media (max-width: 768px) {
+    .erp-sidebar {
+        display: none;
+    }
+    
+    .erp-sidebar.mobile-open {
+        display: block;
+        position: fixed;
+        left: 0;
+        top: 0;
+        z-index: 1000;
+        box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+    }
+}
