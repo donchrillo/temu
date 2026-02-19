@@ -19,69 +19,67 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
 
 
 def get_ui_router(frontend_dir: Path) -> APIRouter:
-    """Erstellt den UI Router mit allen Frontend-Routen."""
+    """Erstellt den UI Router mit allen Frontend-Routen.
+    
+    Verwendet das React-Frontend aus frontend-react/dist/
+    """
     
     router = APIRouter()
     
+    # React Frontend Verzeichnis
+    react_dist_dir = BASE_DIR / "frontend-react" / "dist"
+    
     @router.get("/")
     async def root():
-        """Root Dashboard"""
-        new_index = frontend_dir / "index-new.html"
-        old_index = frontend_dir / "index.html"
-
-        if new_index.exists():
-            return FileResponse(str(new_index))
-        elif old_index.exists():
-            return FileResponse(str(old_index))
+        """Root Dashboard - React Frontend"""
+        if react_dist_dir.exists():
+            return FileResponse(str(react_dist_dir / "index.html"))
         else:
             return {
                 "message": "TEMU ERP System Gateway",
                 "version": "2.0.0",
                 "modules": {
                     "pdf": "/pdf",
-                    "temu": "/temu"
+                    "temu": "/temu",
+                    "csv": "/csv"
                 },
-                "docs": "/docs"
+                "docs": "/docs",
+                "error": "React Frontend nicht gefunden. Bitte 'npm run build' ausführen."
             }
 
     @router.get("/pdf")
     async def pdf_ui():
-        """PDF-Reader UI"""
-        pdf_html = BASE_DIR / "modules" / "pdf_reader" / "frontend" / "pdf.html"
-        if not pdf_html.exists():
-            raise HTTPException(status_code=404, detail="PDF Frontend not found")
-        return FileResponse(str(pdf_html))
+        """PDF-Reader UI - React Frontend"""
+        if react_dist_dir.exists():
+            return FileResponse(str(react_dist_dir / "index.html"))
+        raise HTTPException(status_code=404, detail="React Frontend not found")
 
     @router.get("/temu")
     async def temu_ui():
-        """TEMU Dashboard"""
-        temu_html = BASE_DIR / "modules" / "temu" / "frontend" / "temu.html"
-        if not temu_html.exists():
-            raise HTTPException(status_code=404, detail="TEMU Frontend not found")
-        return FileResponse(str(temu_html))
+        """TEMU Dashboard - React Frontend"""
+        if react_dist_dir.exists():
+            return FileResponse(str(react_dist_dir / "index.html"))
+        raise HTTPException(status_code=404, detail="React Frontend not found")
 
     @router.get("/csv")
     async def csv_ui():
-        """CSV Verarbeiter UI"""
-        csv_html = BASE_DIR / "modules" / "csv_verarbeiter" / "frontend" / "csv.html"
-        if not csv_html.exists():
-            raise HTTPException(status_code=404, detail="CSV Frontend not found")
-        return FileResponse(str(csv_html))
+        """CSV Verarbeiter UI - React Frontend"""
+        if react_dist_dir.exists():
+            return FileResponse(str(react_dist_dir / "index.html"))
+        raise HTTPException(status_code=404, detail="React Frontend not found")
 
     @router.get("/docs")
     async def docs_ui():
         """API Documentation UI"""
-        docs_html = frontend_dir / "docs.html"
-        if not docs_html.exists():
-            raise HTTPException(status_code=404, detail="Docs Frontend not found")
-        return FileResponse(str(docs_html))
+        docs_html = BASE_DIR / "docs.html"
+        if docs_html.exists():
+            return FileResponse(str(docs_html))
+        raise HTTPException(status_code=404, detail="Docs Frontend not found")
 
     @router.get("/manifest.json")
     async def get_manifest():
         """PWA Manifest"""
-        file_path = frontend_dir / "manifest.json"
-        if file_path.exists():
-            return FileResponse(str(file_path))
-        return {"error": "manifest.json nicht gefunden"}
+        # React doesn't use manifest.json the same way
+        return {"error": "manifest.json nicht mehr verfügbar"}
 
     return router

@@ -13,15 +13,15 @@
   --color-secondary: #8E8E93;
   --color-secondary-hover: #7A7A7E;
   
-  /* Background colors */
+  /* Background colors - Light Mode */
   --color-background: #F2F2F7;
   --color-card: #FFFFFF;
   
-  /* Text colors */
+  /* Text colors - Light Mode */
   --color-text: #1C1C1E;
   --color-text-secondary: #636366;
   
-  /* Border */
+  /* Border - Light Mode */
   --color-border: #D1D1D6;
   
   /* Font */
@@ -35,6 +35,17 @@
   /* Shadows */
   --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.1);
   --shadow-card-hover: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+/* Dark Mode Colors */
+.dark {
+  --color-background: #1C1C1E;
+  --color-card: #2C2C2E;
+  --color-text: #F2F2F7;
+  --color-text-secondary: #8E8E93;
+  --color-border: #38383A;
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-card-hover: 0 4px 16px rgba(0, 0, 0, 0.3);
 }
 
 /* Custom scrollbar */
@@ -54,4 +65,25 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-secondary);
+}
+
+/* Dark mode scrollbar */
+.dark ::-webkit-scrollbar-thumb {
+  background: #48484A;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #5A5A5E;
+}
+
+/* Smooth transitions for theme changes */
+* {
+  transition-property: background-color, border-color, color;
+  transition-duration: 0.2s;
+  transition-timing-function: ease-out;
+}
+
+/* Disable transition on page load */
+.preload * {
+  transition: none !important;
 }

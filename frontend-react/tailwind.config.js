@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: 'class',
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
@@ -28,15 +29,15 @@ export default {
           DEFAULT: '#8E8E93',
           hover: '#7A7A7E',
         },
-        // Background colors
+        // Background colors - Light Mode
         background: '#F2F2F7',
         card: '#FFFFFF',
-        // Text colors
+        // Text colors - Light Mode
         text: {
           DEFAULT: '#1C1C1E',
           secondary: '#636366',
         },
-        // Border
+        // Border - Light Mode
         border: '#D1D1D6',
       },
       fontFamily: {
@@ -61,6 +62,7 @@ export default {
       animation: {
         'fade-in': 'fadeIn 0.3s ease-out',
         'slide-in': 'slideIn 0.3s ease-out',
+        'slide-in-left': 'slideInLeft 0.3s ease-out',
         'scale-in': 'scaleIn 0.3s ease-out',
         'pulse-slow': 'pulse 2s infinite',
       },
@@ -71,6 +73,10 @@ export default {
         },
         slideIn: {
           '0%': { transform: 'translateX(400px)', opacity: '0' },
+          '100%': { transform: 'translateX(0)', opacity: '1' },
+        },
+        slideInLeft: {
+          '0%': { transform: 'translateX(-100%)', opacity: '0' },
           '100%': { transform: 'translateX(0)', opacity: '1' },
         },
         scaleIn: {

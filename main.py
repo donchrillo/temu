@@ -35,7 +35,6 @@ from modules.csv_verarbeiter.router import router as csv_router
 
 # Router Imports (extrahiert)
 from modules.shared.routers.static_router import get_static_router
-from modules.shared.routers.static_router import create_module_static_routes
 from modules.shared.routers.log_router import get_log_router
 from modules.shared.routers.ui_router import get_ui_router
 from modules.shared.routers.websocket_router import get_websocket_router
@@ -80,7 +79,11 @@ async def lifespan(app: FastAPI):
 # FastAPI App
 # ═══════════════════════════════════════════════════════════════
 
-frontend_dir = Path(__file__).resolve().parent / "frontend"
+# Frontend-Verzeichnis (wird für Static Files benötigt)
+frontend_dir = Path(__file__).resolve().parent / "frontend-react" / "dist"
+
+# Hinweis: In Entwicklung läuft das React-Frontend separat auf Port 3000 (Vite)
+# Der API-Server auf Port 8888 liefert nur die API-Endpunkte aus
 
 app = FastAPI(
     title="TEMU ERP System",
@@ -136,7 +139,6 @@ app.include_router(get_jobs_router(scheduler))
 # ═══════════════════════════════════════════════════════════════
 
 get_static_router(app, frontend_dir)
-create_module_static_routes(app, Path(__file__).parent)
 
 # ═══════════════════════════════════════════════════════════════
 # Health & Root Endpoints

@@ -50,7 +50,7 @@ def validate_startup_config() -> List[str]:
             errors.append(db_error)
     
     # 3. Erforderliche Verzeichnisse prüfen
-    required_dirs = ['data', 'logs', 'frontend']
+    required_dirs = ['data', 'logs']
     project_root = Path(__file__).parent.parent.parent.parent
     
     for dir_name in required_dirs:

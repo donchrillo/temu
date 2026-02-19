@@ -66,6 +66,81 @@ export const logsApi = {
     apiClient.get(`/api/logs?job_id=${jobId}&limit=${limit}`).then(res => res.data),
 };
 
+// ============ CSV API ============
+export interface CsvReport {
+  filename: string;
+  sheets: Record<string, Record<string, string>[]>;
+}
+
+export interface CsvStatus {
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  job_id: string;
+  error?: string;
+  progress?: number;
+}
+
+export interface CsvExportParams {
+  csv_files: string[];
+  zip_name: string;
+  include_report: boolean;
+  include_log: boolean;
+}
+
+export interface CsvExportResponse {
+  zip_filename: string;
+  download_url: string;
+}
+
+export interface CsvCleanupResponse {
+  deleted: number;
+  errors: string[];
+}
+
+export interface CsvLogEntry {
+  timestamp: string;
+  level: string;
+  job_type: string;
+  message: string;
+}
+
+export const csvApi = {
+  upload: async (file: File): Promise<{ job_id: string }> => {
+    const formData = new FormData();
+    formData.append('files', file);
+    return apiClient.post('/api/csv/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(res => res.data);
+  },
+
+  process: (jobId: string, skipCritical: boolean = false): Promise<any> => {
+    return apiClient.post(`/api/csv/process?job_id=${jobId}&skip_critical=${skipCritical}`);
+  },
+
+  getStatus: (jobId: string): Promise<CsvStatus> => {
+    return apiClient.get(`/api/csv/status/${jobId}`).then(res => res.data);
+  },
+
+  getLatestReport: (): Promise<CsvReport | { filename?: never }> => {
+    return apiClient.get('/api/csv/report/latest').then(res => res.data);
+  },
+
+  listProcessedFiles: (): Promise<{ files: string[] }> => {
+    return apiClient.get('/api/csv/list-processed-files').then(res => res.data);
+  },
+
+  createExportZip: (params: CsvExportParams): Promise<CsvExportResponse> => {
+    return apiClient.post('/api/csv/create-export-zip', params).then(res => res.data);
+  },
+
+  getLogs: (prefix: string = 'csv', limit: number = 200): Promise<{ logs: CsvLogEntry[]; prefix: string }> => {
+    return apiClient.get(`/api/csv/logs/db?prefix=${prefix}&limit=${limit}`).then(res => res.data);
+  },
+
+  cleanupAll: (): Promise<CsvCleanupResponse> => {
+    return apiClient.post('/api/csv/cleanup-all').then(res => res.data);
+  },
+};
+
 // Request interceptor for logging
 apiClient.interceptors.request.use(
   (config) => {
