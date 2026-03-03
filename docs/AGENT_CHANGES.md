@@ -26,6 +26,36 @@ Jeder Agent dokumentiert seine Änderungen in folgendem Format:
 
 ---
 
+### 2026-03-03 - GitHub Copilot (GPT-5.3-Codex)
+**Modul/Datei:** `deploy/systemd/temu-frontend.service.template`, `deploy/caddy/Caddyfile.template`, `docs/DEPLOYMENT/systemd-cutover.md`
+**Art der Änderung:** Deployment/Operations
+**Beschreibung:** Deployment auf getrennte Produktiv-Ports umgestellt (Frontend 3000, Backend 8000)
+**Details:**
+- Neues `systemd` Service-Template für React Frontend (`npm run preview`) auf `127.0.0.1:3000`
+- Caddy-Template angepasst: Standard-Traffic an Frontend `3000`, `/api/*` und `/ws/*` an Backend `8000`
+- Cutover-Runbook aktualisiert: Frontend-Build + Frontend-Service-Start + zusätzliche Verifikationsschritte
+**Betroffene Dokumentation:**
+- [x] docs/DEPLOYMENT/systemd-cutover.md
+- [x] AGENT_CHANGES.md (dieser Eintrag)
+
+---
+
+### 2026-03-03 - GitHub Copilot (GPT-5.3-Codex)
+**Modul/Datei:** `deploy/systemd/temu-api.service.template`, `deploy/caddy/Caddyfile.template`, `docs/DEPLOYMENT/systemd-cutover.md`, `docs/DEPLOYMENT/architecture.md`
+**Art der Änderung:** Deployment/Operations
+**Beschreibung:** Go-Live-Cutover von Legacy-System auf `systemd` + FastAPI + React über HTTPS vorbereitet
+**Details:**
+- Neues `systemd` Service-Template für FastAPI auf Port 8000 erstellt
+- Neues Caddy-Template für HTTPS-Auslieferung von React (`dist`) + Reverse Proxy für `/api/*` und `/ws/*`
+- Neues Runbook mit Schritt-für-Schritt-Cutover (Altservice stoppen, neuen Service starten, HTTPS validieren, Rollback)
+- Deployment-Architektur-Doku als PM2-Legacy gekennzeichnet und auf neues Runbook verwiesen
+**Betroffene Dokumentation:**
+- [x] docs/DEPLOYMENT/architecture.md
+- [x] docs/DEPLOYMENT/systemd-cutover.md
+- [x] AGENT_CHANGES.md (dieser Eintrag)
+
+---
+
 ### 2026-02-19 - Frontend React Agent (Verarbeitet: 19. Feb 2026)
 **Modul/Datei:** `frontend-react/src/pages/temu-connector.tsx`, `frontend-react/src/pages/pdf-reader.tsx`, `frontend-react/src/components/ui/progress-overlay.tsx`, `frontend-react/vite.config.ts`
 **Art der Änderung:** Feature - Phase 1-3 Abgeschlossen
