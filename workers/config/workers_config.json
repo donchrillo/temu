@@ -2,13 +2,13 @@
   {
     "job_type": "sync_orders",
     "interval_minutes": 15,
-    "enabled": false,
+    "enabled": true,
     "description": "Synchronisiere neue Aufträge von TEMU API"
   },
   {
     "job_type": "sync_inventory",
     "interval_minutes": 5,
-    "enabled": false,
+    "enabled": true,
     "description": "Aktualisiere Bestandszahlen"
   }
 ]

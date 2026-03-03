@@ -27,6 +27,60 @@ Jeder Agent dokumentiert seine Änderungen in folgendem Format:
 ---
 
 ### 2026-03-03 - GitHub Copilot (GPT-5.3-Codex)
+**Modul/Datei:** `frontend-react/src/pages/dashboard.tsx`
+**Art der Änderung:** Bug Fix (Frontend UX)
+**Beschreibung:** Mobile Navigation auf Dashboard/Startseite wiederhergestellt
+**Details:**
+- Mobiler Burger-Button (`lg:hidden`) im Dashboard-Header ergänzt
+- Button nutzt bestehendes `LayoutContext.openMobileMenu()`
+- Ergebnis: Mobile Sidebar-Menü auf der initialen Dashboard-Route wieder erreichbar
+**Betroffene Dokumentation:**
+- [x] AGENT_CHANGES.md (dieser Eintrag)
+
+---
+
+### 2026-03-03 - GitHub Copilot (GPT-5.3-Codex)
+**Modul/Datei:** `deploy/systemd/temu-api.service.template`, `docs/DEPLOYMENT/systemd-cutover.md`
+**Art der Änderung:** Bug Fix (Operations)
+**Beschreibung:** Scheduler-Konsistenz für Live-Betrieb sichergestellt
+**Details:**
+- API-Service von `--workers 4` auf `--workers 1` umgestellt
+- Hintergrund: Integrierter APScheduler ist pro Prozess; mehrere Uvicorn-Worker erzeugen mehrere Scheduler-Instanzen
+- Runbook-Hinweis ergänzt, dass für Zeitplan-Jobs Single-Worker Pflicht ist
+**Betroffene Dokumentation:**
+- [x] docs/DEPLOYMENT/systemd-cutover.md
+- [x] AGENT_CHANGES.md (dieser Eintrag)
+
+---
+
+### 2026-03-03 - GitHub Copilot (GPT-5.3-Codex)
+**Modul/Datei:** `deploy/systemd/temu-api.service.template`
+**Art der Änderung:** Deployment/Operations
+**Beschreibung:** API-service robuster gemacht bei fehlender `.env`
+**Details:**
+- `EnvironmentFile` in `temu-api.service.template` auf optional (`-/home/chx/jtl_erp/.env`) umgestellt
+- Hintergrund: systemd-Startfehler `Failed to load environment files`
+- Ergebnis: `temu-api.service` startet erfolgreich
+**Betroffene Dokumentation:**
+- [x] AGENT_CHANGES.md (dieser Eintrag)
+
+---
+
+### 2026-03-03 - GitHub Copilot (GPT-5.3-Codex)
+**Modul/Datei:** `docs/DEPLOYMENT/systemd-cutover.md`
+**Art der Änderung:** Deployment/Operations
+**Beschreibung:** Runbook um vollständige Entfernung alter Legacy-Services aus `systemd` ergänzt
+**Details:**
+- Zusätzliche Schrittfolge für dauerhafte Entfernung aufgenommen
+- Enthält `stop`, `disable`, `mask`, optionales Löschen der Unit-Datei, `daemon-reload`, `reset-failed`
+- Verifikationskommandos für `status` und `is-enabled` ergänzt
+**Betroffene Dokumentation:**
+- [x] docs/DEPLOYMENT/systemd-cutover.md
+- [x] AGENT_CHANGES.md (dieser Eintrag)
+
+---
+
+### 2026-03-03 - GitHub Copilot (GPT-5.3-Codex)
 **Modul/Datei:** `deploy/systemd/temu-frontend.service.template`, `deploy/caddy/Caddyfile.template`, `docs/DEPLOYMENT/systemd-cutover.md`
 **Art der Änderung:** Deployment/Operations
 **Beschreibung:** Deployment auf getrennte Produktiv-Ports umgestellt (Frontend 3000, Backend 8000)

@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ordersApi, inventoryApi, jobsApi, logsApi } from '@/lib/api-client';
+import { useLayout } from '@/contexts/LayoutContext';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '@/components/shared/loading-spinner';
@@ -14,10 +15,12 @@ import {
   RefreshCw,
   AlertCircle,
   Info,
+  Menu,
 } from 'lucide-react';
 
 export default function Dashboard() {
   const queryClient = useQueryClient();
+  const { openMobileMenu } = useLayout();
 
   // ============ Queries ============
   const { data: ordersData, isLoading: ordersLoading } = useQuery({
@@ -103,9 +106,19 @@ export default function Dashboard() {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-text">Dashboard</h1>
-        <p className="text-text-secondary">Übersicht über Ihr TEMU ERP System</p>
+      <div className="flex items-start gap-3">
+        <button
+          onClick={openMobileMenu}
+          className="lg:hidden mt-0.5 p-2 hover:bg-background rounded-md transition-colors"
+          aria-label="Menü öffnen"
+        >
+          <Menu className="w-5 h-5 text-text" />
+        </button>
+
+        <div>
+          <h1 className="text-2xl font-bold text-text">Dashboard</h1>
+          <p className="text-text-secondary">Übersicht über Ihr TEMU ERP System</p>
+        </div>
       </div>
 
       {/* Stats Cards */}

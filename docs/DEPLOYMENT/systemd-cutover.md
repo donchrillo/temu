@@ -37,6 +37,28 @@ Optional maskieren (damit er nicht versehentlich startet):
 sudo systemctl mask temu-legacy.service
 ```
 
+Wenn du den alten Service **komplett aus dem systemd-Workflow entfernen** willst (nicht nur stoppen):
+
+```bash
+# 1) Service sicher stoppen und deaktivieren
+sudo systemctl stop temu-legacy.service
+sudo systemctl disable temu-legacy.service
+sudo systemctl mask temu-legacy.service
+
+# 2) Unit-Datei entfernen (nur wenn es eure eigene Unit ist)
+sudo rm -f /etc/systemd/system/temu-legacy.service
+
+# 3) systemd neu einlesen und aufräumen
+sudo systemctl daemon-reload
+sudo systemctl reset-failed
+
+# 4) Verifizieren
+systemctl status temu-legacy.service --no-pager || true
+systemctl is-enabled temu-legacy.service || true
+```
+
+Hinweis: Wenn die Unit von einem Paket installiert wurde (z. B. über apt), dann stattdessen das Paket sauber entfernen statt die Unit-Datei manuell zu löschen.
+
 ---
 
 ## 2) Neues Backend als `systemd`-Service aktivieren
@@ -156,5 +178,6 @@ sudo systemctl enable --now temu-legacy.service
 - FastAPI läuft intern auf `127.0.0.1:8000`.
 - React läuft intern auf `127.0.0.1:3000`.
 - Extern wird nur Caddy (443) exponiert.
+- Für den integrierten APScheduler muss API mit **einem** Worker laufen (`--workers 1`), sonst laufen mehrere Scheduler-Instanzen parallel.
 - Für Produktivbetrieb sollte `--reload` **nicht** in `ExecStart` verwendet werden.
 - Falls Node/Legacy-Prozesse noch laufen, diese zusätzlich mit `ps aux | grep -Ei "node|legacy"` prüfen.
