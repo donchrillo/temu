@@ -26,6 +26,17 @@ Jeder Agent dokumentiert seine Änderungen in folgendem Format:
 
 ---
 
+### 2026-03-12 - GitHub Copilot (GPT-5.4)
+**Modul/Datei:** `modules/temu_datev`, `docs/AGENT_CHANGES.md`
+**Art der Änderung:** Feature (Repository Integration)
+**Beschreibung:** TEMU-DATEV-Projekt als aktualisierbarer Git-Subtree in das Monorepo übernommen
+**Details:**
+- Aus externem Repository `donchrillo/temu-datev` nur der fachliche Unterbaum `TEmuAuszahlung/` übernommen
+- Importpfad bewusst auf `modules/temu_datev` gelegt, damit Backend, Fachlogik und das zugehörige React-Frontend als separates Integrationsmodul im Monorepo liegen
+- Import als `git subtree --squash` durchgeführt, um die Monorepo-Historie kompakt zu halten und spätere Updates weiterhin per Subtree-Pull zu ermöglichen
+**Betroffene Dokumentation:**
+- [x] AGENT_CHANGES.md (dieser Eintrag)
+
 ### 2026-03-03 - GitHub Copilot (GPT-5.3-Codex)
 **Modul/Datei:** `frontend-react/src/pages/dashboard.tsx`
 **Art der Änderung:** Bug Fix (Frontend UX)
