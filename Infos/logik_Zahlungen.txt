@@ -1,0 +1,101 @@
+So jetzt müssen wir uns mit der passenden Abrechnungslogik zu den Bestellungen beschäftigen.
+
+Ich würde die Beispiele von gestern aufgreifen an der an deren wir die Buchungslogik erstellt haben und jetzt die Abrechnungslogik erläutern.
+
+Bleiben wir bei dem einfachen Kauf ohne das TEmu den Kauf subventioniert.
+
+
+
+# === SKR04 KONTEN-KONFIGURATION ===
+KONTO_BANK = 1860070              # BAnkkonto für Marktplatz TEMU
+KONTO_DEBITOREN = 10012000        # TEMU Debitorenkonto (Kundenrechnungen)
+KONTO_TRANSIT = 1460070           # Geldtransit
+KONTO_ERLOESE = 4400000           # Erlöse 19% DE
+KONTO_GEBUEHREN = 6770060         # Service-Gebühren TEMU
+KONTO_VERSAND_LABEL = 6770060        # Rücksendeetiketten
+KONTO_STRAFZAHLUNGEN = 6770060       # Strafzahlungen
+KONTO_PLATTFORMANREIZ = 4400000   # Plattformanreize (Zuschüsse von Temu)
+
+
+DAs war z.B. die Bestellung: PO-076-04575786977913303 
+Wir haben dazu einen Buchungsatz Umsatz Brutto, Debitorkonto 10012000 an Gegenkonto 4400000 gebucht.
+
+Jetzt müssen wir die Zahlungen dagegen buchen. Damit unser offener Posten für die Bestellung auf dem Debotoren Konto 10012000 mit der Bestellnummer ausgeglichen wird, muss zu unserer Forderung eine Zahlung eingehen.
+Deswegen müssen wir die Zahlungen grundsätzlich auch im Belegfeld1 mit der Bestellnummer angeben
+
+Da alles an das BAnkkonto geht ist das KONTO immer KONTO_BANK
+
+Das Konto 1860 (Bank) im SKR04 ist ein aktives Bestandskonto. 
+Hier sind die Details zur Funktionsweise:
+Art des Kontos: Aktivkonto (gehört zum Umlaufvermögen).
+Mehrung (Zugang): Erhöhungen des Bankguthabens (Einzahlungen, Gutschriften) werden im SOLL gebucht.
+Minderung (Abgang): Verringerungen des Guthabens (Auszahlungen, Lastschriften) werden im HABEN gebucht. 
+Zusammenfassend: Das Konto 1860 vermehrt sich im Soll.
+
+DAs Gegenkonto ist dann bei der Zahlung des Kunden das Debitoren Konto. Das hat sich zuvor mit der entstandenen Forderung an den Kunden im Soll erhöht und wird jetzt im Haben verinngert.
+Es gilt ja nach wie vor SOLL an HABEN!
+Verkauf von Waren auf Rechnung:
+Forderungen (Soll) an Umsatzerlöse (Haben) + Umsatzsteuer (Haben). 
+Zahlung der Rechnung
+BANK (Soll) an Forderung (Haben)
+Der Bestand an der Bank erhöht sich und die Forderung an den Kunden veringert sich.
+
+Das Konto 1460 (Geldtransit) im SKR04 ist ein aktives Bestandskonto (genauer: ein Interimskonto im Umlaufvermögen). 
+Hier sind die Details zur Funktionsweise:
+Aktiv oder Passiv: Aktivkonto.
+Saldo-Verhalten: Es vermehrt sich im Soll (Zugang) und verringert sich im Haben (Abgang). 
+Wie funktioniert das Konto 1460?
+Das Geldtransitkonto wird genutzt, um Geldüberträge zwischen zwei Konten (z. B. von Kasse an Bank) zu verbuchen, wenn die Buchungen zeitlich versetzt stattfinden (z. B. Einzahlung am 30.12., Gutschrift am 02.01.). 
+Einzahlung (Kasse auf Bank):
+Geldtransit (1460) an Kasse (1600) -> Zugang im Soll, Kasse wird weniger.
+Bank (1800) an Geldtransit (1460) -> Abgang im Haben, Geldtransit wird ausgeglichen.
+Auszahlung (Bank auf Kasse):
+Geldtransit (1460) an Bank (1800) -> Zugang im Soll, Bank wird weniger.
+Kasse (1600) an Geldtransit (1460) -> Abgang im Haben, Geldtransit wird ausgeglichen. 
+Am Ende des Vorgangs sollte das Konto 1460 auf Null ausgeglichen sein. Ein Saldo im Geldtransitkonto zum Bilanzstichtag weist auf noch nicht abgeschlossene Geldüberträge hin. 
+
+Im SKR04 ist das Konto 6770 (Verkaufsprovisionen) ein Aufwandskonto. 
+Hier sind die Antworten auf Ihre Fragen:
+Aktiv oder Passiv? Aufwandskonten sind Erfolgskonten (keine direkten Bestands-Aktiv- oder Passivkonten). Sie mindern das Eigenkapital und werden über das GuV-Konto abgeschlossen.
+Mehrung im Soll oder Haben? Aufwandskonten werden im Soll gebucht. Das heißt, eine Mehrung (ein neuer Aufwand/eine Provision) wird auf der Soll-Seite erfasst. 
+Zusammenfassung:
+Konto: 6770 (Verkaufsprovisionen)
+Art: Aufwandskonto (Erfolgskonto)
+Buchung: Soll (Mehrung) / Haben (Abschluss) 
+
+
+Datum/Uhrzeit - Zeitpunkt der Zahlung. Datum muss auch in das DATEV Format ddmm (ohne führende Null bei den Tagen) umgewandetl werden
+Transaktionstyp - werden nachfolgend erläutert
+
+	- Delayed fulfillment deduction, das wäre eine Strafzahlung wegen verpäteter Lieferung, muss auf KONTO_STRAFZAHLUNGEN und im Belegfeld1 der Inhalt von Verwandte ID und dann im Buchungstext der Inhalt von Bestell-ID, Der Wert steht in der Spalte U "sonstiges"
+	- Transfer, ist eine Transfer von unsererm BAnkkonto "TEMU" an unser Bankkonto "Sparkasse". Dazu nutzen wir das Geldtransferkonto. Hier wird Soll an Haben gebucht.  KONTO_BANK AN KONTO_TRANSIT, Belegfeld1 der Inhalt von Verwandte ID und im Buchungstext "Geldtransit", Der Wert steht in der Spalte U "sonstiges"
+	- Shipping label for return purchase oder Shipping label for return purchase Adjustment wird an das Aufwandkonto KONTO_GEBUEHREN gebucht. Belegfeld1 der Inhalt von Verwandte ID  und im Buchungstext "Shipping Label" + Inhalt von Bestell-ID, Der Wert steht in der Spalte U "sonstiges"
+	- OrderPayment, ist die Bezahlung der eigentlichen Bestellung. Im Belegfeld1 nehmen wir Verwandte ID und im Buchungstext "Kundenzahlung", Konto_Bank im Soll an Debitor, Wert ist immer  Gesamt MINUS Plattformanreiz oder zur Kontrolle die Summe aus Einzelhandelspreis + Temu-Rabatt + Versand + Produktsteuer + Versandsteuer. Dies gilt für die ZAhlung des Kunden.
+	- OrderPayment, wenn es einen Plattform anreiz von TEMU gab.  Im Belegfeld1 nehmen wir Verwandte ID und im Buchungstext "Temu Plattformanreiz" , Konto_Bank im Soll an Debitor, Wert ist immer Plattformanreiz
+	- OrderPayment, die eingentlichen GEbühren müssen noch an ein Aufwandskonto gebucht werden. Im Belegfeld1 nehmen wir Verwandte ID und im Buchungstext "Temu GEbühren", Wert ist immer ServicegebÃ¼hr (inkl. Steuern), Konto_Bank im Haben an Auwandskonto im Soll
+
+	. refund, hier gilt analog alles von Order_Payment, nur dass hier S und H immer vertauscht werden!
+
+Verwandte ID
+Bestell-ID
+Bestellartikel-ID - unwichtig für uns
+SKU - unwichtig für uns
+SKU-ID - unwichtig für uns
+Anzahl -unwichtig für uns
+Hafenstadt - unwichtig für uns
+Zustandsangabe des Schiffes unwichtig für uns- 
+Einzelhandelspreis
+Temu-Rabatt
+VerkÃ¤uferrabatt
+ServicegebÃ¼hr (inkl. Steuern)
+Plattformanreiz
+Zwischensumme
+Versand
+PlattformanreizÂ â€“ Versand
+Produktsteuer
+Versandsteuer
+Sonstiges
+Gesamt
+WÃ¤hrung
+
+Ich denke, damit kannst du erstmal areiten.
