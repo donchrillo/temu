@@ -13,6 +13,7 @@ from datetime import datetime
 
 from modules.shared import log_service, app_logger
 from .jobs import get_job_info
+from .services.config import VALID_ORDER_STATUSES, MAX_DAYS_BACK
 
 # Router erstellen
 router = APIRouter()
@@ -75,16 +76,16 @@ async def trigger_order_sync(
     # Das Gateway holt sich den SchedulerService und triggert den Job
     # Hier nur Dokumentation und Validierung
 
-    if parent_order_status not in [0, 1, 2, 3, 4, 5]:
+    if parent_order_status not in VALID_ORDER_STATUSES:
         raise HTTPException(
             status_code=400,
-            detail="Invalid parent_order_status. Must be 0-5"
+            detail=f"Invalid parent_order_status. Must be one of {sorted(VALID_ORDER_STATUSES)}"
         )
 
-    if days_back < 1 or days_back > 90:
+    if days_back < 1 or days_back > MAX_DAYS_BACK:
         raise HTTPException(
             status_code=400,
-            detail="days_back must be between 1 and 90"
+            detail=f"days_back must be between 1 and {MAX_DAYS_BACK}"
         )
 
     return {

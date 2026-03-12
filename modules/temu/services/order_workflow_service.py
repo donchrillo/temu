@@ -1,46 +1,35 @@
 """TEMU Order Workflow Service - 5-Schritt Orchestrierung"""
 
-import json
 import traceback
 from datetime import datetime
-from pathlib import Path
 from typing import Dict, Optional, List
 
-from modules.shared.config.settings import (
-    TEMU_APP_KEY, TEMU_APP_SECRET, TEMU_ACCESS_TOKEN, TEMU_API_ENDPOINT,
-    DB_TOCI, DB_JTL
-)
-from .config import TEMU_API_RESPONSES_DIR
+from modules.shared.config.settings import DB_TOCI, DB_JTL
+from .config import WORKFLOW_ORDER_STATUSES
 from modules.shared import db_connect
 from modules.shared.database.repositories.temu.order_repository import OrderRepository
 from modules.shared.database.repositories.temu.order_item_repository import OrderItemRepository
-from modules.shared.database.repositories.jtl_common.jtl_repository import JtlRepository
-from modules.shared.connectors.temu.service import TemuMarketplaceService
+from .base_workflow_service import BaseWorkflowService
 from .order_service import OrderService
 from modules.jtl.xml_export.xml_export_service import XmlExportService
 from .tracking_service import TrackingService
 from modules.shared import log_service
 
 
-class OrderWorkflowService:
+class OrderWorkflowService(BaseWorkflowService):
     """
     Orchestriert den kompletten TEMU Order Sync Workflow.
     Splittet Transaktionen in logische Blöcke (Import vs. Tracking).
     """
     
     def __init__(self):
-        # Service Caches
-        self._temu_service = None
+        super().__init__()
+        # Domain-spezifische Service/Repo Caches
         self._order_service = None
         self._xml_service = None
         self._tracking_service = None
-        
-        # Connection & Repo Caches (werden pro Block neu gesetzt)
-        self._toci_conn = None
-        self._jtl_conn = None
         self._order_repo = None
         self._item_repo = None
-        self._jtl_repo = None
     
     def run_complete_workflow(
         self, 
@@ -49,15 +38,14 @@ class OrderWorkflowService:
         verbose: bool = False
     ) -> bool:
         start_time = datetime.now()
-        job_id = f"temu_orders_{int(start_time.timestamp())}"
+        job_id = self._generate_job_id("temu_orders")
         
         # Validierung
-        if parent_order_status not in [2, 3, 4, 5]:
+        if parent_order_status not in WORKFLOW_ORDER_STATUSES:
             log_service.log(job_id, "order_workflow", "ERROR", f"Ungültiger Status: {parent_order_status}")
             return False
         
-        if not all([TEMU_APP_KEY, TEMU_APP_SECRET, TEMU_ACCESS_TOKEN]):
-            log_service.log(job_id, "order_workflow", "ERROR", "TEMU Credentials fehlen")
+        if not self._validate_credentials(job_id, "order_workflow"):
             return False
         
         log_service.start_job_capture(job_id, "order_workflow")
@@ -90,7 +78,7 @@ class OrderWorkflowService:
             log_service.log(job_id, "order_workflow", "INFO", "✓ Step 2 committed - Daten persistent")
 
             # Repositories/Services verwerfen, damit Step 3 frische Connections nutzt
-            self._reset_repos_and_services()
+            self._cleanup_service_caches()
             
             # Neue Transaktion für XML Export (Step 3)
             with db_connect(DB_TOCI) as toci_conn:
@@ -113,7 +101,7 @@ class OrderWorkflowService:
         except Exception as e:
             workflow_success = False
             error_trace = traceback.format_exc()
-            log_service.log(job_id, "order_workflow", "ERROR", f"✗ Import-Phase fehlgeschlagen (Rollback): {str(e)}\n{error_trace}")
+            log_service.log(job_id, "order_workflow", "ERROR", f"✗ Import-Phase fehlgeschlagen (Rollback): {str(e)}", error_text=error_trace)
             # Wir brechen hier ab, weil ohne Import auch kein Tracking Sinn macht
             log_service.end_job_capture(success=False, duration=0, error=str(e))
             return False
@@ -155,7 +143,7 @@ class OrderWorkflowService:
             # Fehler im Tracking-Block gefährdet nicht den Import-Block
             workflow_success = False 
             error_trace = traceback.format_exc()
-            log_service.log(job_id, "order_workflow", "ERROR", f"✗ Tracking-Phase fehlgeschlagen: {str(e)}")
+            log_service.log(job_id, "order_workflow", "ERROR", f"✗ Tracking-Phase fehlgeschlagen: {str(e)}", error_text=error_trace)
         finally:
             self._cleanup_connections()
 
@@ -167,20 +155,10 @@ class OrderWorkflowService:
         log_service.end_job_capture(success=workflow_success, duration=duration)
         return workflow_success
 
-    def _cleanup_connections(self):
-        """Hilfsmethode zum Zurücksetzen der Referenzen"""
-        self._toci_conn = None
-        self._jtl_conn = None
+    def _cleanup_service_caches(self):
+        """Setzt domain-spezifische Repo- und Service-Caches zurück."""
         self._order_repo = None
         self._item_repo = None
-        self._jtl_repo = None
-        self._reset_repos_and_services()
-
-    def _reset_repos_and_services(self):
-        """Setzt Repo- und Service-Caches zurück, um geschlossene Verbindungen zu vermeiden."""
-        self._order_repo = None
-        self._item_repo = None
-        self._jtl_repo = None
         self._xml_service = None
         self._order_service = None
         self._tracking_service = None
@@ -196,36 +174,17 @@ class OrderWorkflowService:
             return False
 
     def _step_2_json_to_db(self, job_id: str) -> Dict:
-        """Lädt JSONs und importiert sie in die DB (innerhalb der Transaktion)"""
+        """Delegiert JSON-Import an OrderService (shared Transaktion)."""
         try:
-            # Pfade
-            api_response_dir = TEMU_API_RESPONSES_DIR
-            orders_file = api_response_dir / 'api_response_orders.json'
-            shipping_file = api_response_dir / 'api_response_shipping_all.json'
-            amount_file = api_response_dir / 'api_response_amount_all.json'
-            
-            if not all(f.exists() for f in [orders_file, shipping_file, amount_file]):
-                log_service.log(job_id, "json_to_db", "ERROR", "Dateien fehlen")
-                return {'imported': 0}
-
-            # Laden
-            with open(orders_file, 'r', encoding='utf-8') as f: orders_resp = json.load(f)
-            with open(shipping_file, 'r', encoding='utf-8') as f: shipping_resp = json.load(f)
-            with open(amount_file, 'r', encoding='utf-8') as f: amount_resp = json.load(f)
-            
-            orders = orders_resp.get('result', {}).get('pageItems', [])
-            
-            # Verarbeiten mit INJIZIERTEN Repositories (Shared Connection)
             order_srv = self._get_order_service()
-            return order_srv.import_from_api_response(
-                orders, shipping_resp, amount_resp,
+            return order_srv.import_from_json_files(
+                job_id=job_id,
                 order_repo=self._get_order_repo(),
-                item_repo=self._get_item_repo(),
-                job_id=job_id
+                item_repo=self._get_item_repo()
             )
         except Exception as e:
             log_service.log(job_id, "json_to_db", "ERROR", f"Import Error: {e}")
-            raise # Re-raise für Rollback
+            raise
 
     def _step_3_db_to_xml(self, job_id: str) -> Dict:
         try:
@@ -270,41 +229,29 @@ class OrderWorkflowService:
 
     # --- LAZY LOADERS (Dependency Injection) ---
 
-    def _get_order_repo(self):
+    def _get_order_repo(self) -> OrderRepository:
         if not self._order_repo:
             self._order_repo = OrderRepository(connection=self._toci_conn)
         return self._order_repo
 
-    def _get_item_repo(self):
+    def _get_item_repo(self) -> OrderItemRepository:
         if not self._item_repo:
             self._item_repo = OrderItemRepository(connection=self._toci_conn)
         return self._item_repo
 
-    def _get_jtl_repo(self):
-        if not self._jtl_repo and self._jtl_conn:
-            self._jtl_repo = JtlRepository(connection=self._jtl_conn)
-        return self._jtl_repo
-
-    def _get_temu_service(self, verbose=False):
-        if not self._temu_service:
-            self._temu_service = TemuMarketplaceService(
-                TEMU_APP_KEY, TEMU_APP_SECRET, TEMU_ACCESS_TOKEN, TEMU_API_ENDPOINT, verbose
-            )
-        return self._temu_service
-
-    def _get_order_service(self):
+    def _get_order_service(self) -> OrderService:
         if not self._order_service:
             self._order_service = OrderService(self._get_order_repo(), self._get_item_repo())
         return self._order_service
 
-    def _get_xml_service(self):
+    def _get_xml_service(self) -> XmlExportService:
         if not self._xml_service:
             self._xml_service = XmlExportService(
                 self._get_order_repo(), self._get_item_repo(), self._get_jtl_repo()
             )
         return self._xml_service
 
-    def _get_tracking_service(self):
+    def _get_tracking_service(self) -> TrackingService:
         if not self._tracking_service:
             self._tracking_service = TrackingService(
                 self._get_order_repo(), self._get_jtl_repo()

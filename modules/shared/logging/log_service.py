@@ -9,10 +9,19 @@ class LogService:
     
     def __init__(self):
         self.repo = LogRepository()
-        self.repo.ensure_table_exists()
+        self._table_checked = False
         self.current_job_id: Optional[str] = None
         self.current_job_type: Optional[str] = None
         self.log_buffer: List[str] = []
+    
+    def _ensure_table(self):
+        """Lazy Table Check - nur einmal beim ersten Log-Aufruf"""
+        if not self._table_checked:
+            try:
+                self.repo.ensure_table_exists()
+                self._table_checked = True
+            except Exception as e:
+                app_logger.error(f"Log-Tabelle konnte nicht erstellt werden: {e}")
     
     def start_job_capture(self, job_id: str, job_type: str):
         """Starte Capturing für einen Job"""
@@ -28,6 +37,9 @@ class LogService:
 
         if not job_id or not job_type:
             raise ValueError("job_id und job_type muessen gesetzt sein")
+        
+        # Lazy Table Check beim ersten Aufruf
+        self._ensure_table()
         
         # In Memory Buffer
         self.log_buffer.append(message)
@@ -84,6 +96,60 @@ class LogService:
     def cleanup_old_logs(self, days: int = 30) -> int:
         """Lösche alte Logs"""
         return self.repo.clean_old_logs(days)
+
+    def get_statistics(self, job_id: str = None, days: int = 7) -> Dict:
+        """Hole Log-Statistiken für einen Zeitraum.
+        
+        Args:
+            job_id: Optional filter by specific job_id
+            days: Number of days to look back (default 7)
+        
+        Returns:
+            Dict mit Statistiken (total_logs, error_count, job_count, etc.)
+        """
+        try:
+            self._ensure_table()
+            
+            # Nutze get_job_stats wenn job_id angegeben
+            if job_id:
+                stats = self.repo.get_job_stats(job_id)
+                return {
+                    "job_id": job_id,
+                    "total_runs": stats.get("total_runs", 0),
+                    "successful": stats.get("successful", 0),
+                    "errors": stats.get("errors", 0),
+                    "avg_duration": stats.get("avg_duration"),
+                    "max_duration": stats.get("max_duration"),
+                    "last_run": stats.get("last_run")
+                }
+            
+            # Sonst: hol alle Logs für den Zeitraum und zähle
+            logs = self.repo.get_logs(limit=10000)
+            
+            # Filter by days
+            from datetime import datetime, timedelta
+            cutoff = datetime.now() - timedelta(days=days)
+            
+            filtered_logs = [
+                log for log in logs 
+                if log.get("timestamp") and log.get("timestamp") >= cutoff
+            ]
+            
+            error_count = sum(1 for log in filtered_logs if log.get("level") == "ERROR")
+            success_count = sum(1 for log in filtered_logs if log.get("status") == "SUCCESS")
+            unique_jobs = len(set(log.get("job_id") for log in filtered_logs if log.get("job_id")))
+            
+            return {
+                "period_days": days,
+                "total_logs": len(filtered_logs),
+                "error_count": error_count,
+                "success_count": success_count,
+                "unique_jobs": unique_jobs
+            }
+        except Exception as e:
+            app_logger.error(f"get_statistics failed: {e}")
+            return {"error": str(e)}
+
 
 # Globale LogService Instanz
 log_service = LogService()

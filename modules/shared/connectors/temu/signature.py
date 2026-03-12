@@ -2,8 +2,10 @@
 
 import json
 import hashlib
+from typing import Any, Dict
 
-def calculate_signature(app_secret, params):
+
+def calculate_signature(app_secret: str, params: Dict[str, Any]) -> str:
     """
     Berechnet die TEMU API Signatur (MD5).
     
@@ -45,15 +47,3 @@ def calculate_signature(app_secret, params):
     sign = hashlib.md5(un_sign.encode('utf-8')).hexdigest().upper()
     
     return sign
-
-if __name__ == "__main__":
-    # Testaufruf
-    secret = "mein_app_secret"
-    parameters = {
-        "param1": "wert1",
-        "param2": "wert2",
-        "param3": "wert3"
-    }
-    
-    signatur = calculate_signature(secret, parameters)
-    print(f"Berechnete Signatur: {signatur}")

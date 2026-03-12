@@ -4,7 +4,7 @@ Creates a dedicated subtree under data/pdf_reader.
 """
 from pathlib import Path
 
-# Root project directory (two levels up from this file: src/modules/pdf_reader)
+# Root project directory (modules/pdf_reader/services/config.py -> project root)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
 # Data root

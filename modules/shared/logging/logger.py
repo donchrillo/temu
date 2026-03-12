@@ -5,7 +5,10 @@ Funktioniert auch ohne DB-Verbindung.
 """
 import logging
 import sys
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
+
+from modules.shared.config.settings import LOG_MAX_FILE_SIZE, LOG_BACKUP_COUNT
 
 def create_module_logger(
     module_name: str,
@@ -45,13 +48,17 @@ def create_module_logger(
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
 
-    # 2. File Handler (logs/{log_subdir}/{file_name})
+    # 2. File Handler mit Rotation (logs/{log_subdir}/{file_name})
     # Go up to project root: modules/shared/logging/ -> modules/shared/ -> modules/ -> root/
     log_dir = Path(__file__).parent.parent.parent.parent / "logs" / log_subdir
     log_dir.mkdir(parents=True, exist_ok=True)
     
     log_file = file_name or f"{log_subdir}.log"
-    file_handler = logging.FileHandler(log_dir / log_file, encoding='utf-8')
+    file_handler = RotatingFileHandler(
+        log_dir / log_file, encoding='utf-8',
+        maxBytes=LOG_MAX_FILE_SIZE,
+        backupCount=LOG_BACKUP_COUNT
+    )
     file_handler.setLevel(file_level)
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)

@@ -2,39 +2,22 @@
 
 from typing import List, Optional
 from sqlalchemy import text
-# Lazy import to avoid circular dependency
-def _get_log_service():
-    from ...logging.log_service import log_service
-    return log_service
+from .._log_helper import get_log_service as _get_log_service
 from ...connection import get_engine
 from ....config.settings import TABLE_ORDER_ITEMS, DB_TOCI
 from ..base import BaseRepository
 
-class OrderItem:
-    """Domain Model für Order Item"""
-    def __init__(self, id=None, order_id=None, bestell_id=None, 
-                 bestellartikel_id=None, produktname=None, sku=None,
-                 sku_id=None, variation=None, menge=None,
-                 netto_einzelpreis=None, brutto_einzelpreis=None,
-                 gesamtpreis_netto=None, gesamtpreis_brutto=None, 
-                 mwst_satz=None):
-        self.id = id
-        self.order_id = order_id
-        self.bestell_id = bestell_id
-        self.bestellartikel_id = bestellartikel_id
-        self.produktname = produktname
-        self.sku = sku
-        self.sku_id = sku_id
-        self.variation = variation
-        self.menge = menge
-        self.netto_einzelpreis = netto_einzelpreis
-        self.brutto_einzelpreis = brutto_einzelpreis
-        self.gesamtpreis_netto = gesamtpreis_netto
-        self.gesamtpreis_brutto = gesamtpreis_brutto
-        self.mwst_satz = mwst_satz
+# Domain Model - importiert aus zentraler models.py (Rückwärtskompatibel)
+from .models import OrderItem
 
 class OrderItemRepository(BaseRepository):
     """Data Access Layer - ONLY DB Operations"""
+
+    # Zentrale Spaltenliste für SELECT-Queries (DRY)
+    _ITEM_COLUMNS = """id, order_id, bestell_id, bestellartikel_id,
+                       produktname, sku, sku_id, variation, menge,
+                       netto_einzelpreis, brutto_einzelpreis,
+                       gesamtpreis_netto, gesamtpreis_brutto, mwst_satz"""
 
     def save(self, item: OrderItem) -> int:
         """INSERT oder UPDATE OrderItem"""
@@ -119,10 +102,7 @@ class OrderItemRepository(BaseRepository):
         """Hole alle Items für Order"""
         try:
             sql = f"""
-                SELECT id, order_id, bestell_id, bestellartikel_id,
-                       produktname, sku, sku_id, variation, menge,
-                       netto_einzelpreis, brutto_einzelpreis,
-                       gesamtpreis_netto, gesamtpreis_brutto, mwst_satz
+                SELECT {self._ITEM_COLUMNS}
                 FROM {TABLE_ORDER_ITEMS}
                 WHERE order_id = :order_id
             """
@@ -136,10 +116,7 @@ class OrderItemRepository(BaseRepository):
         """Hole alle Items für eine Bestellung (via bestell_id)"""
         try:
             sql = f"""
-                SELECT id, order_id, bestell_id, bestellartikel_id,
-                       produktname, sku, sku_id, variation, menge,
-                       netto_einzelpreis, brutto_einzelpreis,
-                       gesamtpreis_netto, gesamtpreis_brutto, mwst_satz
+                SELECT {self._ITEM_COLUMNS}
                 FROM {TABLE_ORDER_ITEMS}
                 WHERE bestell_id = :bestell_id
             """
@@ -153,10 +130,7 @@ class OrderItemRepository(BaseRepository):
         """Hole Item by bestellartikel_id"""
         try:
             sql = f"""
-                SELECT id, order_id, bestell_id, bestellartikel_id,
-                       produktname, sku, sku_id, variation, menge,
-                       netto_einzelpreis, brutto_einzelpreis,
-                       gesamtpreis_netto, gesamtpreis_brutto, mwst_satz
+                SELECT {self._ITEM_COLUMNS}
                 FROM {TABLE_ORDER_ITEMS}
                 WHERE bestellartikel_id = :bestellartikel_id
             """

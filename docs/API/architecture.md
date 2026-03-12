@@ -1,7 +1,7 @@
 # 📘 TEMU Integration – Architektur-Dokumentation: API-Layer
 
 **Status:** 🟢 STABLE / VERIFIED  
-**Datum:** 5. Februar 2026  
+**Datum:** 13. Februar 2026  
 **Bereich:** FastAPI Server, REST Endpoints, WebSocket Integration
 
 ---
@@ -153,6 +153,30 @@ async def trigger_job(job_id: str, mode: str = "quick", verbose: bool = False):
   "status": 404
 }
 ```
+
+### Modul-Endpoints: PDF Reader
+
+**Base-Route:** `/api/pdf`
+
+**Werbung:**
+- `POST /werbung/upload` (optional `?process=true`)
+- `POST /werbung/extract`
+- `POST /werbung/process`
+- `GET /werbung/result`
+
+**Rechnungen:**
+- `POST /rechnungen/upload` (optional `?process=true`)
+- `POST /rechnungen/process`
+- `GET /rechnungen/result`
+
+**Upload-Validierung (Security):**
+- Nur `.pdf` Dateien werden akzeptiert
+- Maximal 50 MB pro Datei
+- Dateiname wird auf sicheren Basisnamen reduziert (Path Traversal Schutz)
+
+**Fehlercodes (Upload):**
+- `400` bei ungultigem Dateinamen oder falscher Dateiendung
+- `413` bei zu grosser Datei
 
 ---
 
@@ -583,6 +607,99 @@ uvicorn main:app \
 | **Request Size Limit** | 100 MB | Max Upload Size |
 | **CORS Origin** | * (Dev) | Spezifisch in Prod! |
 | **Log Level** | DEBUG (Dev) / INFO (Prod) | Logging Verbosity |
+
+---
+
+## Business Config Options (Zentral verwaltet)
+
+**Datei:** `modules/temu/config/config.py`
+
+### Scheduler & Interval Configuration
+```python
+# Job Execution Intervals (in Minuten)
+ORDER_SYNC_INTERVAL_MINUTES = 30       # Default: Order Sync alle 30 Min
+INVENTORY_SYNC_INTERVAL_MINUTES = 60   # Default: Inventory Sync alle 60 Min
+```
+
+| Config | Wert | Beschreibung | Runtime-Tuning |
+| :--- | :--- | :--- | :--- |
+| `ORDER_SYNC_INTERVAL_MINUTES` | 30 | Order-Sync-Häufigkeit | ✅ Ja (config.py anpassen) |
+| `INVENTORY_SYNC_INTERVAL_MINUTES` | 60 | Inventory-Sync-Häufigkeit | ✅ Ja (config.py anpassen) |
+
+**Wie es verwendet wird:**
+```python
+# In workers/workers_config.py
+from modules.temu.config.config import ORDER_SYNC_INTERVAL_MINUTES
+
+scheduler.add_job(
+    func='...',
+    trigger='cron',
+    minute=f'*/{ORDER_SYNC_INTERVAL_MINUTES}'  # 0,30,60... Minuten
+)
+```
+
+### API Response Parsing Constants
+```python
+# Amount/Currency Handling
+AMOUNT_DIVISOR = 100                   # TEMU API: amounts in cents (100 = 1.00)
+TAX_RATE_DIVISOR = 1_000_000          # TEMU Tax: 19000000 = 19%
+
+# Status Mapping
+ORDER_STATUS_MAP = {                   # TEMU Status Codes
+    1: 'pending',                      # Awaiting processing
+    2: 'processing',                   # Being processed
+    3: 'shipped',                      # Shipped
+    4: 'delivered',                    # Delivered
+    5: 'cancelled',                    # Cancelled
+}
+
+# Carrier ID Mapping (TEMU Internal IDs)
+CARRIER_MAPPING = {                    # Map friendly names → TEMU IDs
+    'dhl': 141252268,
+    'dpd': 998264853,
+    'hermes': 414141241,
+    'ups': 141241414,
+    'gls': 141214124,
+}
+```
+
+### Validation Constants
+```python
+# Used in router.py + workflows for validation
+VALID_ORDER_STATUSES = {0, 1, 2, 3, 4, 5}    # Accepted status codes for API
+WORKFLOW_ORDER_STATUSES = {2, 3, 4, 5}        # Status codes that trigger workflow
+```
+
+**Beispiel - Verwendung im Router:**
+```python
+@app.get("/api/orders")
+async def get_orders(status: int = None):
+    if status and status not in VALID_ORDER_STATUSES:
+        raise HTTPException(status_code=400, detail=f"Invalid status. Valid: {VALID_ORDER_STATUSES}")
+    # ...
+```
+
+**Beispiel - Verwendung im Service:**
+```python
+from modules.temu.config.config import ORDER_STATUS_MAP, AMOUNT_DIVISOR
+
+def parse_order(api_response):
+    status_text = ORDER_STATUS_MAP.get(api_response['status'])  # Lookup
+    amount = api_response['amount'] / AMOUNT_DIVISOR             # Convert cents to EUR
+    return {
+        'status_text': status_text,
+        'amount': amount
+    }
+```
+
+### Vorteile der Centralized Config
+| Vorteil | Erklärung |
+| :--- | :--- |
+| **Single Source of Truth** | Ein Ort, wo alle Magic Numbers definiert sind |
+| **Einfache Fehlerverhinderung** | Keine Typos, keine inkonsistenten Werte |
+| **Runtime-Tuning** | Scheduler-Intervalle ändern ohne Code-Neustart |
+| **Testierbar** | Constants können in Tests gemockt werden |
+| **Versionskontrolle** | Historische Config-Änderungen nachvollziehbar |
 
 ---
 

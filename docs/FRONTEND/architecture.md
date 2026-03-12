@@ -4,7 +4,7 @@ PWA (Progressive Web App) für Worker Dashboard mit WebSocket Live-Updates, HTTP
 
 ---
 
-**Datum:** 6. Februar 2026
+**Datum:** 13. Februar 2026
 
 ---
 
@@ -597,36 +597,90 @@ Alle HTML-Dateien laden master.css **VOR** ihrem modul-spezifischen CSS:
 
 ---
 
-## 15. Central Navigation System
+## 15. Shared UI Components System
 
 ### Übersicht
-Alle Seiten nutzen eine **zentrale Navigation-Komponente** mit Burger-Menü, die dynamisch geladen wird.
+Das Frontend nutzt ein **zentralisiertes UI-Components System** zur Eliminierung von Duplikaten und konsistenter Benutzerinterktion.
 
 ### Komponenten
 
-#### 1. Navigation HTML
+#### 1. `progress-helper.js` – Progress-Anzeige (Refactored ✅)
+**Datei:** `frontend/components/progress-helper.js`
+
+Animierte Progress-Anzeige mit zwei Modi:
+
+**A. Auto-Increment Modus** (TEMU, PDF):
+```javascript
+// Automatische Inkrementierung (Prozent steigt kontinuierlich)
+showProgress('Processing...', 'auto');  
+// ProgressOverlay zeigt: 0% → 5% → 15% → 30% → ...
+updateProgressText('Importing data...');
+hideProgress();
+```
+
+**B. Simple Modus** (CSV):
+```javascript
+// Manuelle Kontrolle (0-100%)
+showProgress('Processing...', 0);
+updateProgress(25);   // 25%
+updateProgress(50);   // 50%
+updateProgress(100);  // 100%
+hideProgress();
+```
+
+**Features:**
+- ✅ `ProgressOverlay` Module Pattern mit gecachten DOM-Referenzen  
+- ✅ `DEFAULT_PROGRESS_STEPS` Konstante für Auto-Increment Intervalle
+- ✅ Rückwärtskompatible API (alte Aufrufe funktionieren noch)
+- ✅ Eliminiert ~55 Zeilen duplizierter Code aus temu.js + pdf.js
+
+#### 2. `ui-helpers.js` – Shared Toast & Log Formatting (NEW ✅)
+**Datei:** `frontend/components/ui-helpers.js`
+
+Zentrale Utilities für Toast-Notifications und Log-Formatting:
+
+```javascript
+// Toast Notifications
+showToast(message, type, duration);
+// Type: 'success' (grün), 'error' (rot), 'info' (blau)
+// Beispiel: showToast('✅ CSV uploaded', 'success', 3000);
+
+// Log Entry Formatting
+formatLogEntry(jobId, jobType, message, level);
+// Gibt HTML-String zurück für Log-Anzeige
+```
+
+**Features:**
+- ✅ Einheitliche Look & Feel über alle Module
+- ✅ Eliminiert ~75 Zeilen duplizierter Code aus temu.js + pdf.js  
+- ✅ Auto-Clearing nach Duration
+- ✅ Styled Toasts mit Icons und Animationen
+
+#### 3. `nav-loader.js` – Central Navigation (Refactored ✅)
+**Datei:** `frontend/components/nav-loader.js`
+
+Dynamisch geladene Navigation mit Burger-Menü:
+
+**Funktionen:**
+```javascript
+loadNavigation(pageKey, title);      // Navigation laden & aktualisieren
+toggleMenu();                         // Menü öffnen/schließen
+setActiveMenuItem(pageKey);           // Aktives Menü markieren
+setNavTitle(title);                   // Header-Titel setzen
+closeMenu();                          // Menü schließen (Helper-Funktion)
+initMenuBehavior();                   // Menü-Event-Listener setupen
+```
+
+**Features:**
+- ✅ Zentrale Menu-Close-Logik (3× Duplikat → 1× Funktion)
+- ✅ `NAV_CONFIG` Konstante (Magic Strings entfernt)
+- ✅ JSDoc für alle Funktionen
+- ✅ Lazy-Laden der Navigation Template
+
 **Datei:** `frontend/components/navigation.html`
 - Zentrale Definition aller Menüpunkte
 - Burger-Menü mit Links zu allen Modulen
 - Einmalige Pflege für alle Seiten
-
-#### 2. Navigation Loader
-**Datei:** `frontend/components/nav-loader.js`
-- Lädt Navigation dynamisch via Fetch
-- **Funktionen:**
-  - `loadNavigation(pageKey, title)` - Navigation laden & initialisieren
-  - `toggleMenu()` - Menü öffnen/schließen
-  - `setActiveMenuItem(pageKey)` - Aktives Menü markieren
-  - `setNavTitle(title)` - Header-Titel setzen
-
-#### 3. Progress Helper
-**Datei:** `frontend/components/progress-helper.js`
-- Animierte Progress-Anzeige für lange Operationen
-- **Funktionen:**
-  - `showProgress(text, percent)` - Progress-Overlay anzeigen
-  - `updateProgress(percent)` - Prozent aktualisieren (0-100)
-  - `updateProgressText(text)` - Text aktualisieren
-  - `hideProgress()` - Overlay verstecken
 
 ### Integration in neue Seiten
 
@@ -640,15 +694,16 @@ Alle Seiten nutzen eine **zentrale Navigation-Komponente** mit Burger-Menü, die
     <link rel="stylesheet" href="/static/meine-seite.css">
 </head>
 <body>
-    <!-- Navigation wird automatisch geladen -->
+    <!-- Shared Components: Navigation, Toast, Logging -->
     <script src="/components/nav-loader.js"></script>
+    <script src="/components/progress-helper.js"></script>
+    <script src="/components/ui-helpers.js"></script>
     <script>loadNavigation('page-key', '🎯 Titel der Seite');</script>
 
     <div class="container">
         <!-- Dein Content -->
     </div>
 
-    <script src="/components/progress-helper.js"></script>
     <script src="/static/meine-seite.js"></script>
 </body>
 </html>
@@ -687,5 +742,193 @@ Alle Seiten nutzen eine **zentrale Navigation-Komponente** mit Burger-Menü, die
 
 ---
 
-**Zuletzt aktualisiert:** 6. Februar 2026  
-**Status:** ✅ Voll funktionsfähig (PWA, WebSocket, HTTPS, CSS Consolidation, Central Navigation)
+## 16. Module Frontend Refactoring (13. Februar 2026) ✅
+
+### TEMU Frontend (`modules/temu/frontend/`)
+**Refactoring Status:** ✅ Abgeschlossen
+
+**Verbesserungen:**
+
+1. **Security – XSS in `renderJob()` behoben:**
+   ```javascript
+   // ❌ VORHER: innerHTML mit API-Daten (XSS)
+   jobElement.innerHTML = `<p>${job.name}</p>`;
+   
+   // ✅ NACHHER: DOM-Erstellung mit textContent
+   const nameEl = document.createElement('p');
+   nameEl.textContent = job.name;  // Automatisch escaped
+   jobElement.appendChild(nameEl);
+   ```
+
+2. **DRY – triggerJob() Helper (2× dupliziertes Pattern):**
+   ```javascript
+   // Generischer Helper für Job-Auslösung
+   triggerJob(jobId, jobType, onProgress, onSuccess)
+   // Ersetzt ~40 Zeilen duplicated trigger code
+   ```
+
+3. **DRY – showModal() Helper (2× Dialog mit inline Styles):**
+   ```javascript
+   // Modal-Dialog + Inline-Styles → CSS-Klassen + DOM-Erstellung
+   showModal(title, formFields, onSubmit)
+   // Eliminiert ~120 Zeilen Duplikat HTML
+   ```
+
+4. **Performance – DOM-Caching via `getProgressElements()`:**
+   ```javascript
+   // ❌ VORHER: 4× getElementById() pro Progress-Update
+   document.getElementById('progress');
+   document.getElementById('progress-bar');
+   // → Performance-Hit bei schnellen Updates
+   
+   // ✅ NACHHER: Lazy-Init Caching
+   getProgressElements() → { container, bar, text, ... }
+   ```
+
+5. **Code Quality:**
+   - Magic Strings → `TEMU_CONFIG` Konstante (Endpoints, Selectors, Timings)
+   - `formatLogEntry()` als eigene Funktion extrahiert
+   - `createVerboseCheckbox()` Helper extrahiert (war 2× dupliziert)
+   - CSS-Duplikate aus `master.css` entfernt
+   - Neue CSS-Klassen hinzugefügt (`.modal-form-grid`, `.modal-field-hint`, `.job-actions`)
+
+**Impact:** Low  
+**Breaking Changes:** None
+
+### PDF Frontend (`modules/pdf_reader/frontend/`)
+**Refactoring Status:** ✅ Abgeschlossen
+
+**Verbesserungen:**
+
+1. **DRY – performAction() Helper (6× identisches try/catch/progress Pattern):**
+   ```javascript
+   // ❌ VORHER: 6× Copy-Paste try/catch/progress/toast Code
+   // extract_rechnungen() { try { progress(); ... toast(); } catch {} }
+   // extract_werbung() { try { progress(); ... toast(); } catch {} }
+   
+   // ✅ NACHHER: Generischer Helper
+   performAction(endpoint, actionName, fileList, onSuccess)
+   // Alle 6 Actions nutzen jetzt gleiche Logik
+   ```
+
+2. **DRY – fileState Map statt separate Arrays:**
+   ```javascript
+   // ❌ VORHER: Separate Arrays
+   const werbungFiles = [];
+   const rechnungenFiles = [];
+   if (type === 'werbung') werbungFiles.push(file);
+   else rechnungenFiles.push(file);
+   
+   // ✅ NACHHER: Einheitliche Map-Struktur
+   const fileState = {
+       werbung: { files: [], status: 'idle' },
+       rechnungen: { files: [], status: 'idle' }
+   };
+   // Bessere Struktur, weniger if/else
+   ```
+
+3. **Security – XSS in `renderFileList()` behoben:**
+   ```javascript
+   // ❌ VORHER: innerHTML mit file.name
+   list.innerHTML = `<li>${file.name}</li>`;
+   
+   // ✅ NACHHER: DOM mit textContent
+   const li = document.createElement('li');
+   li.textContent = file.name;  // Safe
+   ```
+
+4. **Performance – DOM-Caching:**
+   ```javascript
+   // ❌ VORHER: 4× getElementById() pro Progress-Aufruf
+   // ✅ NACHHER: Gecachte `getProgressElements()`
+   ```
+
+5. **Code Quality:**
+   - Magic Strings → `PDF_CONFIG` Konstante
+   - Log-Formatierung → `formatLogEntry()` Funktion
+   - CSS-Duplikate entfernt (`.log-controls` aus master)
+   - `.status-info-grid` Klasse für Dynamisches Status-Grid
+
+**Impact:** Low  
+**Breaking Changes:** None
+
+---
+
+## 17. Service Worker & Dashboard Refactoring (13. Februar 2026) ✅
+
+### Service Worker (`frontend/service-worker.js`)
+**Verbesserungen:**
+
+1. **Modernisierung – Callbacks → async/await:**
+   ```javascript
+   // ❌ VORHER: .then() Callbacks
+   self.addEventListener('activate', event => {
+       event.waitUntil(
+           caches.keys().then(keys => {
+               return Promise.all(
+                   keys.map(key => caches.delete(key))
+               );
+           })
+       );
+   });
+   
+   // ✅ NACHHER: async/await
+   async function cleanOldCaches() {
+       const keys = await caches.keys();
+       await Promise.all(keys.map(key => caches.delete(key)));
+   }
+   ```
+
+2. **Naming – `ASSETS` → `PRECACHE_ASSETS`:**
+   - Beschreiblicher Name
+   - CLI Grep-Freundlichkeit
+
+3. **Version Bumping:**
+   - Cache-Version erhöht für neue Assets
+   - Service Worker Update triggert Client-Refresh
+
+### Dashboard (`frontend/index-new.html` + `dashboard.js`)
+**Verbesserungen:**
+
+1. **Cleanup – Inline Scripts → externe `dashboard.js`:**
+   ```html
+   <!-- ❌ VORHER: 30 Zeilen inline Script -->
+   <script>
+       // Status laden
+       // Offline rendering
+       // SW registrieren
+   </script>
+   
+   <!-- ✅ NACHHER: Externe Datei -->
+   <script src="/static/dashboard.js"></script>
+   ```
+
+2. **Neue dashboard.js Funktionen:**
+   ```javascript
+   // Config in DASHBOARD_CONFIG
+   // loadStatus() – API Status fetchen
+   // renderOfflineStatus() – Fallback UI
+   // registerServiceWorker() – PWA Registration
+   ```
+
+### Docs (`frontend/docs.html`)
+**Verbesserungen:**
+
+1. **CSS Reorganization – Inline Styles → master.css:**
+   ```html
+   <!-- ❌ VORHER: Inline <style> Tags -->
+   <style>
+       .docs-page { color: #333; }
+       .swagger-container { padding: 20px; }
+   </style>
+   
+   <!-- ✅ NACHHER: In dashboard.css verschoben -->
+   ```
+
+2. **Cache-Busting:**
+   - CSS Version hinzugefügt (`?v=20260213`)
+
+---
+
+**Zuletzt aktualisiert:** 13. Februar 2026  
+**Status:** ✅ Voll funktionsfähig (PWA, WebSocket, HTTPS, CSS Consolidation, Shared Components, Module Refactoring)

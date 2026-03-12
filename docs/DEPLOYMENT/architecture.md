@@ -2,9 +2,11 @@
 
 Minimale Dokumentation für Remote SSH + PM2 Setup.
 
+Hinweis: Diese Seite beschreibt den bisherigen PM2-Ansatz (Legacy). Für den aktuellen Go-Live mit `systemd` + HTTPS siehe `docs/DEPLOYMENT/systemd-cutover.md`.
+
 ---
 
-**Datum:** 5. Februar 2026
+**Datum:** 13. Februar 2026
 
 ---
 

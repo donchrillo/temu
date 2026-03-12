@@ -104,14 +104,21 @@ data/pdf_reader/
 
 ## Services (bestehende Logik)
 
-Die Business Logic liegt weiterhin in `src/modules/pdf_reader/`:
+Die Business Logic liegt in `modules/pdf_reader/services/`:
 - `werbung_service.py` - Werbung-Verarbeitung
 - `werbung_extraction_service.py` - Seiten-Extraktion
 - `rechnungen_service.py` - Rechnungs-Verarbeitung
 - `document_identifier.py` - Dokumenttyp-Erkennung
 - `patterns.py` - Regex-Patterns
+- `amount_utils.py` - Gemeinsame Betrags-Parsing-Utilities
 
-Das Modul ist ein **Re-Export-Wrapper** - keine Änderungen an der bestehenden Logik!
+Hinweis: Die Verarbeitung nutzt gemeinsame Helper (Parsing/Extraktion) und ist modular aufgebaut.
+
+## Upload-Sicherheit
+
+- Nur PDF-Dateien werden akzeptiert
+- Maximal 50 MB pro Datei
+- Dateinamen werden auf sichere Basisnamen reduziert (Path Traversal Schutz)
 
 ## Design
 

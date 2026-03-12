@@ -18,7 +18,7 @@ from ..config.settings import SQL_SERVER, SQL_USERNAME, SQL_PASSWORD
 _engines: Dict[str, Engine] = {}
 
 
-def _parse_server():
+def _parse_server() -> tuple[str, str]:
     """Split host/port from SQL_SERVER setting."""
     parts = SQL_SERVER.replace(':', ',').split(',')
     host = parts[0]

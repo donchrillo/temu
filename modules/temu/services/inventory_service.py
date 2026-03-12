@@ -64,7 +64,7 @@ class InventoryService:
             job_id: für Logging
         
         Returns:
-            {"inserted": n, "updated": n}
+            {"processed": n}
         """
         files = list(self.api_response_dir.glob("temu_sku_status*.json"))
         products: List[Dict[str, Any]] = []
@@ -82,11 +82,11 @@ class InventoryService:
                 })
         
         if not products:
-            return {"inserted": 0, "updated": 0}
+            return {"processed": 0}
         
         result = product_repo.upsert_products(products)
         log_service.log(job_id, "json_to_db", "INFO", 
-                      f"Produkte: {result['inserted']} neu, {result['updated']} aktualisiert")
+                      f"Produkte: {result['processed']} verarbeitet")
         return result
     
     def refresh_inventory_from_jtl(self, product_repo, inventory_repo, jtl_repo, job_id: str) -> Dict[str, int]:
@@ -134,11 +134,11 @@ class InventoryService:
             })
         
         if not items_to_upsert:
-            return {"inserted": 0, "updated": 0}
+            return {"processed": 0}
         
         # 3. Batch-Upsert in temu_inventory
         result = inventory_repo.upsert_inventory(items_to_upsert)
         
         log_service.log(job_id, "jtl_to_inventory", "INFO", 
-                      f"Bestände abgeglichen: {result['inserted']} neu, {result['updated']} aktualisiert")
+                      f"Bestände abgeglichen: {result['processed']} verarbeitet")
         return result

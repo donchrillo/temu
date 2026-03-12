@@ -1,0 +1,17 @@
+[Unit]
+Description=TEMU ERP FastAPI Backend
+After=network.target
+
+[Service]
+Type=simple
+User=chx
+Group=chx
+WorkingDirectory=/home/chx/jtl_erp
+EnvironmentFile=-/home/chx/jtl_erp/.env
+ExecStart=/home/chx/jtl_erp/.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --workers 1
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

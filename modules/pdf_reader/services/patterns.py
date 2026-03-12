@@ -1,5 +1,10 @@
-# Copied from streamlit-app/src/patterns.py
-pattern = {
+"""Sprach- und dokumenttypspezifische Patterns für die PDF-Datenextraktion.
+
+Jedes Land definiert Patterns für Rechnungen, Gutschriften und Werbung.
+Die Keys (rechnungsnummer, summe, etc.) werden von den Extraction-Services genutzt.
+"""
+
+PATTERNS = {
     "fr": {
         "rechnung": {
             "rechnungsnummer": "Facture n°:",

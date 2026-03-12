@@ -9,8 +9,10 @@ REST API Endpoints für PDF-Verarbeitung:
 - Download Ergebnisse
 """
 
+import asyncio
 import time
-from pathlib import Path
+from functools import partial
+from pathlib import Path, PurePosixPath
 from typing import List
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
@@ -33,17 +35,44 @@ from .services.rechnungen_service import process_rechnungen
 router = APIRouter()
 
 # ═══════════════════════════════════════════════════════════════
+# UPLOAD CONSTRAINTS
+# ═══════════════════════════════════════════════════════════════
+
+ALLOWED_EXTENSIONS = {".pdf"}
+MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
+
+# ═══════════════════════════════════════════════════════════════
 # HELPER FUNCTIONS
 # ═══════════════════════════════════════════════════════════════
 
 async def _save_uploads(files: List[UploadFile], target_dir: Path) -> list[str]:
-    """Speichere Uploads in das Zielverzeichnis."""
+    """Speichere Uploads in das Zielverzeichnis.
+
+    Sicherheitsmaßnahmen:
+    - Path Traversal Schutz: Nur der Dateiname wird verwendet (Directory-Komponenten entfernt)
+    - Dateitypvalidierung: Nur .pdf Dateien werden akzeptiert
+    - Größenlimit: Maximal 50 MB pro Datei
+    """
     ensure_directories()
     saved = []
     target_dir.mkdir(parents=True, exist_ok=True)
     for f in files:
-        dest = target_dir / f.filename
+        # Path Traversal Schutz: Nur den reinen Dateinamen extrahieren
+        safe_name = PurePosixPath(f.filename).name
+        if not safe_name:
+            raise HTTPException(status_code=400, detail="Ungültiger Dateiname")
+
+        # Dateiendung prüfen
+        if Path(safe_name).suffix.lower() not in ALLOWED_EXTENSIONS:
+            raise HTTPException(status_code=400, detail=f"Nur PDF-Dateien erlaubt, erhalten: '{safe_name}'")
+
         content = await f.read()
+
+        # Größenlimit prüfen
+        if len(content) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=413, detail=f"Datei zu groß ({len(content)} Bytes): '{safe_name}'. Max: {MAX_FILE_SIZE} Bytes")
+
+        dest = target_dir / safe_name
         with open(dest, "wb") as out:
             out.write(content)
         saved.append(str(dest))
@@ -53,6 +82,36 @@ def _dir_status(dir_path: Path) -> dict:
     """Status eines Verzeichnisses (Anzahl Dateien)."""
     files = [p for p in dir_path.glob("*") if p.is_file()]
     return {"path": str(dir_path), "count": len(files), "files": [p.name for p in files[:5]]}
+
+def _result_count(result) -> int:
+    """Sichere Längenbestimmung für Verarbeitungsergebnisse."""
+    return len(result) if hasattr(result, "__len__") else 0
+
+async def _run_in_executor(fn, *args):
+    """Führt eine synchrone Funktion im Thread-Pool aus, um den Event-Loop nicht zu blockieren."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, partial(fn, *args))
+
+async def _run_process_job(job_type: str, process_fn, job_id: str) -> dict:
+    """Generischer Runner für Process-Endpoints (Werbung/Rechnungen)."""
+    log_service.start_job_capture(job_id, job_type)
+    try:
+        result = await _run_in_executor(process_fn, job_id)
+        count = _result_count(result)
+        log_service.log(job_id, job_type, "INFO", f"Verarbeitet: {count} Einträge")
+        log_service.end_job_capture(success=True)
+        return {"status": "ok", "processed": True, "count": count, "job_id": job_id}
+    except Exception as e:
+        log_service.log(job_id, job_type, "ERROR", f"Process Fehler: {e}")
+        log_service.end_job_capture(success=False, error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+def _get_result_file(filename: str) -> FileResponse:
+    """Generischer Download für Excel-Ergebnisse."""
+    excel_path = ORDNER_AUSGANG / filename
+    if excel_path.exists():
+        return FileResponse(str(excel_path), filename=filename)
+    raise HTTPException(status_code=404, detail="Kein Ergebnis verfügbar. Bitte zuerst verarbeiten.")
 
 # ═══════════════════════════════════════════════════════════════
 # HEALTH & STATUS
@@ -100,16 +159,13 @@ async def upload_werbung(files: List[UploadFile] = File(default=[]), process: bo
         extracted_filenames = []
         
         if process:
-            # Wenn process=True, machen wir alles in einem Job
             log_service.log(job_id, "pdf_werbung_upload", "INFO", "Starte automatische Verarbeitung...")
             
-            extracted_files = extract_and_save_first_page(job_id)
+            extracted_files = await _run_in_executor(extract_and_save_first_page, job_id)
             extracted_filenames = [p.name for p in extracted_files]
             
-            result = process_ad_pdfs(job_id)
-            
-            count = len(result) if hasattr(result, '__len__') else 0
-            log_service.log(job_id, "pdf_werbung_upload", "INFO", f"Werbung verarbeitet: {count} Einträge")
+            result = await _run_in_executor(process_ad_pdfs, job_id)
+            log_service.log(job_id, "pdf_werbung_upload", "INFO", f"Werbung verarbeitet: {_result_count(result)} Einträge")
 
         log_service.end_job_capture(success=True)
         return {
@@ -131,7 +187,7 @@ async def extract_werbung():
     log_service.start_job_capture(job_id, "pdf_werbung_extract")
     
     try:
-        extracted_files = extract_and_save_first_page(job_id)
+        extracted_files = await _run_in_executor(extract_and_save_first_page, job_id)
         
         log_service.log(job_id, "pdf_werbung_extract", "INFO", f"Extrahiert: {len(extracted_files)} Dateien")
         log_service.end_job_capture(success=True)
@@ -150,33 +206,12 @@ async def extract_werbung():
 async def process_werbung():
     """Verarbeite extrahierte Werbungs-PDFs zu Excel."""
     job_id = f"pdf_werbung_process_{int(time.time())}"
-    log_service.start_job_capture(job_id, "pdf_werbung_process")
-    
-    try:
-        result = process_ad_pdfs(job_id)
-        
-        count = len(result) if hasattr(result, '__len__') else 0
-        log_service.log(job_id, "pdf_werbung_process", "INFO", f"Verarbeitet: {count} Einträge")
-        log_service.end_job_capture(success=True)
-        
-        return {
-            "status": "ok",
-            "processed": True,
-            "count": count,
-            "job_id": job_id
-        }
-    except Exception as e:
-        log_service.log(job_id, "pdf_werbung_process", "ERROR", f"Process Fehler: {e}")
-        log_service.end_job_capture(success=False, error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+    return await _run_process_job("pdf_werbung_process", process_ad_pdfs, job_id)
 
 @router.get("/werbung/result")
 async def get_werbung_result():
     """Download Werbungs-Excel-Export"""
-    excel_path = ORDNER_AUSGANG / "werbung.xlsx"
-    if excel_path.exists():
-        return FileResponse(str(excel_path), filename="werbung.xlsx")
-    raise HTTPException(status_code=404, detail="Kein Ergebnis verfügbar. Bitte zuerst verarbeiten.")
+    return _get_result_file("werbung.xlsx")
 
 # ═══════════════════════════════════════════════════════════════
 # RECHNUNGEN (INVOICES) ENDPOINTS
@@ -195,10 +230,8 @@ async def upload_rechnungen(files: List[UploadFile] = File(default=[]), process:
         result = None
         if process:
             log_service.log(job_id, "pdf_rechnungen_upload", "INFO", "Starte automatische Verarbeitung...")
-            result = process_rechnungen(job_id)
-            
-            count = len(result) if hasattr(result, '__len__') else 0
-            log_service.log(job_id, "pdf_rechnungen_upload", "INFO", f"Rechnungen verarbeitet: {count} Einträge")
+            result = await _run_in_executor(process_rechnungen, job_id)
+            log_service.log(job_id, "pdf_rechnungen_upload", "INFO", f"Rechnungen verarbeitet: {_result_count(result)} Einträge")
 
         log_service.end_job_capture(success=True)
         return {
@@ -216,33 +249,12 @@ async def upload_rechnungen(files: List[UploadFile] = File(default=[]), process:
 async def process_rechnungen_endpoint():
     """Verarbeite Rechnungs-PDFs zu Excel."""
     job_id = f"pdf_rechnungen_process_{int(time.time())}"
-    log_service.start_job_capture(job_id, "pdf_rechnungen_process")
-    
-    try:
-        result = process_rechnungen(job_id)
-        
-        count = len(result) if hasattr(result, '__len__') else 0
-        log_service.log(job_id, "pdf_rechnungen_process", "INFO", f"Verarbeitet: {count} Einträge")
-        log_service.end_job_capture(success=True)
-        
-        return {
-            "status": "ok",
-            "processed": True,
-            "count": count,
-            "job_id": job_id
-        }
-    except Exception as e:
-        log_service.log(job_id, "pdf_rechnungen_process", "ERROR", f"Process Fehler: {e}")
-        log_service.end_job_capture(success=False, error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+    return await _run_process_job("pdf_rechnungen_process", process_rechnungen, job_id)
 
 @router.get("/rechnungen/result")
 async def get_rechnungen_result():
     """Download Rechnungs-Excel-Export"""
-    excel_path = ORDNER_AUSGANG / "rechnungen.xlsx"
-    if excel_path.exists():
-        return FileResponse(str(excel_path), filename="rechnungen.xlsx")
-    raise HTTPException(status_code=404, detail="Kein Ergebnis verfügbar. Bitte zuerst verarbeiten.")
+    return _get_result_file("rechnungen.xlsx")
 
 # ═══════════════════════════════════════════════════════════════
 # LOGS & CLEANUP

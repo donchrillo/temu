@@ -2,10 +2,7 @@
 
 from typing import List, Dict, Any
 from sqlalchemy import text
-# Lazy import to avoid circular dependency
-def _get_log_service():
-    from ...logging.log_service import log_service
-    return log_service
+from .._log_helper import get_log_service as _get_log_service
 from ...connection import get_engine
 from ....config.settings import DB_TOCI
 from ..base import BaseRepository
@@ -39,7 +36,7 @@ class ProductRepository(BaseRepository):
         try:
             # Innere Logik zum Ausführen des Loops (vermeidet Code-Duplizierung)
             def process_batch(conn):
-                ins, upd = 0, 0
+                processed = 0
                 for p in products:
                     params = {
                         "sku": p.get("sku"),
@@ -52,22 +49,22 @@ class ProductRepository(BaseRepository):
                     result = conn.execute(sql, params)
                     
                     if result.rowcount > 0:
-                        upd += 1 # Merge liefert rowcount > 0 bei Insert & Update
-                return ins, upd
+                        processed += 1  # MERGE unterscheidet nicht zwischen INSERT/UPDATE
+                return processed
 
             if self._conn:
-                inserted, updated = process_batch(self._conn)
+                processed = process_batch(self._conn)
             else:
                 engine = get_engine(DB_TOCI)
                 with engine.connect() as conn:
                     with conn.begin(): # Transaktion starten
-                        inserted, updated = process_batch(conn)
+                        processed = process_batch(conn)
             
-            return {"inserted": inserted, "updated": updated}
+            return {"processed": processed}
 
         except Exception as e:
             _get_log_service().log("SYSTEM_ERROR", "productrepository" , "ERROR", f"ProductRepository upsert_products: {e}")
-            return {"inserted": 0, "updated": 0}
+            return {"processed": 0}
 
     def deactivate_missing(self, active_skus: List[str]) -> int:
         """Deactivate products not in active_skus"""

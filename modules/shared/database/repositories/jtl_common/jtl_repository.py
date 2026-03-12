@@ -3,10 +3,7 @@
 from typing import Optional, Dict, List
 from sqlalchemy import text, bindparam
 from sqlalchemy.engine import Connection
-# Lazy import to avoid circular dependency
-def _get_log_service():
-    from ...logging.log_service import log_service
-    return log_service
+from .._log_helper import get_log_service as _get_log_service
 from ....config.settings import DB_JTL
 from ..base import BaseRepository
 
@@ -254,9 +251,4 @@ class JtlRepository(BaseRepository):
             return str(row[0])
         except Exception as e:
             _get_log_service().log("SYSTEM_ERROR", "jtl_repository", "ERROR", f"JTL get_customer_number_by_order_id: {e}")
-            return None
-            kunden_nr = row[0]
-            return kunden_nr if kunden_nr else None
-        except Exception as e:
-            _get_log_service().log("SYSTEM_ERROR", "jtl_repository", "ERROR", f"JTL get_customer_number_by_email: {e}")
             return None

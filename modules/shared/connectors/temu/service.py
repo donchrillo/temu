@@ -2,6 +2,7 @@
 
 import json
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Dict, Optional
 from modules.temu.services.config import TEMU_API_RESPONSES_DIR
 from .api_client import TemuApiClient
@@ -13,6 +14,12 @@ from ...logging.log_service import log_service
 
 API_RESPONSE_DIR = TEMU_API_RESPONSES_DIR
 API_RESPONSE_DIR.mkdir(exist_ok=True)
+
+
+def _save_json(filepath: Path, data: dict) -> None:
+    """Speichere Daten als JSON-Datei."""
+    with open(filepath, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
 class TemuMarketplaceService(BaseMarketplaceConnector):
     """
@@ -38,7 +45,7 @@ class TemuMarketplaceService(BaseMarketplaceConnector):
     
     def fetch_orders(self, parent_order_status=0, days_back=7, job_id: Optional[str] = None) -> bool:
         """
-        Hole Orders von TEMU API und speichere lokal als JSON
+        Hole Orders von TEMU API und speichere lokal als JSON.
         
         Args:
             parent_order_status: Order Status Filter
@@ -48,102 +55,91 @@ class TemuMarketplaceService(BaseMarketplaceConnector):
         Returns:
             bool: True wenn erfolgreich
         """
-        
         try:
+            log_service.log(job_id, "temu_service", "INFO", "→ Hole Orders von TEMU API")
             
-            log_service.log(job_id, "temu_service", "INFO", 
-                              "→ Hole Orders von TEMU API")
-            
-            # Validiere Credentials
+            # Guard Clause: Credentials prüfen
             if not self.validate_credentials():
-                error_msg = "TEMU Credentials fehlen"
-                log_service.log(job_id, "temu_service", "ERROR", f"✗ {error_msg}")
-
-            
-            # Berechne Timestamps
-            now = datetime.now()
-            create_before = int(now.timestamp())
-            create_after = int((now - timedelta(days=days_back)).timestamp())
-
-            
-            # Abrufe Orders
-            log_service.log(job_id, "temu_service", "INFO", "  → Rufe Orders ab...")
-            
-            orders_response = self.orders_api.get_orders(
-                parent_order_status=parent_order_status,            
-                page_number=1, 
-                page_size=100, 
-                create_after=create_after,
-                create_before=create_before,
-                job_id=job_id
-            )
-            
-            if orders_response is None:
-                error_msg = "API Fehler beim Order-Abruf"
-                log_service.log(job_id, "temu_service", "ERROR", f"✗ {error_msg}")
+                log_service.log(job_id, "temu_service", "ERROR", "✗ TEMU Credentials fehlen")
                 return False
             
-            # Speichere Orders JSON
-            orders_file = API_RESPONSE_DIR / 'api_response_orders.json'
-            with open(orders_file, 'w', encoding='utf-8') as f:
-                json.dump(orders_response, f, ensure_ascii=False, indent=2)
+            # 1. Orders abrufen
+            orders_response = self._fetch_orders_from_api(parent_order_status, days_back, job_id)
+            if orders_response is None:
+                return False
             
-            log_service.log(job_id, "temu_service", "INFO", "  ✓ Orders gespeichert")  
-
+            # 2. Orders JSON speichern
+            _save_json(API_RESPONSE_DIR / 'api_response_orders.json', orders_response)
+            log_service.log(job_id, "temu_service", "INFO", "  ✓ Orders gespeichert")
             
-            # Extrahiere Orders
+            # 3. Orders extrahieren
             orders = orders_response.get("result", {}).get("pageItems", [])
-            
             if not orders:
                 log_service.log(job_id, "temu_service", "INFO", "  ✓ Keine Orders gefunden")
                 return True
             
             log_service.log(job_id, "temu_service", "INFO", f"  ✓ {len(orders)} Orders gefunden")
             
-            # Abrufe Versand- & Preisinformationen
+            # 4. Zusätzliche Informationen abrufen und speichern
+            self._fetch_and_save_order_details(orders, job_id)
+            
             log_service.log(job_id, "temu_service", "INFO", 
-                          "  → Rufe Versand- und Preisinformationen ab...")
-            
-            shipping_responses = {}
-            amount_responses = {}
-            
-            for order_item in orders:
-                parent_order_map = order_item.get("parentOrderMap", {})
-                parent_order_sn = parent_order_map.get("parentOrderSn")
-                
-                if not parent_order_sn:
-                    continue
-                
-                shipping_response = self.orders_api.get_shipping_info(parent_order_sn, job_id=job_id)
-                if shipping_response:
-                    shipping_responses[parent_order_sn] = shipping_response
-                
-                amount_response = self.orders_api.get_order_amount(parent_order_sn, job_id=job_id)
-                if amount_response:
-                    amount_responses[parent_order_sn] = amount_response
-            
-            # Speichere Zusammenfassungen
-            shipping_file = API_RESPONSE_DIR / 'api_response_shipping_all.json'
-            with open(shipping_file, 'w', encoding='utf-8') as f:
-                json.dump(shipping_responses, f, ensure_ascii=False, indent=2)
-            
-            amount_file = API_RESPONSE_DIR / 'api_response_amount_all.json'
-            with open(amount_file, 'w', encoding='utf-8') as f:
-                json.dump(amount_responses, f, ensure_ascii=False, indent=2)
-            
-
-            log_service.log(job_id, "temu_service", "INFO", 
-                              f"  ✓ Versand: {len(shipping_responses)}, Preise: {len(amount_responses)}")
-            log_service.log(job_id, "temu_service", "INFO", 
-                              "✓ API Orders erfolgreich heruntergeladen und gespeichert")
-            
+                          "✓ API Orders erfolgreich heruntergeladen und gespeichert")
             return True
         
         except Exception as e:
-            import traceback
-            error_trace = traceback.format_exc()
             log_service.log(job_id, "temu_service", "ERROR", f"✗ Fehler: {str(e)}")
-
+            return False
+    
+    def _fetch_orders_from_api(self, parent_order_status: int, days_back: int, 
+                                job_id: Optional[str]) -> Optional[dict]:
+        """Rufe Orders von TEMU API ab."""
+        log_service.log(job_id, "temu_service", "INFO", "  → Rufe Orders ab...")
+        
+        now = datetime.now()
+        create_before = int(now.timestamp())
+        create_after = int((now - timedelta(days=days_back)).timestamp())
+        
+        response = self.orders_api.get_orders(
+            parent_order_status=parent_order_status,
+            page_number=1,
+            page_size=100,
+            create_after=create_after,
+            create_before=create_before,
+            job_id=job_id
+        )
+        
+        if response is None:
+            log_service.log(job_id, "temu_service", "ERROR", "✗ API Fehler beim Order-Abruf")
+        
+        return response
+    
+    def _fetch_and_save_order_details(self, orders: list, job_id: Optional[str]) -> None:
+        """Rufe Versand- und Preisinformationen pro Order ab und speichere als JSON."""
+        log_service.log(job_id, "temu_service", "INFO", 
+                      "  → Rufe Versand- und Preisinformationen ab...")
+        
+        shipping_responses = {}
+        amount_responses = {}
+        
+        for order_item in orders:
+            parent_order_sn = order_item.get("parentOrderMap", {}).get("parentOrderSn")
+            if not parent_order_sn:
+                continue
+            
+            shipping_response = self.orders_api.get_shipping_info(parent_order_sn, job_id=job_id)
+            if shipping_response:
+                shipping_responses[parent_order_sn] = shipping_response
+            
+            amount_response = self.orders_api.get_order_amount(parent_order_sn, job_id=job_id)
+            if amount_response:
+                amount_responses[parent_order_sn] = amount_response
+        
+        _save_json(API_RESPONSE_DIR / 'api_response_shipping_all.json', shipping_responses)
+        _save_json(API_RESPONSE_DIR / 'api_response_amount_all.json', amount_responses)
+        
+        log_service.log(job_id, "temu_service", "INFO", 
+                      f"  ✓ Versand: {len(shipping_responses)}, Preise: {len(amount_responses)}")
     
     def fetch_shipping_info(self, order_id: str, job_id: Optional[str] = None) -> Dict:
         """Hole Versandinformationen"""
@@ -160,10 +156,3 @@ class TemuMarketplaceService(BaseMarketplaceConnector):
             Tuple: (success: bool, error_code: str, error_msg: str)
         """
         return self.orders_api.upload_tracking_data(tracking_data, job_id=job_id)
-    
-    # def fetch_inventory_skus(self, job_id: Optional[str] = None, page_size: int = 100) -> bool:
-    #     """
-    #     (Deaktiviert) SKU-Download ist jetzt im InventoryService.fetch_and_store_raw_skus.
-    #     Diese Methode bleibt auskommentiert, um doppelten Code zu vermeiden.
-    #     """
-    #     pass

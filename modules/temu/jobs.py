@@ -7,6 +7,7 @@ Registriert TEMU-spezifische Background-Jobs:
 """
 
 from workers.job_models import JobType
+from .services.config import ORDER_SYNC_INTERVAL_MINUTES, INVENTORY_SYNC_INTERVAL_MINUTES
 
 
 def register_jobs(scheduler_service):
@@ -25,7 +26,7 @@ def register_jobs(scheduler_service):
     # Job 1: Order Sync (5-Step Workflow)
     job_id = scheduler_service.add_job(
         job_type=JobType.SYNC_ORDERS,
-        interval_minutes=30,  # Default: alle 30 Minuten
+        interval_minutes=ORDER_SYNC_INTERVAL_MINUTES,
         description="TEMU Order Sync - 5-Step Workflow (Fetch, Import, XML, Upload, Tracking)",
         enabled=True
     )
@@ -34,7 +35,7 @@ def register_jobs(scheduler_service):
     # Job 2: Inventory Sync (4-Step Workflow)
     job_id = scheduler_service.add_job(
         job_type=JobType.SYNC_INVENTORY,
-        interval_minutes=60,  # Default: alle 60 Minuten
+        interval_minutes=INVENTORY_SYNC_INTERVAL_MINUTES,
         description="TEMU Inventory Sync - 4-Step Workflow (Download SKUs, Fetch Stock, Compare, Push)",
         enabled=True
     )

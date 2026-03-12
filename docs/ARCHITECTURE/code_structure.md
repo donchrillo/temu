@@ -4,20 +4,23 @@ Quick Reference für die TEMU-Integration Codebase.
 
 ---
 
-**Datum:** 5. Februar 2026
+**Datum:** 19. Februar 2026
 
 ---
 
-## 1. Projektbaum
+## 1. Projektbaum (Stand: 19. Februar 2026)
 
 ```
-/home/chx/temu/
+/home/chx/entwicklung/
 ├── .venv/                         # Python Virtual Environment
 ├── data/                          # Runtime Data (JSON, XML, PDFs)
 │   ├── csv_verarbeiter/
 │   │   ├── eingang/
 │   │   ├── ausgang/
-│   │   └── reports/
+│   │   ├── ausgang_archive/
+│   │   ├── archive/
+│   │   ├── reports/
+│   │   └── tmp/
 │   ├── pdf_reader/
 │   │   ├── eingang/{rechnungen,werbung}
 │   │   ├── ausgang/
@@ -27,35 +30,94 @@ Quick Reference für die TEMU-Integration Codebase.
 │       ├── xml/
 │       └── export/
 ├── docs/                          # Project Documentation
-├── frontend/                      # Main PWA Frontend
-│   ├── dashboard.css
-│   ├── index-new.html             # Main HTML (PWA Entry)
-│   ├── manifest.json
-│   ├── service-worker.js
-│   └── icons/
+├── frontend-react/                # React 19 SPA (aktiviert am 19.02.2026)
+│   ├── src/
+│   │   ├── components/           # UI Components (shadcn/ui)
+│   │   │   ├── ui/               # Button, Card, Input, Select, Dialog, Table, Tabs
+│   │   │   ├── layout/           # App Shell, Sidebar, Header
+│   │   │   └── shared/           # Spinner, Skeleton, Toast, Error Boundary
+│   │   ├── pages/                # Page Components
+│   │   │   ├── dashboard.tsx
+│   │   │   ├── temu-connector.tsx
+│   │   │   ├── csv/
+│   │   │   │   └── processor.tsx
+│   │   │   └── pdf-reader.tsx
+│   │   ├── hooks/                # Custom Hooks (use-api, use-websocket)
+│   │   ├── lib/                  # Utilities
+│   │   │   ├── api-client.ts    # axios instance + TypeScript Interfaces
+│   │   │   └── utils.ts         # Tailwind helper
+│   │   ├── types/                # TypeScript Type Definitions
+│   │   ├── App.tsx
+│   │   ├── main.tsx
+│   │   └── index.css
+│   ├── public/
+│   │   └── icons/
+│   ├── dist/                     # Build Output (wird von API served)
+│   ├── index.html
+│   ├── package.json
+│   ├── vite.config.ts            # Proxy: /api → localhost:8888
+│   ├── tailwind.config.js
+│   └── tsconfig.json
 ├── logs/                          # Runtime Logs by Module
 │   ├── app/
 │   ├── csv_verarbeiter/
-│   └── pdf_reader/
+│   ├── pdf_reader/
+│   └── temu/
 ├── modules/                       # ALL application modules (monorepo)
 │   ├── shared/                    # Common Infrastructure
 │   │   ├── config/                # Settings, .env file
-│   │   ├── connectors/temu/       # TEMU API Client
-│   │   ├── database/              # Connection, Repositories (TOCI + JTL)
-│   │   └── logging/               # Log Service, Logger Factory
+│   │   ├── connectors/
+│   │   │   ├── base_connector.py  # Basis-Connector Klasse
+│   │   │   └── temu/              # TEMU API Client
+│   │   ├── database/
+│   │   │   ├── connection.py      # SQLAlchemy Engine + Pool
+│   │   │   └── repositories/
+│   │   │       ├── _log_helper.py # Zentralisierte Log-Service Lazy-Init
+│   │   │       ├── base.py        # BaseRepository Pattern
+│   │   │       ├── common/        # Log Repository
+│   │   │       ├── jtl_common/    # JTL Lookups
+│   │   │       └── temu/          # TEMU Repositories
+│   │   │           ├── models.py  # Domain Models (Order, OrderItem)
+│   │   │           ├── inventory_repository.py
+│   │   │           ├── order_repository.py
+│   │   │           ├── order_item_repository.py
+│   │   │           └── product_repository.py
+│   │   ├── logging/               # Log Service + Logger Factory
+│   │   │   ├── log_service.py     # DB-basiertes Logging (Business Events)
+│   │   │   └── logger.py          # RotatingFileHandler (Technical Errors)
+│   │   ├── errors/                # Error Handling (NEW ✅ 19.02.2026)
+│   │   │   └── handler.py         # @handle_api_errors Decorator
+│   │   └── routers/               # Extrahiert aus main.py (NEW ✅ 19.02.2026)
+│   │       ├── static_router.py   # FastAPI StaticFiles (/static, /icons, /components)
+│   │       ├── ui_router.py       # UI-Routen → frontend-react/dist
+│   │       ├── log_router.py      # Log Management (/api/logs)
+│   │       └── websocket_router.py # WebSocket (/ws/logs)
 │   ├── temu/                      # TEMU Marketplace Integration
-│   │   ├── frontend/              # PWA Interface
-│   │   ├── services/              # Business Logic (Orders, Inventory, Tracking)
+│   │   ├── services/
+│   │   │   ├── config.py          # Zentralisierte Constants (15+ Named Constants)
+│   │   │   ├── base_workflow_service.py  # Shared Workflow Infrastructure
+│   │   │   ├── order_service.py          # Order Import (God Method → 5 Helpers)
+│   │   │   ├── order_workflow_service.py # 5-Step Order Sync
+│   │   │   ├── inventory_service.py      # Inventory Management
+│   │   │   ├── inventory_workflow_service.py # 4-Step Inventory Sync
+│   │   │   ├── tracking_service.py       # JTL→TEMU Tracking
+│   │   │   └── stock_sync_service.py     # Stock Delta Push
 │   │   ├── jobs.py                # APScheduler Job Definitions
 │   │   └── router.py              # FastAPI Routes
 │   ├── pdf_reader/                # PDF Processing Module
-│   │   ├── frontend/              # Upload Interface
-│   │   ├── services/              # PDF Extraction Logic
+│   │   ├── services/
+│   │   │   ├── amount_utils.py    # Zentralisierte Betrags-Utilities
+│   │   │   ├── config.py          # PDF Config
+│   │   │   ├── document_identifier.py    # PDF-Typ Erkennung
+│   │   │   ├── patterns.py               # Regex Patterns (DE/UK/IT/FR/SE)
+│   │   │   ├── rechnungen_service.py     # Rechnungs-Parsing
+│   │   │   ├── werbung_service.py        # Werbungs-Parsing
+│   │   │   └── werbung_extraction_service.py # Seiten-Extraktion
 │   │   └── router.py              # FastAPI Routes
 │   ├── jtl/                       # JTL ERP Integration
-│   │   └── xml_export/            # XML Generation Service
-│   └── csv_verarbeiter/           # CSV Processing (JTL2DATEV) [🔄 In Dev]
-│       ├── frontend/              # Light Apple-design UI
+│   │   └── xml_export/
+│   │       └── xml_export_service.py  # XML Generation (refactored)
+│   └── csv_verarbeiter/           # CSV Processing (JTL→DATEV) [✅ Abgeschlossen]
 │       ├── services/              # CSV Processing Logic
 │       └── router.py              # FastAPI Routes
 ├── workers/                       # APScheduler Job Management
@@ -63,33 +125,28 @@ Quick Reference für die TEMU-Integration Codebase.
 │   │   └── workers_config.json    # Schedule + Intervals
 │   ├── job_models.py
 │   ├── worker_service.py
-│   └── workers_config.py
-├── scripts/                       # Shell scripts (e.g., setup, export)
+│   ├── workers_config.py
+│   └── jobs_router.py             # Job Management Router (NEW ✅ 19.02.2026)
 ├── .gitignore
-├── CLAUDE.md
+├── AI_GUIDE.md                    # Haupt-Projektleitfaden für AI
 ├── db_schema.sql
 ├── ecosystem.config.js            # PM2 Configuration
-├── main.py                        # Unified FastAPI Gateway
-├── MIGRATION_STATUS.md
-└── requirements.txt
+├── main.py                        # Unified FastAPI Gateway (refactored: 419→162 Zeilen)
+├── requirements.txt
+└── start_dev.sh                   # Development Start Script
 ```
 
 ---
 
 ## 2. Kern-Module (Verantwortlichkeiten)
 
-### API Layer – `main.py`
+### API Layer – `main.py` (Refactored: 419→162 Zeilen ✅)
 **Verantwortung:** HTTP/WebSocket Schnittstelle
 
-```python
-# Endpoints:
-GET /api/health              # Health Check
-GET /api/jobs/status         # All Jobs Status
-GET /api/jobs/<job_id>       # Specific Job Details
-POST /api/jobs/<job_id>/execute # Trigger Job
-WebSocket /ws/logs           # Live Job Updates
-GET /icons/{filename}        # Icon-Serving
-```
+**Metriken (Phase 1 Refactoring - 19.02.2026):**
+- Vorher: 419 Zeilen
+- Nachher: 162 Zeilen (-61%)
+- Ziel: ~150 Zeilen ✅
 
 **Features:**
 - FastAPI (async, ASGI)
@@ -97,6 +154,42 @@ GET /icons/{filename}        # Icon-Serving
 - WebSocket für Live-Updates (JSON messages)
 - Error Handling mit HTTP Status Codes
 - CORS + Security Headers
+
+**Router-Struktur (extrahierte Module):**
+```
+main.py (162 Zeilen)
+├── modules/shared/routers/static_router.py     # /static, /icons, /components
+├── modules/shared/routers/ui_router.py         # /, /pdf, /temu, /csv, /docs
+├── modules/shared/routers/log_router.py        # /api/logs
+├── modules/shared/routers/websocket_router.py  # /ws/logs
+├── workers/jobs_router.py                      # /api/jobs
+├── modules/temu/router.py                      # /api/temu
+├── modules/pdf_reader/router.py                # /api/pdf
+└── modules/csv_verarbeiter/router.py           # /api/csv
+```
+
+---
+
+### PDF Reader – `modules/pdf_reader/`
+**Verantwortung:** PDF Upload, Extraktion (Werbung/Rechnungen) und Excel-Export
+
+**Kern-Dateien:**
+- `router.py` – Upload, Extract, Process, Result Endpoints
+- `services/rechnungen_service.py` – Rechnungs-Parsing
+- `services/werbung_service.py` – Werbungs-Parsing
+- `services/werbung_extraction_service.py` – Erste Seite extrahieren
+- `services/amount_utils.py` – Gemeinsame Betrags-Parsing-Utilities
+
+**Datenpfade:**
+- `data/pdf_reader/eingang/{rechnungen,werbung}` – Uploads
+- `data/pdf_reader/tmp` – extrahierte Einzelseiten (Werbung)
+- `data/pdf_reader/ausgang` – Excel-Exporte
+
+**Security/Robustheit:**
+- Uploads akzeptieren nur `.pdf`
+- 50 MB Größenlimit pro Datei
+- Dateiname wird bereinigt (Path Traversal Schutz)
+- `extract_text()` None-safe für bildbasierte PDFs
 
 ---
 
@@ -134,12 +227,15 @@ repo.update(data)          # Auto-commit
 **Verantwortung:** CRUD Operations pro Tabelle
 
 **Repositories:**
+- `_log_helper.py` – Zentralisierte `_get_log_service()` Lazy-Import (DRY, ersetzt 6× kopierte Funktion)
+- `base.py` – BaseRepository Pattern (gemeinsame CRUD-Methoden)
+- `temu/models.py` – Domain Models `Order` und `OrderItem` (extrahiert aus Repositories)
 - `temu/product_repository.py` – temu_products (Insert, Update, Get)
-- `temu/inventory_repository.py` – temu_inventory (Stock Tracking)
-- `temu/order_repository.py` – temu_orders (Order CRUD)
-- `temu/order_item_repository.py` – temu_order_items (Line Items)
-- `jtl_common/jtl_repository.py` – JTL Lookups (tArtikel, vLagerbestandProLager)
-- `common/log_repository.py` – Logging
+- `temu/inventory_repository.py` – temu_inventory (Stock Tracking, `mark_synced` mit explizitem Loop)
+- `temu/order_repository.py` – temu_orders (Order CRUD, `_ORDER_COLUMNS` Klassenkonstante, Batch-Query für Tracking)
+- `temu/order_item_repository.py` – temu_order_items (Line Items, `_ITEM_COLUMNS` Klassenkonstante)
+- `jtl_common/jtl_repository.py` – JTL Lookups (tArtikel, vLagerbestandProLager) — Dead Code bereinigt
+- `common/log_repository.py` – Logging (parametrisiertes `SELECT TOP`, Input-Clamping)
 
 **Interface:**
 ```python
@@ -160,6 +256,8 @@ class Repository:
 ### Marketplace Connector – `modules/shared/connectors/temu/`
 
 **Verantwortung:** TEMU API Kommunikation
+
+**Basis-Klasse:** `base_connector.py` – Gemeinsame Connector-Infrastruktur
 
 #### `api_client.py` – Low-Level
 ```python
@@ -202,16 +300,19 @@ class TemuService:
 
 **Verantwortung:** Domain Logic (Orders, Inventory, Tracking, Stock Sync)
 
-#### `order_service.py` – Order Import
+#### `order_service.py` – Order Import (Refactored ✅)
 ```python
 class OrderService:
     import_orders_from_json(json_data) → Inserted Orders
     
-    Steps:
-    1. Parse JSON
-    2. Deduplicate by order_id
-    3. Insert into DB (transactional)
-    4. Return Count
+    # Orchestrator Pattern (vorher 120-Zeilen God Method):
+    _load_json_responses()            # JSON-File-Handling + Validation
+    _parse_shipping_data(order)       # Customer/Address-Extraktion
+    _parse_amount_data(order)         # Pricing-Extraktion (AMOUNT_DIVISOR, TAX_RATE_DIVISOR)
+    _upsert_order(conn, order_data)   # Order Insert/Update Logic
+    _upsert_order_items(conn, items)  # Order Items Processing
+    
+    # Return: {"inserted": n, "updated": n, "errors": n}
 ```
 
 #### `inventory_service.py` – Inventory Management
@@ -228,7 +329,7 @@ class InventoryService:
     # Kalkuliert: available_stock = max(0, fBestand - nPuffer)
 ```
 
-#### `tracking_service.py` – Tracking Management
+#### `tracking_service.py` – Tracking Management (Refactored ✅)
 ```python
 class TrackingService:
     sync_tracking_from_jtl(order_ids) → Synced Count
@@ -237,27 +338,28 @@ class TrackingService:
     1. Find Orders without Tracking in DB
     2. Lookup Order ID in JTL (lvLieferschein)
     3. Get Tracking Number + Carrier
-    4. Map Carrier to TEMU Carrier ID
+    4. Map Carrier to TEMU Carrier ID (via CARRIER_MAPPING constant)
     5. Store in temu_orders.tracking_number
     
-    Carrier Mapping:
-    - "Hermes" → 1
-    - "DPD" → 2
-    - "UPS" → 3
-    etc.
+    # Carrier Mapping (aus config.py):
+    # CARRIER_MAPPING = {'dhl': 141252268, 'dpd': 998264853, ...}
+    # 201 → 159 Zeilen (-21%) nach Dead Code Cleanup
 ```
 
-#### `stock_sync_service.py` – Stock Delta Sync
+#### `stock_sync_service.py` – Stock Delta Sync (Refactored ✅)
 ```python
 class StockSyncService:
-    sync_stock_deltas() → Synced Count
+    sync_stock_deltas() → {"processed": n}
     
     Steps:
     1. Get all temu_inventory where needs_sync=1
     2. Group by goods_id
     3. For each group: Call TEMU API updateStockTarget
-    4. Mark synced_at, needs_sync=0
+    4. Mark synced_at, needs_sync=0 (sofort nach jedem Teil-Update)
     5. Log errors (missing ID, API fail)
+    
+    # 105 → 80 Zeilen (-24%) nach Dead Code Cleanup
+    # Counter vereinfacht: "processed" statt "inserted/updated" (MERGE unterscheidet nicht)
     
     Error Handling:
     - Skip if goods_id NULL
@@ -293,11 +395,71 @@ Step 5: Tracking→API
   - Upload Tracking to TEMU
   - Update Order Status
 
+#### `base_workflow_service.py` – Shared Workflow Infrastructure (NEW ✅)
+**Verantwortung:** Gemeinsame Connection-, Credential- und Job-Lifecycle-Verwaltung für alle Workflow-Services
+
+**Basis-Klasse für Workflow Services:**
+```python
+class BaseWorkflowService:
+    def _validate_credentials(self) → bool
+        # Check TEMU API keys vorhanden
+    
+    def _generate_job_id(self) → str
+        # Unique Job ID mit Timestamp
+    
+    def _cleanup_connections(self) → None
+        # Reset connection state, call subclass cleanup hook
+    
+    def _cleanup_service_caches(self) → None
+        # Override hook für Subclasses, z.B. für Domain-spezifische Repos
+    
+    def _get_temu_service(self) → TemuService
+        # Lazy-load shared TemuMarketplaceService
+    
+    def _get_jtl_repo(self) → JltRepository
+        # Lazy-load shared JltRepository
+```
+
+**Vorteile:**
+- ✅ **Eliminiert 55+ Zeilen Duplikation** zwischen OrderWorkflowService und InventoryWorkflowService
+- ✅ **DRY Prinzip:** Credential checking, job ID generation, connection lifecycle zentral
+- ✅ **Inheritance Chain:** OrderWorkflowService → BaseWorkflowService → object
+- ✅ **MRO validiert:** Korrekte Method Resolution Order für Override patterns
+- ✅ **Testierbar:** Mocks für Basis-Funktionalität möglich
+
+**Subclass Example:**
+```python
+class OrderWorkflowService(BaseWorkflowService):
+    def run_complete_workflow(self) → WorkflowResult:
+        self._validate_credentials()  # From base
+        job_id = self._generate_job_id()  # From base
+        
+        # Domain-specific logic
+        result = self._step_1_fetch_api()  # Nur in Order
+        result += self._step_2_import_db()  # Nur in Order
+        # ...
+        
+        self._cleanup_connections()  # From base
+        return result
+    
+    def _cleanup_service_caches(self) → None:
+        # Override for Order-specific repos
+        self.order_repo = None
+        self.order_item_repo = None
+        # ...
+```
+
+**Metriken:**
+- OrderWorkflowService: 312 → 259 Zeilen (-17% Duplikation)
+- InventoryWorkflowService: 211 → 189 Zeilen (-10% Duplikation)
+- BaseWorkflowService: 97 neue Zeilen (gut investiert)
+
 Architecture:
 - DI: Services injiziert (TemuService, Repos, JTL Repo)
 - Lazy Loading: Connections erst bei Bedarf
 - Error Handling: Catch + Log, nicht crash
 - Transactional: Context Manager für multi-step safety
+- **NEW:** BaseWorkflowService für shared infrastructure
 ```
 
 **Praktisches Example:**
@@ -369,17 +531,113 @@ DI Pattern: Wie OrderWorkflow
 
 ---
 
+### Config & Constants – `modules/temu/config/config.py`
+
+**Verantwortung:** Zentralisierte Geschäftskonstanten und Magic Numbers
+
+**Neue Constants (Prio 3 Refactoring: 15+ Named Constants):**
+```python
+# API Response Parsing
+AMOUNT_DIVISOR = 100              # TEMU API gibt Beträge in Cents
+TAX_RATE_DIVISOR = 1_000_000      # TEMU Tax Rate in Mikrotax (19000000 = 19%)
+
+# Status & Mapping
+ORDER_STATUS_MAP = {
+    1: 'pending',
+    2: 'processing',
+    3: 'shipped',
+    4: 'delivered',
+    5: 'cancelled',
+}
+VALID_ORDER_STATUSES = {0, 1, 2, 3, 4, 5}           # Router Validierung
+WORKFLOW_ORDER_STATUSES = {2, 3, 4, 5}             # Workflow execution filter
+
+# Carrier Mapping (TEMU Carrier IDs)
+CARRIER_MAPPING = {
+    'dhl': 141252268,
+    'dpd': 998264853,
+    'hermes': 414141241,
+    'ups': 141241414,
+    'gls': 141214124,
+}
+
+# Scheduler Defaults
+ORDER_SYNC_INTERVAL_MINUTES = 30          # Default: alle 30 Min
+INVENTORY_SYNC_INTERVAL_MINUTES = 60      # Default: alle 60 Min
+```
+
+**Vorteile:**
+- ✅ **Single Source of Truth:** Alle Magic Numbers zentral
+- ✅ **Weniger Fehler:** Keine Typos bei hardcoded values
+- ✅ **Einfach zu testen:** Constants mockbar
+- ✅ **Runtime-Tuning:** Interval-Änderungen ohne Code-Restart
+- ✅ **Konsistenz:** Router + Service validieren mit gleichen Sets
+
+**Metriken:**
+- config.py: 29 → 97 Zeilen (gut investiert)
+- ~20 Hardcoded Values ersetzt verteilt über 5+ Dateien
+- Imports in order_service.py, router.py, jobs.py aktualisiert
+
+---
+
 ### Services – `modules/shared/logging/`
 
-#### `log_service.py` – Centralized Logging
+#### `log_service.py` – Centralized Logging (DB-basiert)
 ```python
 class LogService:
     log_job(job_id, job_type, level, message, status=None)
     get_job_logs(job_id, limit=50)
     get_job_stats(job_id)  # success rate, duration avg
+    _ensure_table()  # Lazy Init — App startet auch ohne DB
 ```
 
 Speichert in `dbo.scheduler_logs` (SQL Server).
+**Lazy Init:** `ensure_table_exists()` aus `__init__` in Lazy `_ensure_table()` verschoben — Server startet auch wenn DB offline ist.
+
+#### `logger.py` – File-based Logging (Technical Errors)
+```python
+# RotatingFileHandler (10MB, 5 Backups) — verhindert unbegrenztes Log-Wachstum
+# Ersetzt früheren FileHandler
+# print()-Fallbacks durch app_logger.error() ersetzt
+```
+
+---
+
+### JTL XML-Export – `modules/jtl/xml_export/xml_export_service.py` (Refactored ✅)
+
+**Verantwortung:** XML-Generierung für JTL ERP Import (Bestellungen aus TEMU)
+
+**Methoden-Übersicht (logisch gruppiert):**
+```python
+class XmlExportService:
+    # ── Public API ──
+    export_to_xml(order_ids) → ExportResult
+    
+    # ── Order Processing ──
+    _process_single_order(order) → ET.Element      # Aus Loop-Body extrahiert
+    _fetch_order_items(order_id) → list[OrderItem]  # Item-Fetching isoliert
+    
+    # ── XML Generation ──
+    _generate_order_xml(order) → ET.Element
+    _add_header_fields(elem, order) → None          # Header-Felder extrahiert
+    _prettify_wrapped_xml(root, elem) → str         # DRY: 3× Pattern konsolidiert
+    _prettify_xml(xml_string) → str                 # + Control-Char Sanitization
+    
+    # ── Customer Lookup ──
+    _get_customer_number(order) → str               # Cache mit MAXSIZE=1000
+    
+    # ── Persistence ──
+    _save_xml_to_disk(root) → Path
+    _import_to_jtl(root) → None                     # copy.deepcopy() für append
+    _archive_order_to_docs(root) → None             # copy.deepcopy() für append
+    _save_xml_to_db(root) → None                    # copy.deepcopy() für append
+```
+
+**Wichtige Konstanten:**
+- `VERSAND_MWST_SATZ = 19.0` (ersetzt Magic Number `1.19`)
+- `_CUSTOMER_CACHE_MAXSIZE = 1000` (begrenzt Memory-Wachstum)
+
+**Bug Fix (Critical):** `ET.Element.append()` verschiebt Elemente statt zu kopieren → `copy.deepcopy()` in 3 Persistence-Methoden
 
 ---
 
@@ -682,4 +940,4 @@ pm2 monit                   # Live Monitoring
 
 ---
 
-**Summe:** TEUM-Integration ist modular aufgebaut mit klaren Verantwortlichkeiten pro Layer (API, DB, Services, Workflows, Jobs). DI + Lazy Loading für Flexibilität, Context Manager für Transactional Safety, Batch Queries für Performance.
+**Summe:** TEMU-Integration ist modular aufgebaut mit klaren Verantwortlichkeiten pro Layer (API, DB, Services, Workflows, Jobs). DI + Lazy Loading für Flexibilität, Context Manager für Transactional Safety, Batch Queries für Performance.

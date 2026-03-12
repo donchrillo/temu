@@ -6,7 +6,7 @@ Alle technischen Dokumentationen der TEMU-Integration sind hier organisiert. Die
 
 ---
 
-**Datum:** 5. Februar 2026
+**Datum:** 19. Februar 2026
 
 ---
 
@@ -24,17 +24,15 @@ Code-Struktur, Module, Data Flows
   - Performance Notes & Testing/Debugging
 
 ### [FRONTEND/](./FRONTEND/)
-PWA (Progressive Web App), WebSocket, HTTPS/WSS
+React 19 SPA (Vite, TypeScript, Tailwind, shadcn/ui)
 
 - **[architecture.md](./FRONTEND/architecture.md)** – Frontend & PWA Integration
-  - PWA Übersicht (Offline, Installation, Caching)
-  - Automatische Protokoll-Erkennung (HTTP ↔ HTTPS)
-  - WebSocket Integration (Live Job-Updates)
-  - manifest.json (PWA Metadaten & Icons)
-  - Service Worker (Offline-Caching, Lifecycle)
-  - Backend Icon-Route & Icon-Erstellung
-  - Installation auf Android/iOS
-  - Debugging & Deployment Checklist
+  - React 19 SPA Übersicht (Vite, TypeScript, Tailwind)
+  - shadcn/ui Components (Button, Card, Input, Select, Dialog, Table, Tabs)
+  - API-Client mit TypeScript Interfaces
+  - Vite Proxy (/api → localhost:8888)
+  - Service Worker für PWA-Funktion
+  - Deployment: Build nach dist/ → served via ui_router.py
 
 ### 📂 Struktur (Technische Layer)
 
@@ -174,5 +172,5 @@ Ausstehende Aufgaben & Zukünftige Erweiterungen
 
 ---
 
-**Zuletzt aktualisiert:** 5. Februar 2026  
+**Zuletzt aktualisiert:** 19. Februar 2026  
 **Wartbar:** Ja ✅

@@ -1,0 +1,17 @@
+# Domain anpassen, z. B. erp.example.de
+erp.example.de {
+    encode gzip zstd
+
+    @api path /api/*
+    reverse_proxy @api 127.0.0.1:8000
+
+    @ws path /ws/*
+    reverse_proxy @ws 127.0.0.1:8000
+
+    # React Frontend läuft als eigener Prozess auf Port 3000
+    reverse_proxy 127.0.0.1:3000
+
+    # API und WS nicht cachen
+    header @api Cache-Control "no-store"
+    header @ws Cache-Control "no-store"
+}

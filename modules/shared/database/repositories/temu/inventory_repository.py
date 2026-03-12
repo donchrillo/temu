@@ -2,10 +2,7 @@
 
 from typing import List, Dict, Any
 from sqlalchemy import text
-# Lazy import to avoid circular dependency
-def _get_log_service():
-    from ...logging.log_service import log_service
-    return log_service
+from .._log_helper import get_log_service as _get_log_service
 from ...connection import get_engine
 from ....config.settings import DB_TOCI
 from ..base import BaseRepository
@@ -34,7 +31,7 @@ class InventoryRepository(BaseRepository):
         try:
             # Helper Funktion für die innere Logik (damit wir den Loop nicht doppelt schreiben müssen)
             def process_items(conn):
-                ins, upd = 0, 0
+                processed = 0
                 for it in items:
                     params = {
                         "product_id": it["product_id"],
@@ -43,29 +40,27 @@ class InventoryRepository(BaseRepository):
                     }
                     result = conn.execute(sql, params)
                     
-                    # Hinweis: MERGE liefert rowcount=1 sowohl bei INSERT als auch UPDATE.
-                    # Eine genaue Unterscheidung ist ohne OUTPUT Clause im SQL schwierig.
-                    # Wir zählen hier einfach als "processed".
+                    # MERGE liefert rowcount=1 sowohl bei INSERT als auch UPDATE
                     if result.rowcount > 0:
-                        upd += 1 # Wir zählen es pauschal als Update/Upsert
-                return ins, upd
+                        processed += 1
+                return processed
 
             if self._conn:
                 # Wir sind bereits in einer Transaktion
-                inserted, updated = process_items(self._conn)
+                processed = process_items(self._conn)
             else:
                 # EIGENE Transaktion öffnen, aber NUR EINMAL für alle Items!
                 engine = get_engine(DB_TOCI)
                 with engine.connect() as conn:
                     with conn.begin(): # Explizite Transaktion starten
-                        inserted, updated = process_items(conn)
+                        processed = process_items(conn)
                         # Commit passiert automatisch am Ende von conn.begin() wenn kein Fehler
             
-            return {"inserted": inserted, "updated": updated}
+            return {"processed": processed}
 
         except Exception as e:
             _get_log_service().log("SYSTEM_ERROR", "inventoryrepository" , "ERROR", f"InventoryRepository upsert_inventory: {e}")
-            return {"inserted": 0, "updated": 0}
+            return {"processed": 0}
 
     def get_needs_sync(self) -> List[Dict[str, Any]]:
         """Get inventory items that need sync"""
@@ -106,9 +101,10 @@ class InventoryRepository(BaseRepository):
                 WHERE id = :id
             """
             
-            # _execute_stmt erkennt, dass items eine Liste von Dicts ist 
-            # und führt automatisch ein executemany aus.
-            self._execute_stmt(sql, items)
+            # Explizites Loop statt implizites executemany
+            # (executemany über _execute_stmt ist undokumentierter Seiteneffekt)
+            for item in items:
+                self._execute_stmt(sql, {"id": item["id"], "temu_stock": item["temu_stock"]})
             
             return len(items)
             

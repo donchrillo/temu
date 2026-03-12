@@ -1,9 +1,12 @@
 """XML Export Service - Business Logic für XML Generierung"""
 
+import copy
+import re
+import traceback
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Optional
 
 from modules.shared.database.repositories.temu.order_repository import OrderRepository
 from modules.shared.database.repositories.temu.order_item_repository import OrderItemRepository
@@ -11,6 +14,18 @@ from modules.shared.database.repositories.jtl_common.jtl_repository import JtlRe
 from modules.shared.logging.log_service import log_service
 from modules.shared.config.settings import JTL_WAEHRUNG, JTL_SPRACHE, JTL_K_BENUTZER, JTL_K_FIRMA
 from modules.temu.services.config import XML_OUTPUT_PATH, TEMU_EXPORT_DIR
+
+# XML-illegale Control-Characters (Tab 0x09, LF 0x0A, CR 0x0D sind erlaubt)
+_XML_ILLEGAL_CHARS_RE = re.compile(
+    '[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]'
+)
+
+# Standard MwSt-Satz für Versandkosten (19% Deutschland)
+VERSAND_MWST_SATZ = 19.0
+
+# Max Einträge im Kundennummer-Cache
+_CUSTOMER_CACHE_MAXSIZE = 1000
+
 
 class XmlExportService:
     """Business Logic - XML Generierung für JTL"""
@@ -27,11 +42,15 @@ class XmlExportService:
         self.order_repo = order_repo or OrderRepository()
         self.item_repo = item_repo or OrderItemRepository()
         self.jtl_repo = jtl_repo or JtlRepository()
-        self._customer_nr_cache = {}  # Cache Kundennummern pro Email
+        self._customer_nr_cache: dict[str, str] = {}
 
-    def export_to_xml(self, save_to_disk=True, import_to_jtl=True, save_to_db=True, job_id: Optional[str] = None) -> Dict:
-        """
-        Generiert XML aus Orders und exportiert zu JTL
+    # ──────────────────────────────────────────────
+    # Public API
+    # ──────────────────────────────────────────────
+
+    def export_to_xml(self, save_to_disk: bool = True, import_to_jtl: bool = True,
+                      save_to_db: bool = True, job_id: Optional[str] = None) -> dict:
+        """Generiert XML aus Orders und exportiert zu JTL.
 
         Args:
             save_to_disk: Speichere XML auf Festplatte
@@ -42,149 +61,165 @@ class XmlExportService:
         Returns:
             dict mit Ergebnissen
         """
-
         try:
+            log_service.log(job_id, "xml_export", "INFO", "→ Generiere XML aus Orders")
 
-            log_service.log(job_id, "xml_export", "INFO",
-                              "→ Generiere XML aus Orders")
-
-            # ===== Hole Orders mit status='importiert' =====
             orders = self._get_orders_to_export(job_id)
-
             if not orders:
-
                 log_service.log(job_id, "xml_export", "INFO",
-                                  "✓ Keine neuen Orders zum Exportieren")
+                                "✓ Keine neuen Orders zum Exportieren")
                 return {'exported': 0, 'jtl_imported': 0, 'success': False}
 
+            log_service.log(job_id, "xml_export", "INFO",
+                            f"  {len(orders)} Orders zum Exportieren gefunden")
 
-            else:
-                log_service.log(job_id, "xml_export", "INFO",
-                              f"  {len(orders)} Orders zum Exportieren gefunden")
-
-            # ===== Generate XML Root (für gesamt-export) =====
             root = ET.Element('tBestellungen')
             exported_count = 0
             jtl_import_count = 0
 
-            # ===== Für jede Order: XML generieren =====
             for order in orders:
-                try:
-                    # Hole Items für diese Order - versuche zuerst order_id, dann bestell_id
-                    items = self.item_repo.find_by_order_id(order.id)
+                success, jtl_ok = self._process_single_order(
+                    order, root, save_to_db=save_to_db, save_to_disk=save_to_disk,
+                    import_to_jtl=import_to_jtl, job_id=job_id,
+                )
+                if success:
+                    exported_count += 1
+                if jtl_ok:
+                    jtl_import_count += 1
 
-                    # Fallback: Wenn keine Items gefunden, versuche über bestell_id
-                    if not items:
-                        items = self.item_repo.find_by_bestell_id(order.bestell_id)
-                        if items:
-                            log_service.log(job_id, "xml_export", "WARNING",
-                                              f"  ⚠ {order.bestell_id}: Items via bestell_id gefunden (nicht over order_id)")
-
-                    # DEBUG: Logge Items
-                    log_service.log(job_id, "xml_export", "DEBUG",
-                                      f"  Order {order.bestell_id} (ID={order.id}): {len(items)} Items gefunden")
-
-                    # Generiere XML Element
-                    bestellung_elem = self._generate_order_xml(order, items, root)
-
-                    if bestellung_elem is not None:
-                        # ===== Step 0: Speichere Einzelne XML in TOCI DB =====
-                        if save_to_db:
-                            self._save_xml_to_db(order.bestell_id, bestellung_elem, job_id)
-
-                        # ===== Step 0b: Archiviere Einzel-XML in docs/exports =====
-                        if save_to_disk:
-                            self._archive_order_to_docs(order.bestell_id, bestellung_elem, job_id)
-
-                        # ===== Step 1: In JTL DB importieren =====
-                        if import_to_jtl and self.jtl_repo:
-                            jtl_success = self._import_to_jtl(order, bestellung_elem, job_id)
-                            if jtl_success:
-                                jtl_import_count += 1
-                                # Markiere Archiv-Eintrag als verarbeitet
-                                self.order_repo.mark_xml_export_processed(order.bestell_id)
-
-                        # ===== Step 2: Update Status in TOCI =====
-                        status_success = self._update_order_status(order.id, job_id)
-
-                        if status_success or not import_to_jtl:
-                            exported_count += 1
-
-                            log_service.log(job_id, "xml_export", "INFO",
-                                              f"  ✓ {order.bestell_id}: XML generiert")
-
-                        else:
-
-                            log_service.log(job_id, "xml_export", "WARNING",
-                                              f"  ⚠ {order.bestell_id}: Status Update fehlgeschlagen")
-                    else:
-
-                        log_service.log(job_id, "xml_export", "WARNING",
-                                          f"  ⚠ {order.bestell_id}: XML Generation fehlgeschlagen")
-
-                except Exception as e:
-                    import traceback
-                    error_trace = traceback.format_exc()
-
-                    log_service.log(job_id, "xml_export", "ERROR",
-                                      f"  ✗ Fehler bei Order {order.bestell_id}: {str(e)}")
-                    log_service.log(job_id, "xml_export", "ERROR", error_trace)
-
-
-            # ===== Step 3: Speichere komplette XML auf Festplatte =====
             if save_to_disk:
                 self._save_xml_to_disk(root, job_id)
 
-
             log_service.log(job_id, "xml_export", "INFO",
-                              f"✓ XML Export erfolgreich: {exported_count} exportiert, {jtl_import_count} JTL importiert")
+                            f"✓ XML Export erfolgreich: {exported_count} exportiert, "
+                            f"{jtl_import_count} JTL importiert")
 
             return {
                 'exported': exported_count,
                 'jtl_imported': jtl_import_count,
                 'success': exported_count > 0,
-                'message': f'{exported_count} Orders exportiert'
+                'message': f'{exported_count} Orders exportiert',
             }
 
         except Exception as e:
-            import traceback
             error_trace = traceback.format_exc()
-
             log_service.log(job_id, "xml_export", "ERROR",
-                              f"✗ XML Export Fehler: {str(e)}")
+                            f"✗ XML Export Fehler: {str(e)}")
             log_service.log(job_id, "xml_export", "ERROR", error_trace)
-
-
             return {'exported': 0, 'jtl_imported': 0, 'success': False}
 
-    def _get_orders_to_export(self, job_id: Optional[str] = None) -> List:
-        """Hole Orders mit status='importiert' und xml_erstellt=0"""
-        try:
-            orders = self.order_repo.find_by_status('importiert')
-            orders_to_export = [
-                order for order in orders
-                if not order.xml_erstellt
-            ]
+    # ──────────────────────────────────────────────
+    # Order Processing
+    # ──────────────────────────────────────────────
 
-            return orders_to_export
+    def _process_single_order(self, order, root: ET.Element, *,
+                              save_to_db: bool, save_to_disk: bool,
+                              import_to_jtl: bool,
+                              job_id: Optional[str] = None) -> tuple[bool, bool]:
+        """Verarbeite eine einzelne Order zu XML.
+
+        Returns:
+            tuple (exported, jtl_imported) — jeweils True bei Erfolg.
+        """
+        jtl_ok = False
+        try:
+            items = self._fetch_order_items(order, job_id)
+
+            log_service.log(job_id, "xml_export", "DEBUG",
+                            f"  Order {order.bestell_id} (ID={order.id}): {len(items)} Items gefunden")
+
+            bestellung_elem = self._generate_order_xml(order, items, root)
+            if bestellung_elem is None:
+                log_service.log(job_id, "xml_export", "WARNING",
+                                f"  ⚠ {order.bestell_id}: XML Generation fehlgeschlagen")
+                return False, False
+
+            if save_to_db:
+                self._save_xml_to_db(order.bestell_id, bestellung_elem, job_id)
+
+            if save_to_disk:
+                self._archive_order_to_docs(order.bestell_id, bestellung_elem, job_id)
+
+            if import_to_jtl and self.jtl_repo:
+                jtl_ok = self._import_to_jtl(order, bestellung_elem, job_id)
+                if jtl_ok:
+                    self.order_repo.mark_xml_export_processed(order.bestell_id)
+
+            status_success = self._update_order_status(order.id, job_id)
+            exported = status_success or not import_to_jtl
+
+            if exported:
+                log_service.log(job_id, "xml_export", "INFO",
+                                f"  ✓ {order.bestell_id}: XML generiert")
+            else:
+                log_service.log(job_id, "xml_export", "WARNING",
+                                f"  ⚠ {order.bestell_id}: Status Update fehlgeschlagen")
+
+            return exported, jtl_ok
 
         except Exception as e:
-
+            error_trace = traceback.format_exc()
             log_service.log(job_id, "xml_export", "ERROR",
-                              f"✗ Fehler beim Laden der Orders: {str(e)}")
+                            f"  ✗ Fehler bei Order {order.bestell_id}: {str(e)}")
+            log_service.log(job_id, "xml_export", "ERROR", error_trace)
+            return False, False
+
+    def _fetch_order_items(self, order, job_id: Optional[str] = None) -> list:
+        """Hole Items für eine Order — Fallback über bestell_id."""
+        items = self.item_repo.find_by_order_id(order.id)
+        if not items:
+            items = self.item_repo.find_by_bestell_id(order.bestell_id)
+            if items:
+                log_service.log(job_id, "xml_export", "WARNING",
+                                f"  ⚠ {order.bestell_id}: Items via bestell_id gefunden "
+                                f"(nicht über order_id)")
+        return items
+
+    def _get_orders_to_export(self, job_id: Optional[str] = None) -> list:
+        """Hole Orders mit status='importiert' und xml_erstellt=0."""
+        try:
+            orders = self.order_repo.find_by_status('importiert')
+            return [o for o in orders if not o.xml_erstellt]
+        except Exception as e:
+            log_service.log(job_id, "xml_export", "ERROR",
+                            f"✗ Fehler beim Laden der Orders: {str(e)}")
             return []
 
-    def _generate_order_xml(self, order, items, parent_elem) -> Optional[ET.Element]:
-        """Generiere XML Element für eine Order"""
+    # ──────────────────────────────────────────────
+    # XML Generation
+    # ──────────────────────────────────────────────
 
-        # ===== Haupt-Bestellung Element =====
+    def _generate_order_xml(self, order, items, parent_elem) -> Optional[ET.Element]:
+        """Generiere XML Element für eine Order."""
         bestellung = ET.SubElement(
             parent_elem, 'tBestellung',
             kFirma=JTL_K_FIRMA,
-            kBenutzer=JTL_K_BENUTZER
+            kBenutzer=JTL_K_BENUTZER,
         )
 
-        # ===== Header Daten =====
+        # Header Daten
+        self._add_header_fields(bestellung, order)
+
+        # Artikel-Positionen (VOR Kunde — JTL-Reihenfolge)
+        for item in items:
+            self._add_item_to_xml(bestellung, item)
+
+        # Versandkosten
+        self._add_shipping_costs_to_xml(bestellung, order)
+
+        # Kundennummer aus JTL (falls Email existiert)
+        kunden_nr = self._get_jtl_customer_number(order.email)
+
+        # Kunde, Lieferadresse, Zahlungsinfo
+        self._add_customer_to_xml(bestellung, order, kunden_nr)
+        self._add_delivery_address_to_xml(bestellung, order)
+        self._add_payment_info_to_xml(bestellung)
+
+        return bestellung
+
+    @staticmethod
+    def _add_header_fields(bestellung: ET.Element, order) -> None:
+        """Schreibe Header-Felder in das Bestellungs-Element."""
         ET.SubElement(bestellung, 'cSprache').text = JTL_SPRACHE
         ET.SubElement(bestellung, 'cWaehrung').text = JTL_WAEHRUNG
         ET.SubElement(bestellung, 'cBestellNr')
@@ -195,7 +230,6 @@ class XmlExportService:
         ET.SubElement(bestellung, 'dVersandDatum').text = (
             order.versanddatum.strftime('%d.%m.%Y') if order.versanddatum else ''
         )
-
         ET.SubElement(bestellung, 'cTracking').text = order.trackingnummer or ''
         ET.SubElement(bestellung, 'dLieferDatum')
         ET.SubElement(bestellung, 'cKommentar')
@@ -204,55 +238,32 @@ class XmlExportService:
         ET.SubElement(bestellung, 'dErstellt').text = (
             order.kaufdatum.strftime('%d.%m.%Y') if order.kaufdatum else ''
         )
-
         ET.SubElement(bestellung, 'cZahlungsartName').text = 'TEMU'
         ET.SubElement(bestellung, 'dBezahltDatum')
 
-        # ===== KORREKTE REIHENFOLGE: Artikel ZUERST, dann Kunde =====
-        # ===== Artikel-Positionen =====
-        for item in items:
-            self._add_item_to_xml(bestellung, item)
-
-        # ===== Versandkosten =====
-        self._add_shipping_costs_to_xml(bestellung, order)
-
-        # ===== Hole Kundennummer aus JTL (falls Email existiert) =====
-        kunden_nr = self._get_jtl_customer_number(order.email)
-
-        # ===== Kunde =====
-        self._add_customer_to_xml(bestellung, order, kunden_nr)
-
-        # ===== Lieferadresse =====
-        self._add_delivery_address_to_xml(bestellung, order)
-
-        # ===== Zahlungsinfo =====
-        self._add_payment_info_to_xml(bestellung)
-
-        return bestellung
-
-    def _add_item_to_xml(self, bestellung_elem, item):
-        """Füge einen Artikel zur Order hinzu"""
+    @staticmethod
+    def _add_item_to_xml(bestellung_elem: ET.Element, item) -> None:
+        """Füge einen Artikel als twarenkorbpos hinzu."""
         pos = ET.SubElement(bestellung_elem, 'twarenkorbpos')
 
         ET.SubElement(pos, 'cName').text = item.produktname or ''
         ET.SubElement(pos, 'cArtNr').text = item.sku or ''
         ET.SubElement(pos, 'cBarcode')
         ET.SubElement(pos, 'cEinheit')
-
         ET.SubElement(pos, 'fPreisEinzelNetto').text = f"{item.netto_einzelpreis:.5f}"
         ET.SubElement(pos, 'fPreis').text = f"{item.brutto_einzelpreis:.2f}"
-
         ET.SubElement(pos, 'fMwSt').text = f"{item.mwst_satz:.2f}"
         ET.SubElement(pos, 'fAnzahl').text = f"{item.menge:.2f}"
         ET.SubElement(pos, 'cPosTyp').text = 'standard'
         ET.SubElement(pos, 'fRabatt').text = '0.00'
 
-    def _add_shipping_costs_to_xml(self, bestellung_elem, order):
-        """Füge Versandkosten als Position hinzu"""
+    @staticmethod
+    def _add_shipping_costs_to_xml(bestellung_elem: ET.Element, order) -> None:
+        """Füge Versandkosten als twarenkorbpos hinzu."""
         versand_pos = ET.SubElement(bestellung_elem, 'twarenkorbpos')
 
         versandkosten_netto = float(order.versandkosten or 0)
-        versandkosten_brutto = versandkosten_netto * 1.19
+        versandkosten_brutto = versandkosten_netto * (1 + VERSAND_MWST_SATZ / 100)
 
         ET.SubElement(versand_pos, 'cName').text = 'TEMU Versand'
         ET.SubElement(versand_pos, 'cArtNr')
@@ -260,13 +271,15 @@ class XmlExportService:
         ET.SubElement(versand_pos, 'cEinheit')
         ET.SubElement(versand_pos, 'fPreisEinzelNetto').text = f"{versandkosten_netto:.5f}"
         ET.SubElement(versand_pos, 'fPreis').text = f"{versandkosten_brutto:.2f}"
-        ET.SubElement(versand_pos, 'fMwSt').text = '19.00'
+        ET.SubElement(versand_pos, 'fMwSt').text = f"{VERSAND_MWST_SATZ:.2f}"
         ET.SubElement(versand_pos, 'fAnzahl').text = '1.00'
         ET.SubElement(versand_pos, 'cPosTyp').text = 'versandkosten'
         ET.SubElement(versand_pos, 'fRabatt').text = '0.00'
 
-    def _add_customer_to_xml(self, bestellung_elem, order, kunden_nr: str = ''):
-        """Füge Kundendaten hinzu"""
+    @staticmethod
+    def _add_customer_to_xml(bestellung_elem: ET.Element, order,
+                             kunden_nr: str = '') -> None:
+        """Füge tkunde-Element hinzu."""
         kunde = ET.SubElement(bestellung_elem, 'tkunde')
 
         ET.SubElement(kunde, 'cKundenNr').text = kunden_nr or ''
@@ -292,30 +305,9 @@ class XmlExportService:
             order.kaufdatum.strftime('%d.%m.%Y') if order.kaufdatum else ''
         )
 
-    def _get_jtl_customer_number(self, email: str) -> str:
-        """Hole JTL Kundennummer per E-Mail (mit einfachem Cache)."""
-        if not email:
-            return ''
-        key = email.strip().lower()
-        if not key:
-            return ''
-
-        if key in self._customer_nr_cache:
-            return self._customer_nr_cache[key]
-
-        if not self.jtl_repo:
-            return ''
-
-        try:
-            kunden_nr = self.jtl_repo.get_customer_number_by_email(key) or ''
-            self._customer_nr_cache[key] = kunden_nr
-            return kunden_nr
-        except Exception:
-            # Kein hartes Fail: bei Fehlern leeres Feld -> JTL legt neuen Kunden an
-            return ''
-
-    def _add_delivery_address_to_xml(self, bestellung_elem, order):
-        """Füge Lieferadresse hinzu"""
+    @staticmethod
+    def _add_delivery_address_to_xml(bestellung_elem: ET.Element, order) -> None:
+        """Füge tlieferadresse-Element hinzu."""
         lieferadresse = ET.SubElement(bestellung_elem, 'tlieferadresse')
 
         ET.SubElement(lieferadresse, 'cAnrede')
@@ -334,8 +326,9 @@ class XmlExportService:
         ET.SubElement(lieferadresse, 'cFax')
         ET.SubElement(lieferadresse, 'cMail').text = order.email or ''
 
-    def _add_payment_info_to_xml(self, bestellung_elem):
-        """Füge Zahlungsinfo hinzu (leer für TEMU)"""
+    @staticmethod
+    def _add_payment_info_to_xml(bestellung_elem: ET.Element) -> None:
+        """Füge tzahlungsinfo-Element hinzu (leer für TEMU)."""
         zahlungsinfo = ET.SubElement(bestellung_elem, 'tzahlungsinfo')
 
         ET.SubElement(zahlungsinfo, 'cBankName')
@@ -349,133 +342,132 @@ class XmlExportService:
         ET.SubElement(zahlungsinfo, 'cIBAN')
         ET.SubElement(zahlungsinfo, 'cBIC')
 
-    def _import_to_jtl(self, order, bestellung_elem, job_id: Optional[str] = None) -> bool:
-        """
-        Importiere XML in JTL DB
+    # ──────────────────────────────────────────────
+    # Customer Lookup
+    # ──────────────────────────────────────────────
 
-        Args:
-            order: Order Domain Model
-            bestellung_elem: XML Element (einzelne Bestellung)
-            job_id: Optional - für strukturiertes Logging
+    def _get_jtl_customer_number(self, email: str) -> str:
+        """Hole JTL Kundennummer per E-Mail (mit einfachem Cache)."""
+        if not email:
+            return ''
+        key = email.strip().lower()
+        if not key:
+            return ''
 
-        Returns:
-            bool: True wenn erfolgreich
-        """
+        if key in self._customer_nr_cache:
+            return self._customer_nr_cache[key]
 
+        if not self.jtl_repo:
+            return ''
+
+        try:
+            kunden_nr = self.jtl_repo.get_customer_number_by_email(key) or ''
+            # Begrenze Cache-Größe um Memory-Leak zu vermeiden
+            if len(self._customer_nr_cache) >= _CUSTOMER_CACHE_MAXSIZE:
+                self._customer_nr_cache.clear()
+            self._customer_nr_cache[key] = kunden_nr
+            return kunden_nr
+        except Exception:
+            return ''
+
+    # ──────────────────────────────────────────────
+    # Persistence / JTL Import
+    # ──────────────────────────────────────────────
+
+    def _import_to_jtl(self, order, bestellung_elem: ET.Element,
+                       job_id: Optional[str] = None) -> bool:
+        """Importiere XML in JTL DB."""
         if not self.jtl_repo:
             return False
 
         try:
-            # ✅ WICHTIG: Wrap in Root Element!
-            root = ET.Element('tBestellungen')
-            root.append(bestellung_elem)
-
-            # Konvertiere zu XML String
-            xml_string = self._prettify_xml(root)
-
-            # Schreibe in JTL DB
+            xml_string = self._prettify_wrapped_xml(bestellung_elem)
             return self.jtl_repo.insert_xml_import(xml_string)
-
         except Exception as e:
-
             log_service.log(job_id, "xml_export", "WARNING",
-                              f"  ⚠ JTL Import Fehler für {order.bestell_id}: {str(e)}")
-
+                            f"  ⚠ JTL Import Fehler für {order.bestell_id}: {str(e)}")
             return False
 
-    def _update_order_status(self, order_id: int, job_id: Optional[str] = None) -> bool:
-        """
-        Setze xml_erstellt = 1 NACH erfolgreichem XML Export
-
-        Args:
-            order_id: Order Datenbank ID
-            job_id: Optional - für strukturiertes Logging
-
-        Returns:
-            bool: True wenn erfolgreich
-        """
+    def _update_order_status(self, order_id: int,
+                             job_id: Optional[str] = None) -> bool:
+        """Setze xml_erstellt = 1 NACH erfolgreichem XML Export."""
         try:
-            success = self.order_repo.update_xml_export_status(order_id)
-            return success
+            return self.order_repo.update_xml_export_status(order_id)
         except Exception as e:
-
             log_service.log(job_id, "xml_export", "ERROR",
-                              f"✗ Status Update Fehler: {str(e)}")
-
+                            f"✗ Status Update Fehler: {str(e)}")
             return False
 
-    def _save_xml_to_disk(self, root: ET.Element, job_id: Optional[str] = None):
-        """Speichere komplette XML auf Festplatte mit Zeitstempel"""
+    def _save_xml_to_disk(self, root: ET.Element,
+                          job_id: Optional[str] = None) -> None:
+        """Speichere komplette XML auf Festplatte mit Zeitstempel."""
         try:
             xml_string = self._prettify_xml(root)
 
-            # Generiere Dateinamen mit Zeitstempel: jtl_temu_bestellungen_YYYYMMDD_HHMMSS.xml
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             filename = f"jtl_temu_bestellungen_{timestamp}.xml"
-            # XML_OUTPUT_PATH ist bereits ein Path Objekt, daher direkt .parent verwenden
             filepath = XML_OUTPUT_PATH.parent / filename
-
-            # Stelle sicher, dass das Verzeichnis existiert
             filepath.parent.mkdir(parents=True, exist_ok=True)
 
-            with open(str(filepath), 'w', encoding='ISO-8859-1') as f:
+            with open(filepath, 'w', encoding='ISO-8859-1') as f:
                 f.write(xml_string)
 
-
             log_service.log(job_id, "xml_export", "INFO",
-                              f"  ✓ XML gespeichert: {filepath}")
-
-
+                            f"  ✓ XML gespeichert: {filepath}")
         except Exception as e:
-
             log_service.log(job_id, "xml_export", "ERROR",
-                              f"✗ XML Speicher-Fehler: {str(e)}")
+                            f"✗ XML Speicher-Fehler: {str(e)}")
 
-    def _archive_order_to_docs(self, bestell_id: str, bestellung_elem: ET.Element, job_id: Optional[str] = None) -> None:
-        """Speichere Einzel-XML pro Bestellung in data/temu/export mit Zeitstempel und Bestell-ID."""
+    def _archive_order_to_docs(self, bestell_id: str, bestellung_elem: ET.Element,
+                               job_id: Optional[str] = None) -> None:
+        """Speichere Einzel-XML pro Bestellung in data/temu/export."""
         try:
-            root = ET.Element('tBestellungen')
-            root.append(bestellung_elem)
-            xml_string = self._prettify_xml(root)
+            xml_string = self._prettify_wrapped_xml(bestellung_elem)
 
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             TEMU_EXPORT_DIR.mkdir(parents=True, exist_ok=True)
             archive_file = TEMU_EXPORT_DIR / f"temu_order_{bestell_id}_{timestamp}.xml"
 
-            with open(str(archive_file), 'w', encoding='ISO-8859-1') as f:
+            with open(archive_file, 'w', encoding='ISO-8859-1') as f:
                 f.write(xml_string)
 
             log_service.log(job_id, "xml_export", "INFO",
-                              f"  ↳ Einzel-XML archiviert (data/temu/export): {archive_file}")
-
+                            f"  ↳ Einzel-XML archiviert (data/temu/export): {archive_file}")
         except Exception as e:
             log_service.log(job_id, "xml_export", "WARNING",
-                              f"  ⚠ Einzel-XML Archiv-Fehler für {bestell_id}: {str(e)}")
+                            f"  ⚠ Einzel-XML Archiv-Fehler für {bestell_id}: {str(e)}")
 
-    def _save_xml_to_db(self, bestell_id: str, bestellung_elem: ET.Element, job_id: Optional[str] = None) -> bool:
-        """Speichere einzelne XML in TOCI DB (temu_xml_export Tabelle)"""
+    def _save_xml_to_db(self, bestell_id: str, bestellung_elem: ET.Element,
+                        job_id: Optional[str] = None) -> bool:
+        """Speichere einzelne XML in TOCI DB (temu_xml_export Tabelle)."""
         try:
-            # Wrap Element in Root für valides XML
-            root = ET.Element('tBestellungen')
-            # Kopiere das Element
-            root.append(bestellung_elem)
-
-            xml_string = self._prettify_xml(root)
-
-            # Speichere in TOCI Datenbank
+            xml_string = self._prettify_wrapped_xml(bestellung_elem)
             return self.order_repo.insert_xml_export(bestell_id, xml_string)
-
         except Exception as e:
             log_service.log(job_id, "xml_export", "WARNING",
-                              f"  ⚠ XML DB Speicher-Fehler für {bestell_id}: {str(e)}")
+                            f"  ⚠ XML DB Speicher-Fehler für {bestell_id}: {str(e)}")
             return False
 
+    # ──────────────────────────────────────────────
+    # XML Helpers
+    # ──────────────────────────────────────────────
 
-    def _prettify_xml(self, elem: ET.Element) -> str:
-        """Formatiere XML schön"""
+    def _prettify_wrapped_xml(self, bestellung_elem: ET.Element) -> str:
+        """Wrap ein einzelnes Bestellungs-Element in <tBestellungen> und prettify.
+
+        Nutzt deepcopy da append() das Element aus dem Original-Tree entfernen würde.
+        """
+        root = ET.Element('tBestellungen')
+        root.append(copy.deepcopy(bestellung_elem))
+        return self._prettify_xml(root)
+
+    @staticmethod
+    def _prettify_xml(elem: ET.Element) -> str:
+        """Formatiere XML schön — entfernt XML-illegale Control-Characters."""
         rough_string = ET.tostring(elem, 'utf-8')
-        reparsed = minidom.parseString(rough_string).toprettyxml(
+        cleaned = _XML_ILLEGAL_CHARS_RE.sub('', rough_string.decode('utf-8'))
+        reparsed = minidom.parseString(cleaned.encode('utf-8')).toprettyxml(
             indent="  ",
-            encoding="ISO-8859-1"
+            encoding="ISO-8859-1",
         )
         return reparsed.decode("ISO-8859-1")

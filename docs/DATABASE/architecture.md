@@ -1,7 +1,7 @@
 # 📘 TEMU Integration – Architektur-Dokumentation: Basis-Layer (Database)
 
 **Status:** 🟢 STABLE / VERIFIED  
-**Datum:** 5. Februar 2026  
+**Datum:** 13. Februar 2026  
 **Bereich:** Database Connectivity & Configuration
 
 ---

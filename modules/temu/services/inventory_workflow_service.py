@@ -1,20 +1,21 @@
-"""TEMU Inventory Workflow Service - 4-Schritt Orchestrierung (Final)"""
+"""TEMU Inventory Workflow Service - 4-Schritt Orchestrierung"""
 
+import traceback
 from datetime import datetime
 from typing import Dict, Any
 
-from modules.shared.config.settings import TEMU_APP_KEY, TEMU_APP_SECRET, TEMU_ACCESS_TOKEN, TEMU_API_ENDPOINT, DB_TOCI, DB_JTL
+from modules.shared.config.settings import DB_TOCI, DB_JTL
 from modules.shared import log_service
 from modules.shared import db_connect
 from modules.shared.database.repositories.temu.product_repository import ProductRepository
 from modules.shared.database.repositories.temu.inventory_repository import InventoryRepository
-from modules.shared.database.repositories.jtl_common.jtl_repository import JtlRepository
 from modules.shared.connectors.temu.service import TemuMarketplaceService
+from .base_workflow_service import BaseWorkflowService
 from .inventory_service import InventoryService
 from .stock_sync_service import StockSyncService
 
 
-class InventoryWorkflowService:
+class InventoryWorkflowService(BaseWorkflowService):
     """TEMU Inventory Workflow - Split Transactions for Stability"""
     
     def __init__(
@@ -23,18 +24,15 @@ class InventoryWorkflowService:
         inventory_service: InventoryService | None = None,
         stock_sync_service: StockSyncService | None = None,
     ):
+        super().__init__()
+        # Optionale Injection (für Tests)
         self._temu_service = temu_service
         self._inventory_service = inventory_service
         self._stock_sync_service = stock_sync_service
-
-        # Shared DB Connections (werden in den Blöcken gesetzt)
-        self._toci_conn = None
-        self._jtl_conn = None
         
-        # Repo Caches
+        # Domain-spezifische Repo Caches
         self._product_repo = None
         self._inventory_repo = None
-        self._jtl_repo = None
     
     def run_complete_workflow(self, mode: str = "quick", verbose: bool = False) -> bool:
         """
@@ -42,13 +40,12 @@ class InventoryWorkflowService:
         Splittet Transaktionen in Blöcke für bessere Stabilität.
         """
         start_time = datetime.now()
-        job_id = f"temu_inventory_{int(start_time.timestamp())}"
+        job_id = self._generate_job_id("temu_inventory")
         
         log_service.start_job_capture(job_id, "inventory_workflow")
 
         # Credential Guard
-        if not all([TEMU_APP_KEY, TEMU_APP_SECRET, TEMU_ACCESS_TOKEN]):
-            log_service.log(job_id, "inventory_workflow", "ERROR", "✗ TEMU Credentials nicht gesetzt!")
+        if not self._validate_credentials(job_id, "inventory_workflow"):
             log_service.end_job_capture(success=False, duration=0, error="missing credentials")
             return False
         
@@ -105,23 +102,21 @@ class InventoryWorkflowService:
             return True
             
         except Exception as e:
-            import traceback
             duration = (datetime.now() - start_time).total_seconds()
             error_trace = traceback.format_exc()
             log_service.log(job_id, "inventory_workflow", "ERROR", 
-                          f"✗ TEMU Inventory Sync fehlgeschlagen: {str(e)}\n{error_trace}")
+                          f"✗ TEMU Inventory Sync fehlgeschlagen: {str(e)}", error_text=error_trace)
             log_service.end_job_capture(success=False, duration=duration, error=str(e))
             return False
         finally:
             self._cleanup_connections()
 
-    def _cleanup_connections(self):
-        """Hilfsmethode zum Zurücksetzen der Referenzen"""
-        self._toci_conn = None
-        self._jtl_conn = None
+    def _cleanup_service_caches(self):
+        """Setzt domain-spezifische Repo-/Service-Caches zurück."""
         self._product_repo = None
         self._inventory_repo = None
-        self._jtl_repo = None
+        self._inventory_service = None
+        self._stock_sync_service = None
     
     # ... (Restliche Methoden) ...
 
@@ -174,38 +169,22 @@ class InventoryWorkflowService:
 
     # --- Lazy Loader Helpers ---
 
-    def _get_product_repo(self):
+    def _get_product_repo(self) -> ProductRepository:
         if self._product_repo is None:
             self._product_repo = ProductRepository(connection=self._toci_conn)
         return self._product_repo
 
-    def _get_inventory_repo(self):
+    def _get_inventory_repo(self) -> InventoryRepository:
         if self._inventory_repo is None:
             self._inventory_repo = InventoryRepository(connection=self._toci_conn)
         return self._inventory_repo
 
-    def _get_jtl_repo(self):
-        if self._jtl_repo is None:
-            self._jtl_repo = JtlRepository(connection=self._jtl_conn)
-        return self._jtl_repo
-
-    def _get_temu_service(self, verbose: bool = False):
-        if self._temu_service is None:
-            self._temu_service = TemuMarketplaceService(
-                app_key=TEMU_APP_KEY,
-                app_secret=TEMU_APP_SECRET,
-                access_token=TEMU_ACCESS_TOKEN,
-                endpoint=TEMU_API_ENDPOINT,
-                verbose=verbose,
-            )
-        return self._temu_service
-
-    def _get_inventory_service(self):
+    def _get_inventory_service(self) -> InventoryService:
         if self._inventory_service is None:
             self._inventory_service = InventoryService()
         return self._inventory_service
 
-    def _get_stock_sync_service(self):
+    def _get_stock_sync_service(self) -> StockSyncService:
         if self._stock_sync_service is None:
             self._stock_sync_service = StockSyncService()
         return self._stock_sync_service
