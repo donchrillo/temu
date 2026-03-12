@@ -26,6 +26,105 @@ Jeder Agent dokumentiert seine Änderungen in folgendem Format:
 
 ---
 
+### 2026-03-12 - GitHub Copilot (GPT-5.3-Codex)
+**Modul/Datei:** `docs/DEPLOYMENT/stable-vs-dev.md`, `docs/WORKFLOWS/stable-vs-dev.md`, `docs/README.md`
+**Art der Änderung:** Dokumentation / Strukturkorrektur
+**Beschreibung:** Workspace-Betriebsdoku aus `WORKFLOWS` in den fachlich passenderen Bereich `DEPLOYMENT` verschoben
+**Details:**
+- Datei von `docs/WORKFLOWS/stable-vs-dev.md` nach `docs/DEPLOYMENT/stable-vs-dev.md` umklassifiziert
+- Hintergrund: `docs/WORKFLOWS/` ist für technische Job-Orchestrierung gedacht, nicht für Team-/Workspace-Betriebsmodus
+- Index-Link in `docs/README.md` auf den neuen Pfad korrigiert
+**Betroffene Dokumentation:**
+- [x] docs/DEPLOYMENT/stable-vs-dev.md
+- [x] docs/README.md
+- [x] AGENT_CHANGES.md (dieser Eintrag)
+
+### 2026-03-12 - GitHub Copilot (GPT-5.3-Codex)
+**Modul/Datei:** `docs/WORKFLOWS/stable-vs-dev.md`, `docs/README.md`
+**Art der Änderung:** Dokumentation / Workflow-Governance
+**Beschreibung:** Verbindliche Trennung von Stable- und Dev-Workspace dokumentiert (`jtl_erp` vs `jtl_erp_dev`)
+**Details:**
+- Neue Workflow-Doku mit klaren Rollen für `~/jtl_erp` (stable) und `~/jtl_erp_dev` (development) erstellt
+- Promotion-Pfad festgehalten: Dev-Branch -> PR/Merge -> Pull in Stable
+- Port-/Runtime-Regeln ergänzt (`8000/3000/443` stable, `8888` dev) inkl. Port-Konflikt-Hinweis
+- Doku-Index um direkten Link auf die neue Workflow-Datei erweitert
+**Betroffene Dokumentation:**
+- [x] docs/WORKFLOWS/stable-vs-dev.md
+- [x] docs/README.md
+- [x] AGENT_CHANGES.md (dieser Eintrag)
+
+### 2026-03-12 - GitHub Copilot (GPT-5.3-Codex)
+**Modul/Datei:** `docs/API/architecture.md`
+**Art der Änderung:** Dokumentation / Aktualisierung
+**Beschreibung:** API-Architektur-Dokument auf den aktuellen Gateway- und Router-Stand gebracht
+**Details:**
+- Veraltete Standalone- und Beispielinhalte entfernt, die nicht mehr den echten Runtime-Endpunkten entsprachen
+- Aktuelle FastAPI-Komposition aus `main.py` dokumentiert (`/api/pdf`, `/api/temu`, `/api/csv`, `/api/jobs`, `/api/logs`, `/ws/logs`)
+- Dokumentationspfade und Ports korrigiert (`/api/docs`, `/api/redoc`, Dev-Port `8888`)
+- Transition-Bereich `modules/temu_datev` als noch nicht voll integrierter Bereich explizit markiert
+**Betroffene Dokumentation:**
+- [x] docs/API/architecture.md
+- [x] AGENT_CHANGES.md (dieser Eintrag)
+
+### 2026-03-12 - GitHub Copilot (GPT-5.4)
+**Modul/Datei:** `docs/README.md`, `docs/VISION_2026.md`, `docs/Archiv/PROJECT_ANALYSIS_2026.md`, `docs/Archiv/technical_debt_analysis_de.md`
+**Art der Änderung:** Dokumentation / Cleanup
+**Beschreibung:** Root-Dokumentation auf aktiven Stand bereinigt und veraltete Snapshot-Analysen ins Archiv verschoben
+**Details:**
+- `docs/README.md` von nicht vorhandenen Root-Links bereinigt (`CURRENT_STATUS.md`, `TODO_LIST.md`) und auf aktive Doku-Bereiche fokussiert
+- `docs/VISION_2026.md` von Prompt-/Entwurfsresten bereinigt und als klare strategische Vision neu strukturiert
+- `docs/PROJECT_ANALYSIS_2026.md` nach `docs/Archiv/PROJECT_ANALYSIS_2026.md` verschoben
+- `docs/technical_debt_analysis_de.md` nach `docs/Archiv/technical_debt_analysis_de.md` verschoben
+**Betroffene Dokumentation:**
+- [x] docs/README.md
+- [x] docs/VISION_2026.md
+- [x] AGENT_CHANGES.md (dieser Eintrag)
+
+### 2026-03-12 - GitHub Copilot (GPT-5.4)
+**Modul/Datei:** `AI_CLI_GUIDELINES.md`, `AGENTS.md`, `CLAUDE.md`
+**Art der Änderung:** Dokumentation / Aktualisierung
+**Beschreibung:** Gemeinsame CLI-Richtlinien an den aktuellen Projektstand angepasst und gestrafft
+**Details:**
+- Master-Datei klar als Operating Guide statt vollständige Architekturwahrheit positioniert
+- Aktiven Ist-Zustand des Projekts ergänzt: Single Gateway in `main.py`, aktives React-Frontend, `modules/temu_datev` als Übergangsbereich
+- Wrapper-Dateien `AGENTS.md` und `CLAUDE.md` auf knappe, aktuelle Kompatibilitätsfassung umgestellt
+**Betroffene Dokumentation:**
+- [x] AGENT_CHANGES.md (dieser Eintrag)
+
+### 2026-03-12 - GitHub Copilot (GPT-5.4)
+**Modul/Datei:** `AGENTS.md`, `CLAUDE.md`, `AI_CLI_GUIDELINES.md`
+**Art der Änderung:** Dokumentation / Konsolidierung
+**Beschreibung:** Tool-spezifische Guideline-Dateien auf kanonische CLI-übergreifende Richtlinie ausgerichtet
+**Details:**
+- In `AGENTS.md` und `CLAUDE.md` einen klaren Hinweis auf `AI_CLI_GUIDELINES.md` ergänzt
+- Bestehende Inhalte absichtlich nicht reduziert, damit Auto-Discovery von CLI-Tools nicht verloren geht
+- In der kanonischen Datei einen klaren Pflegehinweis für zukünftige Änderungen ergänzt
+**Betroffene Dokumentation:**
+- [x] AGENT_CHANGES.md (dieser Eintrag)
+
+### 2026-03-12 - GitHub Copilot (GPT-5.4)
+**Modul/Datei:** `AI_CLI_GUIDELINES.md`, `docs/AGENT_CHANGES.md`
+**Art der Änderung:** Dokumentation / Konsolidierung
+**Beschreibung:** Einheitliche, CLI-neutrale Guideline-Datei aus `AGENTS.md` und `CLAUDE.md` erstellt
+**Details:**
+- Beide vorhandenen Dateien verglichen und festgestellt, dass sie aktuell inhaltlich identisch sind
+- Neue kanonische Datei `AI_CLI_GUIDELINES.md` als gemeinsame Arbeitsgrundlage für Claude Code, OpenCode und andere Coding-CLIs angelegt
+- Tool-spezifische Dateien unverändert gelassen, damit bestehende Auto-Discovery-Mechanismen nicht unbeabsichtigt brechen
+**Betroffene Dokumentation:**
+- [x] AGENT_CHANGES.md (dieser Eintrag)
+
+### 2026-03-12 - GitHub Copilot (GPT-5.4)
+**Modul/Datei:** `docs/SPECS/TEMU_DATEV_INTEGRATION_PLAN.md`, `docs/README.md`
+**Art der Änderung:** Dokumentation / Planung
+**Beschreibung:** Umsetzungsplan für die Integration des importierten TEMU-DATEV-Subtrees in die Monorepo-Architektur erstellt
+**Details:**
+- Zielbild für Backend-, Frontend- und Datenpfad-Integration dokumentiert
+- Altstruktur auf Zielstruktur für Router, Services, Frontend und Laufzeitdaten gemappt
+- Doku-Übersicht um direkten Link auf den neuen Integrationsplan ergänzt
+**Betroffene Dokumentation:**
+- [x] docs/README.md
+- [x] AGENT_CHANGES.md (dieser Eintrag)
+
 ### 2026-03-12 - GitHub Copilot (GPT-5.4)
 **Modul/Datei:** `modules/temu_datev`, `docs/AGENT_CHANGES.md`
 **Art der Änderung:** Feature (Repository Integration)
