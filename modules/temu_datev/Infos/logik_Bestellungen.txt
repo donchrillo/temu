@@ -1,0 +1,109 @@
+Hier möchte ich zuerst erklären, wie sich die ganz Abrechnungslogik bei Temu zusammen setzt.
+
+Wir haben pro SKU einen BASISPREIS bei Temu festgelegt. Diesen Basispris bekommen wir immer zwingend von Temu ausbezahlt. Temu selber legt den Verkaufpris an den Kunden fest. Lass us das mal an einem einfachen Beispiel erläutern.
+
+Wir haben eine Kerze mit einem Basispreis von 15 Euro.
+Temu verkauft jetzt diese Kerze an den Kunden im Temu Shop für 23,80 Euro.
+Weil es bei Temu so ist, dass der Kunde für Bestellungen < 30 Euro immer 2,99 Euro Versand bezahlen muss, kommen diese noch hinzu.
+Die Gesamtrechnung, die dem Kunden in unserem Namen ausgestellt wird ist als 23,80 + 2,99 = 26,79 Euro Brutto inklusive MwST.
+Da die Rechnung in unserem Namen ausgestellt wird, schulden wir dem deutschen Finanzamt also in dem Fall 19% Mwst in Höhe von 4,28 Euro.
+
+Wir haben in dieser Rechnung also 4 Preiskomponenten.
+Arikel Netto Preis von 20 Euro
+Artikel MwSt von 3,80 Euro
+Versand Netto Preis von 2,51
+Versand Mwst von 0,48
+
+
+Wir machen ein weiteres Beispiel:
+
+Wir haben dieselbe KErze, aber TEmu verkauft die jetzt mit einem Rabatt an den Kunden. Am Ende bleibt nicht Netto weniger als unser Basispreis übrig. Das ist dann der FAll der Subvention durch Temu.
+Die Kerze wird für 13 Netto also 15,47 Brutto zuzüglich die 2,99 Brutto Versand verkauft.
+Es würden also nur 13 Euro Netto übirgbleiben. Das sind 2 Euro weniger als der Festgelegte Basispreis
+Deswegen stellt Temu eine Rechnung in unserem namen an sich selber aus über 2 Euro netto + UST.
+
+Wir haben dann für diesen Vorgang also 2 Rechnungen
+Die Kundenrechnung analog wie oben und dann noch zusätzlich die Subventionsrechnung.
+
+Das alles Betrifft Käufe von Kunden. Wenn der Kunde die Ware zurücksendet oder eine Erstattung ohne Rücksendung erhält oder aber eine Teilerstattung bekommt, dann wird in diesem FAll eine Gutschrift ausgestellt. Diese wird in den Berichten als "return" geführt und die Werte haben alle in negatives Vorzeichen
+
+Die Bestellungen und die Retouren bzw Gutschriften an den Kunden bekommen wir per Datei geliefert.
+
+BESTELLNUMMER - dies ist die externe Bestellnummer vom Marktplatz TEMU. Diese kommt in der Datev Datei in das Belegfeld1 | x
+MARKTPLATZ - DE (wenn wir mal erweitern und auch die anderen TEMU Martkplätze wie Frankreich, Spanien, Italien.... nutzen, stehen hier andere Kürzel)
+NAME DES EINKAUFSZENTRUMS - ToCi (das ist immer gleich, da wir nur einen SHOP auf TEMU Betreiben"
+ZAHLUNGSDATUM DER BESTELLUNG - Das Datum der Bestellung im Format tt. Month yy. Wir ändern das auf ddmm aber ohne führende Nullen beim Tag. Aus 08. Januar 25 wird 801 | x
+VERKAUFSART - Sales für einen Verkauf und return für eine Gutschrift | x
+VERKÃ„UFER-SKU - unsere Artikelnummer
+UMSATZSTEUERSATZ DER ARTIKEl - der jeweils gültige Umsatzsteuersatz. Da wir im Moment nur in DE verkaufen sind das aktuell immer 19%
+MENGE - anzahl der gekauften Artikel 
+HERKUNFTSLAND DER TRANSAKTION - Aus welchem Land wurden die ARtikel versendet. Bis jetzt immer DE!
+ANKUNFTSLAND DER TRANSAKTION - In welches LAnd wurden die Artikel versendet. Bis jetzt auch immer DE! Sobald wir hier in andere Länder versenden, ändert sich defintiv auch der Umsatzsteuersatz und in der Datev-Datei müssten wir im BU-Schlüssel die entsprechenden WErte eingeben und ein anderes Gegenkonto angeben, damit das Datev System erkennen kann, dass es hier ein anderes Konto benötigt wird und es sich um eine in einem anderen Land steuerbare Leistung handelt. Weiter hinten im Datev Bericht, werden dann die Umsatzsteuersätze angegeben. Bis jetzt brauchen wir das aber NOCH nicht
+PREIS DER ARTIKEL (OHNE UST.) - Der Netto Preis des oder der ARtikel. Das ist die Netto Summer aller gekauften Artikel | x
+ZUSCHUSSPREIS (OHNE UST.) - Hier kommt die Summe rein, die von Temu als Zuschuss an uns bezahlt wird | x
+VERSANDZUSCHUSSPREIS (OHNE MWST.) - das ist auch ein Zuschuss von Temu, den haben wir bis jetzt noch nie bekommen, aber wir sollten den betrachten | x
+PREIS DER SENDUNG (OHNE UST.) - das sind die Netto Versandkosten, sofern der Kunde welche bezahlen musste | x
+Versandetikett fÃ¼r die von der Plattform abgedeckte RÃ¼cksendung von gekauften Artikeln (inkl. Steuern, falls vorhanden) - wurde noch nie berechnet. Ich denke, das kommt bei uns auch nicht, da wir nicht den Fulfilment Service von Temu nutzen.
+Versandetikett fÃ¼r die Anpassung der von der Plattform abgedeckten RÃ¼cksendung von gekauften Artikeln (inkl. Steuern, falls vorhanden) - wurde bis jetzt auch noch nie etwas berechet. solange beachten wir das nicht.
+UMSATZSTEUERBETRAG DER ARTIKEl - der Umsatzsteuerbetrag des Artikels | x
+UMSATZSTEUERBETRAG DES ZUSCHUSSES - Umsatzsteuer des Zuschusses | x
+MEHRWERTSTEUERBETRAG DES VERSANDZUSCHUSSES - Umsatzsteuer eines eventuellen Versandkosten Zuschusses | x
+UMSATZSTEUERBETRAG DER SENDUNG - Umsatzsteuer der Versandkosten pauschale | x
+STEUERN INSGESAMT - Summe aller Steuern, aber für uns uninteressant, da wir die einzelnen Positionen nutzen
+WÃ„HRUNG - Sollte erstmal alle EURO sein
+RECHNUNGSNUMMER - Die Rechnungsnummer an den Kunden, kommt in die Spalte Buchungstext. Ist hier keine Rechnungsnummer enthalten, dann gibt es meist auch einen Eintrag zu derselben Bestellnummer mit der Verkaufsart return, so dass diese beiden Einträge sich aufheben. Dies ist der Fall, wenn der Kunde storniert, bevor wir die Ware versendet haben, wir schreiben dann in die Spalte Buchungstext 'Storno vor Versand' | x
+SUBVENTIONSRECHNUNGSNUMMER - die REchnungnummer für die Rechnung von uns an TEMU für die Subventions Zahlung. Dies kommt dann im FAlle einer Subventions Zahlung in die Spalte Buchungstext + dem Zusatz 'Subvention'
+
+Alles was wir für den Datensatz mit der Rechnung des Kunden bzw der Subventuions Rechnung benötigen, habe ich mit | x markiert
+
+Wir nehmen mal aus der 2025-12-Bestellungen.csv ein Beispiel dazu:
+
+Bestellung PO-076-04575786977913303 mit einer Gesamtsumme von 22,81 Euro
+Bitte suche in der 2025-12-Bestellungen.csv die Zeile mit der Bestellnummer PO-076-04575786977913303
+Dies ist ein Kauf ohne Subvention.
+Wir benötigen für die Erstellung des Datev Buchungssatzes die Spalten BESTELLNUMMER, ZAHLUNGSDATUM DER BESTELLUNG, VERKAUFSART, Summe aus PREIS DER ARTIKEL (OHNE UST.) + PREIS DER SENDUNG (OHNE UST.) + UMSATZSTEUERBETRAG DER ARTIKEl  + UMSATZSTEUERBETRAG DER SENDUNG
+
+Daraus erstellen wir dann einen Buchungssatz für Datev.
+Umsatz Brutto, Debitorkonto 10012000 mit Gegenkonto 4400000, bei Erlösen mit S und bei Erstattungen mit H
+
+Kurzer Exkurs zum Buchen in Datev bzw auf T-Konten.
+Wir nutzen den Kontenrahmen SKR04
+Wir haben 7-stellige Sachkonten und 8 stellige Debitoren
+DAs Debitoren Konto für TEMU ist 10012000
+Das Sachkonto für Erlöse in Deutschland ist 4400000. Sämtliche ERlöse werden im HABEN (H) gebucht. 
+Es gilt immer der Grundsatz beim Buchen "SOLL an HABEN". Das muss immer so sein.
+Wir buchen also DEBITOREN mit SOLL (S) an ERLÖSE mit HABEN (H).
+
+Warum ist das so?
+Das Debitorenkonto wächst im Soll. 
+Hier sind die wichtigsten Fakten dazu:
+Zunahme (Soll): Wenn ein Kunde eine Rechnung erhält, entsteht eine Forderung. Die Buchung lautet: Debitor an Umsatzerlöse. Das Debitorenkonto wird somit im Soll belastet.
+Abnahme (Haben): Wenn der Kunde die Rechnung bezahlt, verringert sich die Forderung. Die Buchung lautet: Bank an Debitor. Das Debitorenkonto wird im Haben gebucht. --> Dazu kommen wir später, wenn wir auf die ZAHLUNGSberichte ingehen!
+Grund: Da Debitoren (Forderungen aus Lieferungen und Leistungen) ein Aktivkonto sind (bzw. wie ein solches behandelt werden), mehren sich die Forderungen auf der linken Seite (Soll) und mindern sich auf der rechten Seite (Haben). 
+
+Das Erlöskonto (ein Erfolgskonto/Ertragskonto) wächst im Haben. 
+Hier sind die wichtigsten Punkte:
+Zunahme (Erlöse/Umsatz): Buchung im Haben.
+Abnahme (Storno/Rücksendung): Buchung im Soll.
+Hintergrund: Erlöskonten sind Unterkonten des Eigenkapitals. Da Erträge das Eigenkapital erhöhen und das Eigenkapitalkonto ein Passivkonto ist, werden Erträge im Haben gebucht. 
+Beispiel:
+Verkauf von Waren auf Rechnung:
+Forderungen (Soll) an Umsatzerlöse (Haben) + Umsatzsteuer (Haben). 
+
+Ich hoffe, dass erklärt die Funktionen von S und H
+
+Wichtig zu wissen und dass können wir ggf. in einer Config festalten und dann auch im Code dazu nutzen, ob wir mir S oder H buchen müssen,
+1. Es hängt vom Konto ab. Ist es ein aktiv oder ein Passiv Konto
+2. Es hängt vor Geschäftsvorfall ab. Ist es eine Rechnung oder Gutschrift. Oder ist es eine Zahlung oder Rückzahlung.
+
+Debitoren sind AKTIVKONTEN und die wachsen immer im SOLL
+Erlöskonten sind PASSIVKONTEN und die wachsen immer im HABEN.
+
+Suche mal nach PO-076-17129256812152236. hier gibt es 2 Einträge. Einmal für einen subventionierten Kauf und dann die Rückgabe mit der Erstattung dazu.
+Unser Basispreis für diesen Artikel beträgt wieder 15 Euro. Temu hat den Artikel für Netto 16,66 + Versand + Mwst verkauft.
+Gleichzeitig hat der Kunden einen Netto Rabatt von 2,88 bekommen, so dass der Kunde Netto nur 13,78 für den Artikel bezahlt hat. DAs ist weniger als unser Basispreis.
+Das sind 1,22 Netto Zuwenig. Deswegen hat Temu noch mal eine Rechnung über 1,22 netto + Mwst an sich selber erstellt.
+Diese WErte können sehr gut aus der Tabelle abgelesen werden. 
+Es müssen dann 2 Datensätze erstellt werden.
+
+Ich denke, damit können wir erstmal arbeiten.
