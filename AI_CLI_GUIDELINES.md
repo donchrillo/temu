@@ -29,9 +29,8 @@ When project reality and this file diverge, trust these sources in this order:
 
 - **Stack:** Python 3.11+ | FastAPI | SQLAlchemy 2.0 | MSSQL | Pydantic 2.5 | React 19 | TypeScript | Vite | Tailwind
 - **Architecture:** Modular monorepo with a single FastAPI gateway in `main.py`
-- **Dev API port:** `8888`
+- **API port:** `8000`
 - **Dev frontend port:** `3000`
-- **Production references:** Some code comments and legacy docs still mention `8000`; treat `8888` as the current development default
 
 ### Active backend structure
 
@@ -62,7 +61,7 @@ When project reality and this file diverge, trust these sources in this order:
 ```bash
 # API server (development)
 source .venv/bin/activate
-uvicorn main:app --reload --host 0.0.0.0 --port 8888
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 # Alternative development start helper
 ./start_dev.sh
