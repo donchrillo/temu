@@ -1,722 +1,161 @@
-# 📘 TEMU Integration – Architektur-Dokumentation: API-Layer
+# TEMU ERP - API Architecture
 
-**Status:** 🟢 STABLE / VERIFIED  
-**Datum:** 13. Februar 2026  
-**Bereich:** FastAPI Server, REST Endpoints, WebSocket Integration
-
----
-
-## Über diesen Layer
-Der API-Layer stellt die Schnittstelle zwischen dem Frontend (Web/Mobile) und der Business-Logik dar. Er basiert auf **FastAPI** (moderner als Flask/Django) mit **Uvicorn**-Server und **Starlette** Middleware.
+Status: STABLE / VERIFIED
+Last checked: 2026-03-12
+Scope: FastAPI Gateway, REST APIs, WebSocket, Router composition
 
 ---
 
-## 1. Architektur & Stack
+## 1. Purpose and Scope
 
-### Komponenten
-```
-Frontend (JavaScript/HTML)
-    ↓ HTTP/WebSocket
-FastAPI Server (Port 8000)
-    ├── REST Endpoints (/api/...)
-    ├── WebSocket Endpoints (/ws/...)
-    └── Middleware (CORS, Logging, Exception Handling)
-    ↓
-Business Logic Layer (Services, Repositories)
-    ↓
-Database Layer (SQLAlchemy, Connection Pooling)
-```
+This document describes the active API architecture in the repository.
+Source of truth is runtime code, primarily `main.py` and the routers under `modules/*` and `workers/*`.
 
-### Technology Stack
-| Komponente | Tech | Version | Zweck |
-| --- | --- | --- | --- |
-| **Server** | Uvicorn | Latest | ASGI Application Server |
-| **Framework** | FastAPI | 0.100+ | REST + WebSocket Framework |
-| **Middleware** | Starlette | Built-in | Request/Response Processing |
-| **Async** | asyncio | Python 3.12 | Concurrent Request Handling |
-| **Documentation** | OpenAPI/Swagger | Auto | Interactive API Docs |
+The system uses one unified FastAPI gateway and includes domain routers for:
+- PDF processing
+- TEMU integration
+- CSV processing
+- Job scheduling
+- Logs
+- WebSocket live updates
 
 ---
 
-## 2. Server Setup & Konfiguration
+## 2. Runtime Topology
 
-**Datei:** `main.py`
-
-### Initialization
-```python
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
-from contextlib import asynccontextmanager
-import os
-from modules.shared.database.connection import db_connect
-from modules.shared.logging.logger import app_logger as logger # Verwende 'logger' für Konsistenz in dieser Doku
-from datetime import datetime # Wird im Exception Handler benötigt
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Server-Lifecycle: Setup & Teardown"""
-    # Startup
-    logger.info("API Server starting...")
-    # Prüfe DB Connection
-    try:
-        # Annahme: DB_JTL ist für einen Test ausreichend und in .env gesetzt
-        with db_connect(os.getenv("DB_JTL")) as conn:
-            logger.info("✅ Database connected")
-    except Exception as e:
-        logger.error(f"❌ Database connection failed: {e}")
-        # Hier könnte man entscheiden, ob der Server trotzdem starten soll
-        # oder einen kritischen Fehler auslösen
-
-    yield  # Server läuft
-
-    # Shutdown
-    logger.info("API Server shutting down...")
-
-app = FastAPI(
-    title="TEMU Integration API",
-    description="Job Management & Real-time Logging",
-    version="1.0.0",
-    lifespan=lifespan # Lifespan-Manager integrieren
-)
-
-# CORS - Allow Frontend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # ⚠️ In Production: Spezifisch!
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-```
-
-### Features
-- ✅ **Automatic OpenAPI Docs:** `/docs` (Swagger UI)
-- ✅ **Async-First:** Alle Endpoints sind `async` für Concurrency
-- ✅ **Built-in Validation:** Request/Response Schemas via Pydantic
-- ✅ **Error Handling:** Automatische JSON-Error-Responses
-
----
-
-## 3. REST Endpoints – Pattern & Design
-
-### Grundmuster: Job Management
-```python
-from fastapi import APIRouter, HTTPException
-from workers.worker_service import WorkerService
-
-router = APIRouter(prefix="/api", tags=["jobs"])
-worker_service = WorkerService()
-
-@router.get("/jobs")
-async def list_jobs():
-    """
-    GET /api/jobs
-    Liefert alle Jobs mit aktuellem Status
-    """
-    try:
-        jobs = worker_service.get_all_jobs()
-        return [job.to_dict() for job in jobs]
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.post("/jobs/{job_id}/run-now")
-async def trigger_job(job_id: str, mode: str = "quick", verbose: bool = False):
-    """
-    POST /api/jobs/{job_id}/run-now?mode=full&verbose=true
-    Triggert einen Job sofort (nicht auf Schedule warten)
-    """
-    params = {"mode": mode, "verbose": verbose}
-    result = worker_service.trigger_job(job_id, params)
-    return {"status": "triggered", "job_id": job_id, "params": params}
-```
-
-### Response Format
-**Erfolg (200):**
-```json
-{
-  "job_id": "sync_inventory_temu",
-  "status": {
-    "status": "success",
-    "last_run": "2026-01-23T13:39:55.061887",
-    "next_run": "2026-01-23T13:44:55.176602",
-    "last_error": null,
-    "last_duration": 0.081407
-  }
-}
-```
-
-**Fehler (500):**
-```json
-{
-  "detail": "Job 'unknown_job' not found",
-  "status": 404
-}
-```
-
-### Modul-Endpoints: PDF Reader
-
-**Base-Route:** `/api/pdf`
-
-**Werbung:**
-- `POST /werbung/upload` (optional `?process=true`)
-- `POST /werbung/extract`
-- `POST /werbung/process`
-- `GET /werbung/result`
-
-**Rechnungen:**
-- `POST /rechnungen/upload` (optional `?process=true`)
-- `POST /rechnungen/process`
-- `GET /rechnungen/result`
-
-**Upload-Validierung (Security):**
-- Nur `.pdf` Dateien werden akzeptiert
-- Maximal 50 MB pro Datei
-- Dateiname wird auf sicheren Basisnamen reduziert (Path Traversal Schutz)
-
-**Fehlercodes (Upload):**
-- `400` bei ungultigem Dateinamen oder falscher Dateiendung
-- `413` bei zu grosser Datei
-
----
-
-## 4. WebSocket Integration – Real-time Logging
-
-### Pattern: Live Job Monitoring
-```python
-from fastapi import WebSocket, WebSocketDisconnect
-import asyncio
-import json
-import time
-from modules.shared.logging.logger import app_logger as logger # Verwende 'logger' für Konsistenz in dieser Doku
-
-@app.websocket("/ws/logs")
-async def websocket_logs(websocket: WebSocket):
-    """
-    WebSocket /ws/logs
-    Pushes live logs & job updates an verbundene Clients
-    """
-    await websocket.accept()
-    
-    try:
-        while True:
-            # Sammle aktuelle Job-States
-            # Für die Doku wird hier eine vereinfachte Version ohne WorkerService genutzt.
-            # In der echten Implementierung würde hier worker_service.get_all_jobs() aufgerufen.
-            jobs_serializable = [
-                {
-                    "job_id": "dummy_job", # Dummy-Daten für Doku
-                    "status": "running",
-                    "last_duration": 0.5,
-                }
-            ]
-            
-            # Sende an Client
-            await websocket.send_json({
-                "type": "jobs_update",
-                "data": jobs_serializable,
-                "timestamp": time.time()
-            })
-            
-            # Update-Frequenz: 2 Sekunden
-            await asyncio.sleep(2)
-            
-    except WebSocketDisconnect:
-        # Client hat sich selbst getrennt (normal)
-        logger.info(f"Client disconnected from /ws/logs")
-    except Exception as e:
-        logger.error(f"WebSocket error: {e}")
-        await websocket.close(code=1011)  # Server Error
-```
-
-### Client-Seite (JavaScript)
-```javascript
-const ws = new WebSocket("ws://localhost:8000/ws/logs");
-
-ws.onmessage = (event) => {
-  const msg = JSON.parse(event.data);
-  
-  if (msg.type === "jobs_update") {
-    console.log("Job Status Update:", msg.data);
-    updateJobsUI(msg.data);
-  }
-};
-
-ws.onerror = () => console.error("WebSocket error");
-ws.onclose = () => console.log("Connection closed");
-```
-
-### WebSocket States & Handling
-| State | Bedeutung | Handling |
-| --- | --- | --- |
-| **CONNECTING** | Verbindung wird aufgebaut | Warten |
-| **OPEN** | Verbunden, Messages fließen | Normal operation |
-| **CLOSING** | Server/Client will schließen | Graceful Shutdown |
-| **CLOSED** | Verbindung weg | Reconnect mit Backoff |
-
----
-
-## 5. Error Handling & HTTP Status Codes
-
-### Standard HTTP Codes
-```python
-@router.get("/jobs/{job_id}")
-async def get_job(job_id: str):
-    # Annahme: worker_service ist global oder über Abhängigkeit erreichbar
-    job = {"job_id": job_id, "is_active": True} # Dummy-Implementierung für Doku
-    
-    if not job: # Dummy-Prüfung für Doku
-        raise HTTPException(
-            status_code=404,  # Not Found
-            detail=f"Job '{job_id}' does not exist"
-        )
-    
-    if not job.get("is_active", True): # Dummy-Prüfung für Doku
-        raise HTTPException(
-            status_code=423,  # Locked
-            detail="Job is disabled"
-        )
-    
-    return {"job_id": job_id, "status": "dummy_status"} # job.to_dict()
-```
-
-### Status Code Reference
-| Code | Bedeutung | Beispiel |
-| --- | --- | --- |
-| **200** | OK | Erfolgreiche GET/POST |
-| **202** | Accepted | Async Job gestartet |
-| **400** | Bad Request | Ungültige Parameter |
-| **404** | Not Found | Job existiert nicht |
-| **423** | Locked | Ressource gesperrt |
-| **500** | Server Error | Unerwarteter Fehler |
-| **503** | Service Unavailable | DB down, Service crashed |
-
-### Global Exception Handler
-```python
-from fastapi import Request
-from fastapi.responses import JSONResponse
-from modules.shared.logging.logger import app_logger # Angepasster Import
-from datetime import datetime # Import hinzugefügt
-
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    """Fangt ALLE unkontrollierten Exceptions ab"""
-    app_logger.error(f"Unhandled exception: {exc}", exc_info=True)
-    
-    return JSONResponse(
-        status_code=500,
-        content={
-            "detail": "Internal Server Error",
-            "path": str(request.url),
-            "timestamp": datetime.now().isoformat()
-        }
-    )
+```text
+React Frontend (Vite dev: :3000 / build: frontend-react/dist)
+        |
+        | HTTP + WebSocket
+        v
+FastAPI Gateway (main.py)
+        |- /api/pdf/*        (modules/pdf_reader/router.py)
+        |- /api/temu/*       (modules/temu/router.py)
+        |- /api/csv/*        (modules/csv_verarbeiter/router.py)
+        |- /api/jobs/*       (workers/jobs_router.py)
+        |- /api/logs/*       (modules/shared/routers/log_router.py)
+        |- /ws/logs          (modules/shared/routers/websocket_router.py)
+        |- /assets, /icons   (modules/shared/routers/static_router.py)
+        |- /, /pdf, /temu... (modules/shared/routers/ui_router.py)
+        v
+Services / repositories / workflows / DB access
 ```
 
 ---
 
-## 6. Authentication & Security
+## 3. Gateway Configuration
 
-### API-Key Pattern (Optional)
-```python
-import os # Import hinzugefügt
-from fastapi import Header, HTTPException, Depends # Depends hinzugefügt
+Primary file: `main.py`
 
-async def verify_api_key(x_api_key: str = Header(...)):
-    """
-    Middleware für API-Key Validierung
-    """
-    if x_api_key != os.getenv("API_KEY"):
-        raise HTTPException(status_code=403, detail="Invalid API Key")
-    return x_api_key
+Key points:
+- FastAPI app with lifespan startup/shutdown logic.
+- Startup validation via `validate_startup_config()`.
+- Scheduler lifecycle managed by `SchedulerService`.
+- CORS currently open (`allow_origins=["*"]`) for development.
+- API docs mounted at:
+  - `/api/docs`
+  - `/api/redoc`
+- Health endpoint:
+  - `GET /api/health`
 
-@router.post("/jobs/{job_id}/run-now")
-async def trigger_job(
-    job_id: str,
-    api_key: str = Depends(verify_api_key)
-):
-    # Nur wenn API-Key korrekt
-    # Annahme: worker_service ist global oder über Abhängigkeit erreichbar
-    return {"status": "triggered", "job_id": job_id, "auth_status": "API Key OK"} # worker_service.trigger_job(job_id)
-```
-
-### CORS Best Practices
-```python
-# ❌ PRODUCTION UNSICHER:
-app.add_middleware(CORSMiddleware, allow_origins=["*"])
-
-# ✅ PRODUCTION SICHER:
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "https://myapp.com",
-        "https://www.myapp.com"
-    ],
-    allow_credentials=True,
-    allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type", "Authorization"],
-    max_age=600  # 10 Minuten CORS Cache
-)
-```
+Port usage:
+- Development API port: `8888` (`start_dev.sh`)
+- Production templates/reference often use port `8000` (deploy level)
 
 ---
 
-## 7. Request/Response Validation mit Pydantic
+## 4. Router Composition (Current)
 
-### Model Definition
-```python
-from pydantic import BaseModel, Field
-from typing import Optional
+### Domain routers
+- `app.include_router(get_pdf_router(), prefix="/api/pdf", tags=["PDF Processor"])`
+- `app.include_router(get_temu_router(), prefix="/api/temu", tags=["TEMU Integration"])`
+- `app.include_router(csv_router, prefix="/api/csv", tags=["CSV Verarbeiter"])`
 
-class JobRequest(BaseModel):
-    """Validiertes Request-Schema"""
-    mode: str = Field("quick", description="quick oder full")
-    verbose: bool = Field(False, description="Debug Output")
-    
-    # Automatische Validierung:
-    # - mode MUSS string sein
-    # - verbose MUSS bool sein
-    # Falls nicht → 422 Unprocessable Entity
-
-class JobResponse(BaseModel):
-    """Validiertes Response-Schema"""
-    job_id: str
-    status: str
-    last_error: Optional[str] = None
-    last_duration: float
-```
-
-### Verwendung
-```python
-@router.post("/jobs/{job_id}/run-now")
-async def trigger_job(
-    job_id: str,
-    request: JobRequest  # ← Automatische Validierung!
-):
-    # request.mode ist garantiert ein String
-    # request.verbose ist garantiert ein Bool
-    # Annahme: worker_service ist global oder über Abhängigkeit erreichbar
-    return {"status": "triggered", "job_id": job_id, "params": request.dict()} # worker_service.trigger_job(job_id, request.dict())
-
-# ❌ Falscher Request (422 Response):
-POST /api/jobs/sync_inventory/run-now
-{
-  "mode": "quick",
-  "verbose": "yes"  # ← String statt Bool!
-}
-
-# Response:
-{
-  "detail": [
-    {
-      "loc": ["body", "verbose"],
-      "msg": "value is not a valid boolean",
-      "type": "type_error.boolean"
-    }
-  ]
-}
-```
+### Shared/system routers
+- Logs router: `get_log_router()` -> `/api/logs/*`
+- Jobs router: `get_jobs_router(scheduler)` -> `/api/jobs/*`
+- WebSocket router: `get_websocket_router(...)` -> `/ws/logs`
+- UI router: `get_ui_router(frontend_dir)` -> `/`, `/pdf`, `/temu`, `/csv`, `/docs`, `/manifest.json`
+- Static assets: `get_static_router(app, frontend_dir)` -> `/assets`, `/icons`
 
 ---
 
-## 8. Performance & Optimization
+## 5. Important Endpoint Groups
 
-### Async Best Practices
-```python
-import time # Hinzugefügt für time.sleep()
+### Gateway/system
+- `GET /api/health`
+- `GET /api/docs`
+- `GET /api/redoc`
 
-# ❌ BLOCKIEREND - Nur 1 Request gleichzeitig:
-@app.get("/jobs")
-def list_jobs():  # ← Keine async!
-    time.sleep(2)  # ← Blockiert ALLE Requests!
-    # Annahme: worker_service ist global oder über Abhängigkeit erreichbar
-    return [] # worker_service.get_all_jobs() # Dummy-Implementierung für Doku
+### Jobs (`workers/jobs_router.py`)
+- `GET /api/jobs`
+- `GET /api/jobs/{job_id}`
+- `POST /api/jobs/{job_id}/run-now`
+- `POST /api/jobs/{job_id}/schedule`
+- `POST /api/jobs/{job_id}/toggle`
 
-# ✅ NICHT-BLOCKIEREND - Viele Requests gleichzeitig:
-@app.get("/jobs")
-async def list_jobs():  # ← Async!
-    # Nicht blockierend
-    # Annahme: worker_service ist global oder über Abhängigkeit erreichbar
-    return [] # worker_service.get_all_jobs() # Dummy-Implementierung für Doku
-```
+### WebSocket
+- `WS /ws/logs` sends `{"type": "jobs_update", "data": ...}` roughly every 2 seconds.
 
-### Connection Management
-```python
-from contextlib import asynccontextmanager
-from modules.shared.database.connection import db_connect # Angepasster Import
-from modules.shared.logging.logger import app_logger as logger # Angepasster Import
-import os # Hinzugefügt für os.getenv
+### Logs (`modules/shared/routers/log_router.py`)
+- `GET /api/logs`
+- `GET /api/logs/stats`
+- `GET /api/logs/export`
+- `POST /api/logs/cleanup`
 
-# Dieser Block zeigt das Pattern, ist aber nicht Teil der Haupt-app-Definition hier.
-# Die tatsächliche Lifespan-Definition ist jetzt in main.py zu finden.
-@asynccontextmanager
-async def lifespan_example(app: FastAPI):
-    """Server-Lifecycle: Setup & Teardown Beispiel für Doku"""
-    # Startup
-    logger.info("API Server starting (example)...")
-    # Prüfe DB Connection
-    try:
-        # Annahme: DB_JTL ist für einen Test ausreichend und in .env gesetzt
-        with db_connect(os.getenv("DB_JTL")) as conn:
-            logger.info("✅ Database connected (example)")
-    except Exception as e:
-        logger.error(f"❌ Database connection failed (example): {e}")
+### PDF (`modules/pdf_reader/router.py`)
+- Health/status, upload/process/result flows for `werbung` and `rechnungen`
+- Input guards include file extension and max upload size checks
 
-    yield  # Server läuft (Beispiel)
+### TEMU (`modules/temu/router.py`)
+- Health/info/stats
+- Manual sync trigger endpoints (`/orders/sync`, `/inventory/sync`)
 
-    # Shutdown
-    logger.info("API Server shutting down (example)...")
-
-# app = FastAPI(lifespan=lifespan_example) # Diese Zeile ist in main.py, nicht hier in der Doku
-```
-
-### Response Caching
-```python
-from fastapi import Response
-import time # Hinzugefügt für time.time()
-
-@router.get("/jobs")
-async def list_jobs(response: Response):
-    """Cache 5 Sekunden client-side"""
-    # Annahme: worker_service ist global oder über Abhängigkeit erreichbar
-    jobs = [] # worker_service.get_all_jobs() # Dummy-Implementierung für Doku
-    
-    response.headers["Cache-Control"] = "public, max-age=5"
-    return jobs
-```
-
-### Request Logging
-```python
-from starlette.middleware.base import BaseHTTPMiddleware
-import time
-from fastapi import Request # Hinzugefügt für Request
-from modules.shared.logging.logger import app_logger as logger # Angepasster Import
-
-class RequestLoggingMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        start = time.time()
-        response = await call_next(request)
-        duration = time.time() - start
-        
-        logger.info(
-            f"{request.method} {request.url.path} "
-            f"→ {response.status_code} ({duration:.3f}s)"
-        )
-        return response
-
-# app.add_middleware(RequestLoggingMiddleware) # Diese Zeile ist in main.py, nicht hier in der Doku
-```
+### CSV (`modules/csv_verarbeiter/router.py`)
+- Health/status/upload/process/result/report style endpoints for DATEV CSV workflows
 
 ---
 
-## 9. API Dokumentation & Testing
+## 6. Frontend Integration
 
-### Auto-Generated OpenAPI Docs
-Aktuell verfügbar unter: **http://localhost:8000/docs** (Swagger UI)
+Development:
+- React app runs separately on `:3000`.
+- API served by FastAPI on `:8888`.
 
-**Features:**
-- Alle Endpoints automatisch dokumentiert
-- Request/Response Schemas sichtbar
-- "Try it Out" Button zum Testen direkt im Browser
-- Alternative: http://localhost:8000/redoc (ReDoc)
-
-### cURL Testing
-```bash
-# Jobs auflisten
-curl http://localhost:8000/api/jobs
-
-# Job sofort triggern
-curl -X POST "http://localhost:8000/api/jobs/sync_inventory_temu/run-now?mode=full"
-
-# Mit Parametern & Header
-curl -X POST "http://localhost:8000/api/jobs/sync_orders/run-now" \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: secret123" \
-  -d '{"verbose": true}'
-```
-
-### Python Client Testing
-```python
-import requests
-import asyncio
-
-# Sync (requests)
-response = requests.get("http://localhost:8000/api/jobs")
-print(response.json())
-
-# Async (httpx)
-import httpx
-
-async def test_api():
-    async with httpx.AsyncClient() as client:
-        resp = await client.get("http://localhost:8000/api/jobs")
-        print(resp.json())
-
-asyncio.run(test_api())
-```
+Built frontend:
+- Gateway can serve static build files from `frontend-react/dist`.
+- UI fallback routes (`/`, `/pdf`, `/temu`, `/csv`) return `index.html` when build is present.
 
 ---
 
-## 10. Deployment Checklist
+## 7. Security and Operational Notes
 
-### Before Going Live
-- [ ] CORS `allow_origins` auf spezifische Domains begrenzen
-- [ ] API-Key oder Authentication aktivieren
-- [ ] Rate Limiting implementieren
-- [ ] HTTPS/SSL Zertifikat konfiguriert
-- [ ] Error Logging & Monitoring eingerichtet
-- [ ] Database Connection Pool optimiert
-- [ ] WebSocket Timeout konfiguriert
-- [ ] Request/Response Limits gesetzt
-- [ ] API Docs zugänglich (oder deaktiviert)
+Current state:
+- CORS is open for development convenience.
+- No global API-key enforcement at gateway level.
+- Validation and error handling are mainly endpoint-local.
 
-### Environment Variables
-```bash
-# .env
-API_PORT=8000
-API_HOST=0.0.0.0
-API_CORS_ORIGINS=https://myapp.com,https://www.myapp.com
-API_KEY=your-secret-key-here
-DATABASE_POOL_SIZE=20
-LOG_LEVEL=INFO
-```
-
-### Uvicorn Startup (Production)
-```bash
-# Development
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-
-# Production
-uvicorn main:app \
-  --host 0.0.0.0 \
-  --port 8000 \
-  --workers 4 \
-  --log-level info \
-  --access-log
-```
+Recommended production hardening:
+- Restrict CORS origins.
+- Add auth/authz where needed.
+- Keep scheduler as single-process ownership where required by deployment model.
 
 ---
 
-## Technische Parameter (Aktuell)
+## 8. Known Transition Area
 
-| Parameter | Wert | Beschreibung |
-| :--- | :--- | :--- |
-| **Server Port** | 8000 | HTTP Listen Port |
-| **Workers** | 1 (Dev) / 4 (Prod) | Parallel Request Handler |
-| **WebSocket Timeout** | Standard (60s) | Connection Keep-Alive |
-| **Request Size Limit** | 100 MB | Max Upload Size |
-| **CORS Origin** | * (Dev) | Spezifisch in Prod! |
-| **Log Level** | DEBUG (Dev) / INFO (Prod) | Logging Verbosity |
+`modules/temu_datev/` exists as an imported transition module (subtree).
+It is not yet fully integrated into the primary gateway and frontend structure.
 
 ---
 
-## Business Config Options (Zentral verwaltet)
+## 9. Verification Checklist
 
-**Datei:** `modules/temu/config/config.py`
+This document is considered up-to-date if all checks still pass:
+- `main.py` still defines one FastAPI gateway.
+- Router prefixes match section 4.
+- Docs URLs remain `/api/docs` and `/api/redoc`.
+- Dev startup still uses port `8888` in `start_dev.sh`.
+- WebSocket path remains `/ws/logs`.
 
-### Scheduler & Interval Configuration
-```python
-# Job Execution Intervals (in Minuten)
-ORDER_SYNC_INTERVAL_MINUTES = 30       # Default: Order Sync alle 30 Min
-INVENTORY_SYNC_INTERVAL_MINUTES = 60   # Default: Inventory Sync alle 60 Min
-```
-
-| Config | Wert | Beschreibung | Runtime-Tuning |
-| :--- | :--- | :--- | :--- |
-| `ORDER_SYNC_INTERVAL_MINUTES` | 30 | Order-Sync-Häufigkeit | ✅ Ja (config.py anpassen) |
-| `INVENTORY_SYNC_INTERVAL_MINUTES` | 60 | Inventory-Sync-Häufigkeit | ✅ Ja (config.py anpassen) |
-
-**Wie es verwendet wird:**
-```python
-# In workers/workers_config.py
-from modules.temu.config.config import ORDER_SYNC_INTERVAL_MINUTES
-
-scheduler.add_job(
-    func='...',
-    trigger='cron',
-    minute=f'*/{ORDER_SYNC_INTERVAL_MINUTES}'  # 0,30,60... Minuten
-)
-```
-
-### API Response Parsing Constants
-```python
-# Amount/Currency Handling
-AMOUNT_DIVISOR = 100                   # TEMU API: amounts in cents (100 = 1.00)
-TAX_RATE_DIVISOR = 1_000_000          # TEMU Tax: 19000000 = 19%
-
-# Status Mapping
-ORDER_STATUS_MAP = {                   # TEMU Status Codes
-    1: 'pending',                      # Awaiting processing
-    2: 'processing',                   # Being processed
-    3: 'shipped',                      # Shipped
-    4: 'delivered',                    # Delivered
-    5: 'cancelled',                    # Cancelled
-}
-
-# Carrier ID Mapping (TEMU Internal IDs)
-CARRIER_MAPPING = {                    # Map friendly names → TEMU IDs
-    'dhl': 141252268,
-    'dpd': 998264853,
-    'hermes': 414141241,
-    'ups': 141241414,
-    'gls': 141214124,
-}
-```
-
-### Validation Constants
-```python
-# Used in router.py + workflows for validation
-VALID_ORDER_STATUSES = {0, 1, 2, 3, 4, 5}    # Accepted status codes for API
-WORKFLOW_ORDER_STATUSES = {2, 3, 4, 5}        # Status codes that trigger workflow
-```
-
-**Beispiel - Verwendung im Router:**
-```python
-@app.get("/api/orders")
-async def get_orders(status: int = None):
-    if status and status not in VALID_ORDER_STATUSES:
-        raise HTTPException(status_code=400, detail=f"Invalid status. Valid: {VALID_ORDER_STATUSES}")
-    # ...
-```
-
-**Beispiel - Verwendung im Service:**
-```python
-from modules.temu.config.config import ORDER_STATUS_MAP, AMOUNT_DIVISOR
-
-def parse_order(api_response):
-    status_text = ORDER_STATUS_MAP.get(api_response['status'])  # Lookup
-    amount = api_response['amount'] / AMOUNT_DIVISOR             # Convert cents to EUR
-    return {
-        'status_text': status_text,
-        'amount': amount
-    }
-```
-
-### Vorteile der Centralized Config
-| Vorteil | Erklärung |
-| :--- | :--- |
-| **Single Source of Truth** | Ein Ort, wo alle Magic Numbers definiert sind |
-| **Einfache Fehlerverhinderung** | Keine Typos, keine inkonsistenten Werte |
-| **Runtime-Tuning** | Scheduler-Intervalle ändern ohne Code-Neustart |
-| **Testierbar** | Constants können in Tests gemockt werden |
-| **Versionskontrolle** | Historische Config-Änderungen nachvollziehbar |
-
----
-
-## Häufig gestellte Fragen
-
-**F: Warum async statt sync?**  
-A: Async ermöglicht 100+ gleichzeitige Requests auf 1 Server. Sync = nur 1 Request gleichzeitig.
-
-**F: Kann ich WebSocket verwenden um Files zu streamen?**  
-A: Nicht empfohlen (HTTP chunked besser). WebSocket = Low-latency Messages, nicht Datei-Transfer.
-
-**F: Wie skaliere ich auf mehrere Server?**  
-A: Load Balancer (nginx) vor mehreren Uvicorn-Instanzen. Shared Redis für Session/Cache.
-
-**F: Wie debugge ich einen WebSocket Fehler?**  
-A: Browser DevTools → Network Tab → WS → Messages anschauen. Plus Logs in `pm2-error.log`.
-
----
-
-> **Nächste Schritte:** Workflows-Dokumentation, Performance-Benchmarks, Deployment-Guide.
+If one check fails, update this file and `docs/AGENT_CHANGES.md`.

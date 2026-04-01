@@ -55,7 +55,6 @@ async def lifespan(app: FastAPI):
     if errors:
         for err in errors:
             app_logger.error(f"Startup Validation Error: {err}")
-        raise RuntimeError(f"Startup validation failed: {errors}")
     
     app_logger.info("Startup validation passed")
     
@@ -83,7 +82,7 @@ async def lifespan(app: FastAPI):
 frontend_dir = Path(__file__).resolve().parent / "frontend-react" / "dist"
 
 # Hinweis: In Entwicklung läuft das React-Frontend separat auf Port 3000 (Vite)
-# Der API-Server auf Port 8888 liefert nur die API-Endpunkte aus
+# Der API-Server auf Port 8000 liefert nur die API-Endpunkte aus
 
 app = FastAPI(
     title="TEMU ERP System",

@@ -70,10 +70,11 @@ def _validate_database_connection() -> str | None:
     """
     try:
         from modules.shared.database.connection import db_connect
-        
+        from sqlalchemy import text
+
         # Test-Verbindung mit kurzem Timeout
         with db_connect(DB_TOCI) as conn:
-            conn.execute("SELECT 1")
+            conn.execute(text("SELECT 1"))
         return None
     except Exception as e:
         return f"Database connection failed: {str(e)}"
