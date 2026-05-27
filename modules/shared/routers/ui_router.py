@@ -76,10 +76,53 @@ def get_ui_router(frontend_dir: Path) -> APIRouter:
             return FileResponse(str(docs_html))
         raise HTTPException(status_code=404, detail="Docs Frontend not found")
 
-    @router.get("/manifest.json")
-    async def get_manifest():
-        """PWA Manifest"""
-        # React doesn't use manifest.json the same way
-        return {"error": "manifest.json nicht mehr verfügbar"}
+    # PWA-Assets direkt aus dist/ ausliefern (manifest, service worker, icons).
+    # vite-plugin-pwa generiert sw.js + workbox-<hash>.js neben das Manifest.
+    @router.get("/manifest.webmanifest")
+    async def pwa_manifest():
+        f = react_dist_dir / "manifest.webmanifest"
+        if not f.is_file():
+            raise HTTPException(status_code=404)
+        return FileResponse(str(f), media_type="application/manifest+json")
+
+    @router.get("/sw.js")
+    async def pwa_service_worker():
+        f = react_dist_dir / "sw.js"
+        if not f.is_file():
+            raise HTTPException(status_code=404)
+        return FileResponse(str(f), media_type="text/javascript")
+
+    @router.get("/registerSW.js")
+    async def pwa_register_sw():
+        f = react_dist_dir / "registerSW.js"
+        if not f.is_file():
+            raise HTTPException(status_code=404)
+        return FileResponse(str(f), media_type="text/javascript")
+
+    @router.get("/workbox-{rest}")
+    async def pwa_workbox(rest: str):
+        f = react_dist_dir / f"workbox-{rest}"
+        if not f.is_file() or react_dist_dir not in f.resolve().parents:
+            raise HTTPException(status_code=404)
+        return FileResponse(str(f), media_type="text/javascript")
+
+    @router.get("/icon-{rest}")
+    async def pwa_icon(rest: str):
+        f = react_dist_dir / f"icon-{rest}"
+        if not f.is_file() or react_dist_dir not in f.resolve().parents:
+            raise HTTPException(status_code=404)
+        return FileResponse(str(f))
+
+    # SPA-Fallback fuer React-Router-Routen (/dashboard, /jobs/<id>, ...).
+    # Muss am Ende stehen, damit die expliziten Routen oben Vorrang haben.
+    # /api/* wird bewusst zu 404 statt index.html — sonst kriegen API-Tippfehler
+    # HTML statt JSON.
+    @router.get("/{full_path:path}", include_in_schema=False)
+    async def spa_fallback(full_path: str):
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404)
+        if not react_dist_dir.exists():
+            raise HTTPException(status_code=404, detail="React Frontend not found")
+        return FileResponse(str(react_dist_dir / "index.html"))
 
     return router
