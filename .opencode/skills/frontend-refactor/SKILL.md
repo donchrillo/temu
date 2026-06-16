@@ -16,7 +16,7 @@ description: Frontend Code Smells erkennen und beheben - Vanilla JS, React-Patte
 ```javascript
 // ❌ BEFORE: Monolithische loadLogs() (80 Zeilen)
 function loadLogs() {
-    fetch('http://192.168.178.4:8000/api/logs')
+    fetch('http://192.168.178.4:8401/api/logs')
         .then(r => r.json())
         .then(data => {
             document.getElementById('logs').innerHTML = '';
@@ -124,11 +124,11 @@ function displayUserComment(comment) {
 ```javascript
 // ❌ BEFORE: Magic URLs überall
 function fetchOrders() {
-    return fetch('http://192.168.178.4:8000/api/orders');
+    return fetch('http://192.168.178.4:8401/api/orders');
 }
 
 function fetchProducts() {
-    return fetch('http://192.168.178.4:8000/api/products');
+    return fetch('http://192.168.178.4:8401/api/products');
 }
 
 // ✅ AFTER: Zentrale Config

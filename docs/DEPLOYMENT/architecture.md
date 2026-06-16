@@ -108,7 +108,7 @@ TEMU_CLIENT_SECRET=...
 
 # API Server
 UVICORN_HOST=127.0.0.1
-UVICORN_PORT=8000
+UVICORN_PORT=8401
 UVICORN_WORKERS=4
 
 # APScheduler
@@ -216,7 +216,7 @@ pm2 save
 pm2 status
 
 # Arbeitet der Scheduler?
-curl http://127.0.0.1:8000/api/jobs/status
+curl http://127.0.0.1:8401/api/jobs/status
 ```
 
 ---

@@ -127,7 +127,7 @@ pm2 logs | grep "duration"
 ### API Health Check
 ```bash
 # Alle Jobs online?
-curl http://127.0.0.1:8000/api/jobs/status
+curl http://127.0.0.1:8401/api/jobs/status
 
 # Beispiel Response:
 {
@@ -191,7 +191,7 @@ pm2 show temu-api | grep "memory"
 # Sollte stabil sein, nicht kontinuierlich steigen
 
 # 3. API responding?
-curl -s http://127.0.0.1:8000/api/jobs/status | jq '.[] | .status'
+curl -s http://127.0.0.1:8401/api/jobs/status | jq '.[] | .status'
 # Sollte "success" oder "running" sein
 
 # 4. Logs clean?
@@ -365,7 +365,7 @@ echo "=== PM2 Status ==="
 pm2 status | grep online
 
 echo "=== API Health ==="
-curl -s http://127.0.0.1:8000/api/jobs/status | jq '.[] | select(.status != "success")'
+curl -s http://127.0.0.1:8401/api/jobs/status | jq '.[] | select(.status != "success")'
 
 echo "=== Error Count (letzten 24h) ==="
 pm2 logs | tail -1000 | grep -c ERROR

@@ -89,7 +89,7 @@ elif job_type == JobType.AMAZON_SYNC_ORDERS:
 
 **Via API:**
 ```bash
-curl -X POST http://localhost:8000/api/jobs/add \
+curl -X POST http://localhost:8401/api/jobs/add \
   -H "Content-Type: application/json" \
   -d '{
     "job_type": "amazon_order_workflow",
@@ -261,7 +261,7 @@ GROUP BY job_type
 
 ### Frontend
 
-Öffne `http://localhost:8000/temu` für Live-Monitoring:
+Öffne `http://localhost:8401/temu` für Live-Monitoring:
 - Job-Status in Echtzeit
 - Log-Filtering nach Job-Typ
 - Manuelle Job-Trigger

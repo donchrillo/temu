@@ -917,17 +917,17 @@ print(result)
 
 ### API Health Check
 ```bash
-curl http://localhost:8000/api/health
+curl http://localhost:8401/api/health
 # {"status": "ok"}
 
-curl http://localhost:8000/api/jobs/status
+curl http://localhost:8401/api/jobs/status
 # {"temu_orders_sync": {...}, ...}
 ```
 
 ### WebSocket Test
 ```bash
 # Öffne in Browser:
-http://localhost:8000/test_websocket.html
+http://localhost:8401/test_websocket.html
 # Sollte "✅ Connected" zeigen
 ```
 

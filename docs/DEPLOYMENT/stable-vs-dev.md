@@ -29,7 +29,7 @@ Use this folder for:
 - pulling only merged and validated changes
 
 Expected runtime (stable):
-- Backend: `127.0.0.1:8000` via `temu-api.service`
+- Backend: `127.0.0.1:8401` via `temu-api.service`
 - Frontend process: `127.0.0.1:3000` via `temu-frontend.service`
 - Public entrypoint: HTTPS `:443` via Caddy
 
@@ -63,7 +63,7 @@ Stable folder rule:
 
 ## 4. Port and Service Rules
 
-- Keep stable backend on `8000` (`systemd` service).
+- Keep stable backend on `8401` (`systemd` service).
 - Keep stable frontend behind Caddy and expose only HTTPS externally.
 - Use `8888` for manual dev API runs.
 - Avoid running competing processes on the same port as stable services.
@@ -83,7 +83,7 @@ systemctl is-active caddy temu-api temu-frontend
 
 Check relevant ports:
 ```bash
-ss -ltnp | grep -E ':443|:8000|:8888|:3000'
+ss -ltnp | grep -E ':443|:8401|:8888|:3000'
 ```
 
 Start dev API:

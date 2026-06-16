@@ -60,7 +60,7 @@ Key points:
 
 Port usage:
 - Development API port: `8888` (`start_dev.sh`)
-- Production templates/reference often use port `8000` (deploy level)
+- Production templates/reference often use port `8401` (deploy level)
 
 ---
 

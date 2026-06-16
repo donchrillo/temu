@@ -58,8 +58,8 @@ modules/
 ### Problem (vorher)
 ```javascript
 // ❌ Hardcodiert – funktioniert nicht über HTTPS
-const API_URL = `http://192.168.178.4:8000/api`;
-const WS_URL = `ws://192.168.178.4:8000/ws/logs`;
+const API_URL = `http://192.168.178.4:8401/api`;
+const WS_URL = `ws://192.168.178.4:8401/ws/logs`;
 ```
 
 Wenn Nutzer über `https://192.168.178.4` zugreift, lädt Browser die App über HTTPS, aber versucht dann `http://` zu laden → **Mixed Content** Error.
@@ -80,9 +80,9 @@ const WS_URL = `${WS_PROTOCOL}//${HOST}${PORT}/ws/logs`;
 //   → API_URL = "https://192.168.178.4/api"
 //   → WS_URL = "wss://192.168.178.4/ws/logs"
 //
-// Browser navigiert zu: http://localhost:8000
-//   → API_URL = "http://localhost:8000/api"
-//   → WS_URL = "ws://localhost:8000/ws/logs"
+// Browser navigiert zu: http://localhost:8401
+//   → API_URL = "http://localhost:8401/api"
+//   → WS_URL = "ws://localhost:8401/ws/logs"
 ```
 
 ### Praktische Effekte
@@ -139,7 +139,7 @@ function initWebSocket() {
 ### Caddy Reverse Proxy – WebSocket Support
 ```caddyfile
 your-server.de {
-    reverse_proxy localhost:8000 {
+    reverse_proxy localhost:8401 {
         # ✅ WebSocket Upgrade Headers
         header_up Upgrade {http.request.header.Upgrade}
         header_up Connection {http.request.header.Connection}

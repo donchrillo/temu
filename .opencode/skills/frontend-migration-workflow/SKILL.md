@@ -387,7 +387,7 @@ import { useLogs } from './useLogs';
 
 describe('useLogs', () => {
     it('fetches logs successfully', async () => {
-        const { result } = renderHook(() => useLogs('http://localhost:8000'));
+        const { result } = renderHook(() => useLogs('http://localhost:8401'));
         
         expect(result.current.loading).toBe(true);
         

@@ -17,7 +17,7 @@ Der Workflows-Layer orchestriert längerlaufende, asynchrone Tasks (Inventory Sy
 ```
 PM2 Process Manager (temu-api)
     ↓
-FastAPI Server (Port 8000)
+FastAPI Server (Port 8401)
     ↓ (Trigger via /api/jobs/:id/run-now)
 APScheduler (In-Memory Job Scheduler)
     ├── Scheduled Jobs (Cron)
@@ -760,7 +760,7 @@ pm2 logs temu-api --lines 50 --follow
 pm2 list
 
 # Health Check API
-curl http://localhost:8000/api/health
+curl http://localhost:8401/api/health
 ```
 
 ---
