@@ -47,8 +47,12 @@ export const jobsApi = {
   getById: (jobId: string): Promise<Job> => 
     apiClient.get(`/api/jobs/${jobId}`).then(res => res.data),
   
-  trigger: (jobId: string, params?: Record<string, any>): Promise<any> => 
-    apiClient.post(`/api/jobs/${jobId}/run-now`, params).then(res => res.data),
+  trigger: (jobId: string, params?: Record<string, any>): Promise<any> => {
+    const qs = params
+      ? '?' + new URLSearchParams(Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)]))).toString()
+      : '';
+    return apiClient.post(`/api/jobs/${jobId}/run-now${qs}`).then(res => res.data);
+  },
   
   toggle: (jobId: string, enabled: boolean): Promise<Job> => 
     apiClient.post(`/api/jobs/${jobId}/toggle?enabled=${enabled}`).then(res => res.data),

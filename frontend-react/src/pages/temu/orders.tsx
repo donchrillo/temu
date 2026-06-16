@@ -37,6 +37,10 @@ export function TemuOrders() {
     queryKey: ['jobs'],
     queryFn: () => jobsApi.getAll(),
     retry: 1,
+    refetchInterval: (q) => {
+      const jobs: any[] = q.state.data || [];
+      return jobs.some((j: any) => j.status?.status === 'running') ? 2000 : false;
+    },
   });
 
   // ============ Logs Query ============
@@ -44,6 +48,10 @@ export function TemuOrders() {
     queryKey: ['logs', logFilter],
     queryFn: () => logsApi.getRecent(50),
     retry: 1,
+    refetchInterval: () => {
+      const jobs: any[] = jobsData || [];
+      return jobs.some((j: any) => j.status?.status === 'running') ? 2000 : false;
+    },
   });
 
   // ============ Mutations ============

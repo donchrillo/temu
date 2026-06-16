@@ -26,6 +26,46 @@ Jeder Agent dokumentiert seine Änderungen in folgendem Format:
 
 ---
 
+### 2026-04-14 - Claude Sonnet 4.6
+**Modul/Datei:** `frontend-react/src/lib/api-client.ts`
+**Art der Änderung:** Bug Fix
+**Beschreibung:** Inventory-Sync Modus-Parameter wurde von FastAPI ignoriert, weil er als JSON-Body statt als Query-Parameter gesendet wurde
+**Details:**
+- `jobsApi.trigger()` sendete Parameter (z.B. `mode: 'full'`) als JSON-Body
+- FastAPI liest einfache Typen bei POST-Endpunkten als Query-Parameter → `mode` wurde ignoriert, Default `"quick"` wurde immer verwendet
+- Fix: Parameter werden jetzt korrekt als Query-String angehängt (z.B. `?mode=full&verbose=false`)
+**Betroffene Dokumentation:**
+- [ ] API-Docs aktualisieren
+
+---
+
+### 2026-04-14 - Claude Sonnet 4.6
+**Modul/Datei:** `workers/worker_service.py`
+**Art der Änderung:** Bug Fix
+**Beschreibung:** Manueller Job-Trigger überschrieb Scheduler-Args permanent, sodass alle folgenden geplanten Läufe mit `mode=full` liefen
+**Details:**
+- `trigger_job_now()` entfernte den geplanten Job und fügte ihn mit neuen Args (inkl. `mode=full`) wieder ein
+- Dadurch liefen alle nachfolgenden Scheduler-Läufe dauerhaft mit `mode=full` statt dem konfigurierten Default
+- Fix: Statt den geplanten Job zu ersetzen, wird ein einmaliger `date`-Trigger-Job (`{job_id}_manual`) angelegt; der ursprüngliche Intervall-Job bleibt unverändert
+**Betroffene Dokumentation:**
+- [ ] Architecture-Docs überarbeiten
+
+---
+
+### 2026-04-14 - Claude Sonnet 4.6
+**Modul/Datei:** `frontend-react/src/pages/temu/orders.tsx`
+**Art der Änderung:** Feature
+**Beschreibung:** Auto-Refresh beim Job-Status ergänzt – UI bleibt nicht mehr dauerhaft auf "running" stehen
+**Details:**
+- Nach dem Starten eines Jobs blieb die UI auf "running" stehen und aktualisierte sich nur bei manuellem Reload
+- `refetchInterval` in den Jobs- und Logs-Queries ergänzt
+- Solange ein Job `status.status === 'running'` hat, wird alle 2 Sekunden neu abgefragt
+- Wenn kein Job mehr läuft, stoppt das Polling automatisch
+**Betroffene Dokumentation:**
+- [ ] README.md anpassen
+
+---
+
 ### 2026-03-12 - GitHub Copilot (GPT-5.3-Codex)
 **Modul/Datei:** `docs/DEPLOYMENT/stable-vs-dev.md`, `docs/WORKFLOWS/stable-vs-dev.md`, `docs/README.md`
 **Art der Änderung:** Dokumentation / Strukturkorrektur

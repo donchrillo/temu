@@ -191,20 +191,21 @@ class SchedulerService:
         """Triggere Job SOFORT mit optionalen Parametern"""
         job = self.scheduler.get_job(job_id)
         if job:
-            # Speichere alte Konfiguration
-            trigger = job.trigger
-            func = job.func
+            # Einmaliger Sofort-Trigger als separater Date-Job,
+            # damit der geplante Intervall-Job seine Standard-Args behält.
+            manual_id = f"{job_id}_manual"
+            existing = self.scheduler.get_job(manual_id)
+            if existing:
+                self.scheduler.remove_job(manual_id)
 
-            # Entferne alten Job
-            self.scheduler.remove_job(job_id)
-
-            # Füge neu hinzu mit sofortigem Start UND neuen Parametern!
             self.scheduler.add_job(
-                func,
-                trigger=trigger,
-                id=job_id,
+                job.func,
+                trigger='date',
+                run_date=datetime.now(),
+                id=manual_id,
                 args=[job_id, parent_order_status, days_back, verbose, mode],
-                next_run_time=datetime.now()
+                misfire_grace_time=60,
+                max_instances=1
             )
     
     def update_job_schedule(self, job_id: str, interval_minutes: int):
