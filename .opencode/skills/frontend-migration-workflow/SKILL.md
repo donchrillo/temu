@@ -405,7 +405,7 @@ describe('useLogs', () => {
 import { test, expect } from '@playwright/test';
 
 test('displays logs', async ({ page }) => {
-    await page.goto('http://localhost:3000/logs');
+    await page.goto('http://localhost:8501/logs');
     
     // Wait for logs to load
     await page.waitForSelector('.log-entry');

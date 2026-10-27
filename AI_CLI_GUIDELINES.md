@@ -30,7 +30,8 @@ When project reality and this file diverge, trust these sources in this order:
 - **Stack:** Python 3.11+ | FastAPI | SQLAlchemy 2.0 | MSSQL | Pydantic 2.5 | React 19 | TypeScript | Vite | Tailwind
 - **Architecture:** Modular monorepo with a single FastAPI gateway in `main.py`
 - **API port:** `8401`
-- **Dev frontend port:** `3000`
+- **Dev frontend port:** `8501` (Vite, `strictPort`; global scheme: Vite = backend + 100)
+- **Production URL:** `https://temu.toci-lan.app` (Caddy wildcard block `*.toci-lan.app`, Let's Encrypt; LAN/VPN direct, from outside via Cloudflare Tunnel + Access). The old `https://temu.lan` (`tls internal`) runs in parallel during the transition.
 
 ### Active backend structure
 

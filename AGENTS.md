@@ -16,7 +16,8 @@ Refer to `AI_CLI_GUIDELINES.md` for the maintained canonical version.
 - **Stack:** Python 3.11+ | FastAPI | SQLAlchemy 2.0 | MSSQL | Pydantic 2.5 | React 19 | TypeScript | Vite | Tailwind
 - **Architecture:** Modular monorepo with a single FastAPI gateway in `main.py`
 - **Dev API port:** `8888`
-- **Dev frontend port:** `3000`
+- **Dev frontend port:** `8501` (Vite, `strictPort`; global scheme: Vite = backend + 100)
+- **Production URL:** `https://temu.toci-lan.app` (Caddy wildcard block `*.toci-lan.app`, Let's Encrypt; LAN/VPN direct, from outside via Cloudflare Tunnel + Access). The old `https://temu.lan` (`tls internal`) runs in parallel during the transition.
 - **Transition area:** `modules/temu_datev/` exists but is not yet fully integrated into the main gateway/frontend structure
 
 ---

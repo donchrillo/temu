@@ -1,17 +1,16 @@
-# Domain anpassen, z. B. erp.example.de
-erp.example.de {
-    encode gzip zstd
+# In /etc/caddy/Caddyfile in den Block `*.toci-lan.app { … }` einfügen (vor das abschließende
+# `handle { abort }`). Das Wildcard-Zertifikat (Let's Encrypt, DNS-01) ist dort schon eingerichtet.
+# DNS: nichts zu tun (Pi-hole beantwortet *.toci-lan.app).
+# Danach: sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+#         sudo systemctl reload caddy
+#
+# Das Backend (temu-api.service, 127.0.0.1:8401) liefert API, WebSocket und das gebaute
+# Frontend (frontend-react/dist) aus. Der alte Block `temu.lan, 192.168.178.4 { … }`
+# (tls internal) läuft übergangsweise parallel.
 
-    @api path /api/*
-    reverse_proxy @api 127.0.0.1:8000
-
-    @ws path /ws/*
-    reverse_proxy @ws 127.0.0.1:8000
-
-    # React Frontend läuft als eigener Prozess auf Port 3000
-    reverse_proxy 127.0.0.1:3000
-
-    # API und WS nicht cachen
-    header @api Cache-Control "no-store"
-    header @ws Cache-Control "no-store"
-}
+	@temu host temu.toci-lan.app
+	handle @temu {
+		reverse_proxy 127.0.0.1:8401
+		header /api/* Cache-Control "no-store"
+		header /ws/* Cache-Control "no-store"
+	}

@@ -81,8 +81,8 @@ async def lifespan(app: FastAPI):
 # Frontend-Verzeichnis (wird für Static Files benötigt)
 frontend_dir = Path(__file__).resolve().parent / "frontend-react" / "dist"
 
-# Hinweis: In Entwicklung läuft das React-Frontend separat auf Port 3000 (Vite)
-# Der API-Server auf Port 8000 liefert nur die API-Endpunkte aus
+# Hinweis: In Entwicklung läuft das React-Frontend separat auf Port 8501 (Vite-Dev);
+# produktiv liefert der API-Server (Port 8401) auch das gebaute Frontend aus frontend-react/dist aus
 
 app = FastAPI(
     title="TEMU ERP System",

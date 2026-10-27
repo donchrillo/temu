@@ -24,7 +24,7 @@ The system uses one unified FastAPI gateway and includes domain routers for:
 ## 2. Runtime Topology
 
 ```text
-React Frontend (Vite dev: :3000 / build: frontend-react/dist)
+React Frontend (Vite dev: :8501 / build: frontend-react/dist)
         |
         | HTTP + WebSocket
         v
@@ -119,7 +119,7 @@ Port usage:
 ## 6. Frontend Integration
 
 Development:
-- React app runs separately on `:3000`.
+- React app runs separately on `:8501` (Vite dev).
 - API served by FastAPI on `:8888`.
 
 Built frontend:

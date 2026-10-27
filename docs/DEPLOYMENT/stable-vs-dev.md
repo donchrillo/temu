@@ -30,8 +30,8 @@ Use this folder for:
 
 Expected runtime (stable):
 - Backend: `127.0.0.1:8401` via `temu-api.service`
-- Frontend process: `127.0.0.1:3000` via `temu-frontend.service`
-- Public entrypoint: HTTPS `:443` via Caddy
+- Frontend: built `frontend-react/dist`, served by the backend (`temu-api.service`); the old preview unit `temu-frontend.service` (port 3000) is disabled
+- Public entrypoint: `https://temu.toci-lan.app` via Caddy (wildcard block `*.toci-lan.app`, Let's Encrypt; from outside via Cloudflare Tunnel + Access). DNS: nothing to do (Pi-hole answers `*.toci-lan.app`). The old `https://temu.lan` (`tls internal`) runs in parallel during the transition.
 
 ### `~/jtl_erp_dev` (development)
 
@@ -42,7 +42,7 @@ Use this folder for:
 
 Expected runtime (development):
 - API local dev server: `0.0.0.0:8888` (e.g. `./start_dev.sh`)
-- Frontend dev server: `:3000` (or another free dev port if needed)
+- Frontend dev server: `:8501` (Vite, `strictPort`)
 
 ---
 
@@ -68,9 +68,8 @@ Stable folder rule:
 - Use `8888` for manual dev API runs.
 - Avoid running competing processes on the same port as stable services.
 
-If frontend dev needs `3000` while stable frontend is active on `3000`:
-- stop `temu-frontend.service` temporarily, or
-- run Vite on a different port in dev.
+Vite dev runs on `8501` (global scheme: Vite = backend + 100) and does not collide with the stable
+backend on `8401`.
 
 ---
 
@@ -78,12 +77,12 @@ If frontend dev needs `3000` while stable frontend is active on `3000`:
 
 Check stable services:
 ```bash
-systemctl is-active caddy temu-api temu-frontend
+systemctl is-active caddy temu-api
 ```
 
 Check relevant ports:
 ```bash
-ss -ltnp | grep -E ':443|:8401|:8888|:3000'
+ss -ltnp | grep -E ':443|:8401|:8888|:8501'
 ```
 
 Start dev API:

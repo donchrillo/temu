@@ -43,7 +43,8 @@ export default defineConfig({
     },
   },
   server: {
-    port: 3000,
+    port: 8501,
+    strictPort: true,
     host: true,
     proxy: {
       '/api': {
