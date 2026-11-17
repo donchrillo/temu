@@ -161,6 +161,12 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
+    // TOCI Portal: Portal-Anmeldung abgelaufen → 401 mit login_url → zur Portal-Anmeldung.
+    const loginUrl = error.response?.status === 401 ? error.response.data?.login_url : undefined;
+    if (typeof loginUrl === 'string' && loginUrl.startsWith('https://portal.toci-lan.app/login?')) {
+      window.location.assign(loginUrl);
+      return new Promise(() => {});
+    }
     if (error.response) {
       console.error(`[API] Error ${error.response.status}:`, error.response.data);
     } else if (error.request) {

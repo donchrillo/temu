@@ -9,6 +9,8 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // TOCI Portal: Manifest mit Cookie abrufen (sonst Login-Weiterleitung statt Icon).
+      useCredentials: true,
       includeAssets: ['icon-192.png', 'icon-512.png', 'icon-maskable-512.png'],
       manifest: {
         name: 'TOCE Tools',
@@ -27,7 +29,11 @@ export default defineConfig({
         ],
       },
       workbox: {
-        navigateFallbackDenylist: [/^\/api\//],
+        // TOCI Portal: Seiten immer übers Netz holen, nie aus dem Service Worker – sonst sieht
+        // Caddy den Aufruf nicht und weder Portal noch Cloudflare Access können umleiten.
+        // JS/CSS/Icons bleiben gespeichert.
+        navigateFallback: null,
+        globIgnores: ['**/index.html'],
         runtimeCaching: [
           {
             urlPattern: /^\/api\//,
