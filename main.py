@@ -12,7 +12,7 @@ Läuft auf Port 8000
 
 import sys
 from pathlib import Path
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -93,14 +93,31 @@ app = FastAPI(
     redoc_url="/api/redoc"
 )
 
-# CORS Middleware
+# CORS: Das Frontend kommt same-origin vom Backend, CORS braucht nur der Vite-Dev-Server.
+# Kein "*" mit Cookies: Hinter dem TOCI Portal könnte sonst jede andere *.toci-lan.app-Seite
+# mit dem Portal-Cookie Daten aus temu lesen.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["https://temu.toci-lan.app"],
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def cache_vorgaben(request: Request, call_next):  # type: ignore[no-untyped-def]
+    """Gehashte /assets/ lange cachebar, Seiten/sw.js/Manifest/Icons `no-cache` (sonst liefern
+    Browser und Cloudflare nach einem Build die alte Fassung, der Service Worker erkennt kein
+    Update). /api und /ws bleiben unberührt (Caddy setzt dort no-store)."""
+    response = await call_next(request)
+    path = request.url.path
+    if path.startswith("/assets/") and response.status_code in (200, 304):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    elif not path.startswith(("/api/", "/ws")) and "cache-control" not in response.headers:
+        response.headers["Cache-Control"] = "no-cache"
+    return response
 
 # ═══════════════════════════════════════════════════════════════
 # Module einbinden (include_router)

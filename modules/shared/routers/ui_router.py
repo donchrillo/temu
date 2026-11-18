@@ -113,6 +113,20 @@ def get_ui_router(frontend_dir: Path) -> APIRouter:
             raise HTTPException(status_code=404)
         return FileResponse(str(f))
 
+    @router.get("/apple-touch-icon.png")
+    async def pwa_apple_touch_icon():
+        f = react_dist_dir / "apple-touch-icon.png"
+        if not f.is_file():
+            raise HTTPException(status_code=404)
+        return FileResponse(str(f), media_type="image/png")
+
+    @router.get("/favicon-32.png")
+    async def pwa_favicon():
+        f = react_dist_dir / "favicon-32.png"
+        if not f.is_file():
+            raise HTTPException(status_code=404)
+        return FileResponse(str(f), media_type="image/png")
+
     # SPA-Fallback fuer React-Router-Routen (/dashboard, /jobs/<id>, ...).
     # Muss am Ende stehen, damit die expliziten Routen oben Vorrang haben.
     # /api/* wird bewusst zu 404 statt index.html — sonst kriegen API-Tippfehler
