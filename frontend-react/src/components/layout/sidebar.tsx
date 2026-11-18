@@ -175,8 +175,8 @@ export function Sidebar({ mobile = false }: SidebarProps) {
       )}>
         {!sidebarCollapsed || mobile ? (
           <>
-            <h1 className="text-lg font-semibold text-text">Toci Tools</h1>
-            <p className="text-xs text-text-secondary">JTL-Wawi ERP</p>
+            <h1 className="text-lg font-semibold text-text">Temu Sync</h1>
+            <p className="text-xs text-text-secondary">JTL ↔ Temu-Marktplatz</p>
           </>
         ) : (
           <h1 className="text-lg font-semibold text-text">TT</h1>

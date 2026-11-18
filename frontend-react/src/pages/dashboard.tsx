@@ -117,7 +117,7 @@ export default function Dashboard() {
 
         <div>
           <h1 className="text-2xl font-bold text-text">Dashboard</h1>
-          <p className="text-text-secondary">Übersicht über Ihr TEMU ERP System</p>
+          <p className="text-text-secondary">Abgleich von Bestellungen, Versand und Beständen zwischen JTL und Temu</p>
         </div>
       </div>
 

@@ -13,9 +13,9 @@ export default defineConfig({
       useCredentials: true,
       includeAssets: ['icon-192.png', 'icon-512.png', 'icon-maskable-512.png'],
       manifest: {
-        name: 'TOCE Tools',
-        short_name: 'TOCE',
-        description: 'TOCE ERP Tools - JTL Integration',
+        name: 'Temu Sync',
+        short_name: 'Temu Sync',
+        description: 'Abgleich JTL ↔ Temu-Marktplatz',
         theme_color: '#007AFF',
         background_color: '#ffffff',
         display: 'standalone',
